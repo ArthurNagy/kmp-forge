@@ -5,7 +5,56 @@ All notable changes to `kmp-forge` will be documented in this file.
 Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [0.1.0] - 2026-05-25
 
-### Added
-- Initial bootstrap: plugin manifest, marketplace entry, README, LICENSE.
+Initial release.
+
+### Features
+- `/kmp-forge-init` — end-to-end scaffold flow. Drives the JetBrains KMP Wizard at kmp.jetbrains.com via explicit step-by-step instructions (no URL params), then applies the overlay: CLAUDE.md, modules, CI, git, product docs, build-logic.
+- `/kmp-forge-add-feature <name>` — generates a complete `:feature-<name>` module on the locked stack (Compose screen + Orbit ViewModel + state + Koin module + Nav 3 destination + commonTest skeleton), wired into composeApp Koin start + NavDisplay.
+- `/kmp-forge-add-screen <feature> <screen>` — adds a screen inside an existing feature module.
+- `/kmp-forge-add-platform <desktop|web|ios>` — extends an existing project to a new platform.
+- `/kmp-forge-add-library <query>` — klibs.io lookup + `libs.versions.toml` insert.
+- `/kmp-forge-bump-stack` — refreshes `libs.versions.toml` against latest stable versions of every locked-stack library.
+- `/kmp-forge-spec [--from-dump]` — authors `docs/MVP_SPEC.md` (interactive interview or free-form paste).
+- `/kmp-forge-doctor` — diagnostic for JDK / Xcode / Android SDK / Gradle / Kotlin / signing / git hooks.
+
+### Agents
+- `kmp-feature-builder` — multi-file feature scaffolder invoked by `/kmp-forge-add-feature`. Reads existing features for style reference, wires use cases from `:domain` when relevant, builds + reports.
+- `kmp-reviewer` — diff/branch/file reviewer enforcing locked-stack conventions: Orbit MVI patterns, Koin DI, Nav 3 type-safe routes, Result+DomainError, DispatcherProvider injection, fakes-not-mocks in commonTest, a11y rules (contentDescription, touch target, no hardcoded sp), RTL convention (start/end not left/right), secrets in untracked files.
+
+### Skills
+- `conventional-commits` · `git-cliff-changelog` · `github-release-artifacts` · `mvp-spec-authoring` · `adr-authoring`
+
+### Locked stack
+- Kotlin Multiplatform + Compose Multiplatform · Orbit MVI · Koin · AndroidX Navigation 3 (1.1.2) · Coil 3 · Kermit · kotlinx-datetime · kotlinx-serialization · Compose Multiplatform Resources
+- Opt-in: Ktor Client · SQLDelight · Sentry · Firebase App Distribution · gradle-play-publisher
+- Excluded by default: image picker, fastlane, analytics, perf monitoring
+
+### Architecture
+- Hybrid: `:feature-<name>` = presentation only; shared `:domain` + `:data` + `:ui`; `build-logic/` convention plugins from day one.
+- Error handling: `Result<T>` + sealed `DomainError` per use case. No exceptions across layer boundaries.
+- Coroutines: `DispatcherProvider` interface injected; no raw `Dispatchers.*` references in `:domain`/`:data`/`:feature-*`.
+- Testing: `kotlin.test` + Orbit `ContainerHost.test()` + Turbine for edge cases + Compose UI Test. Fakes preferred; MockK allowed only in `jvmTest`/`androidTest`.
+
+### Plugin docs (12)
+- `architecture.md` · `stack.md` · `testing.md` · `ci.md` · `git-conventions.md` · `release.md` · `observability.md` · `product-workflow.md` · `secrets.md` · `i18n-a11y.md` · `ios-troubleshooting.md` · `upgrade-policy.md`
+
+### Distribution
+- Public GitHub repo `arthurnagy/kmp-forge` + separate marketplace `arthurnagy/claude-plugins`.
+- Install: `/plugin marketplace add arthurnagy/claude-plugins` then `/plugin install kmp-forge@arthurnagy-claude-plugins`.
+
+### Build
+- 79 files across 6 commits.
+- All scripts smoke-tested locally; overlay rendering, settings.gradle.kts patching, and libs.versions.toml merging validated against a scratch project.
+
+### Known limitations (carry into v0.2)
+- iOS scaffolding via `/kmp-forge-add-platform ios` instructs user to use kmp.jetbrains.com for the iOS app skeleton; first-class overlay templates for `iosApp/` Xcode project deferred.
+- Sentry, Firebase App Distribution, gradle-play-publisher opt-ins print wiring notes rather than auto-modifying `build.gradle.kts` + `release.yml`.
+- klibs.io has no JSON API; `/kmp-forge-add-library` is best-effort HTML parsing with manual fallback.
+- Stack-pattern skills (Orbit, Koin, Nav 3, Coil, etc) deferred — docs + agent prompts cover them inline for v0.1.0.
+- Custom detekt ruleset for a11y enforcement deferred — `kmp-reviewer` agent enforces the same rules at PR-review time.
+
+### Open user actions
+- Push `arthurnagy/kmp-forge` and `arthurnagy/claude-plugins` to GitHub.
+- Test `/kmp-forge-init` end-to-end against a real kmp.jetbrains.com download; surface bugs.

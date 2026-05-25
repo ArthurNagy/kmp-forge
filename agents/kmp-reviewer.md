@@ -42,12 +42,16 @@ cat <path>
 - 🔴 `:feature-*` imports `:data` directly. Features use `:domain` interfaces only.
 - 🔴 Feature imports another feature. Features never depend on each other.
 - 🔴 `:data` imports `:ui`. Data layer doesn't know about UI.
+- 🔴 A repository handles multiple domain types (e.g. `AppRepository`, `DataRepository`). One repo per domain type — `UserRepository` handles only `User`, `OrderRepository` handles only `Order`. Split it.
+- 🟡 A data source handles multiple types. Same rule: one data source per type.
 
 ### MVI / state (blocking)
 
 - 🔴 State mutation outside `intent { reduce { ... } }`. Move into an intent.
-- 🔴 One-shot event delivered via state (`data class XState(..., navigateAway: Boolean)`). Move to `sealed interface XEffect` + `postSideEffect`.
+- 🔴 `postSideEffect(...)` used anywhere. The locked stack uses state-only events (effect type is `Nothing`). Convert to a consumable state slot (`pendingX: ...?` set inside intent, cleared by paired `onXConsumed()` intent).
+- 🔴 ContainerHost typed with anything other than `Nothing` as effect (`ContainerHost<State, SomeEffect>`). Change to `ContainerHost<State, Nothing>`.
 - 🔴 ViewModel doesn't extend `androidx.lifecycle.ViewModel` + implement `ContainerHost`. No custom base classes.
+- 🟡 Boolean spaghetti at page level (`if (loading && !error && items.isEmpty()) ...`). Promote to `sealed interface XState` with mutually-exclusive data object/class children.
 - 🟡 Stateful Composable (Composable holds `var` / `mutableStateOf` instead of taking hoisted state). Make stateless; hoist state.
 
 ### Dispatchers (blocking)

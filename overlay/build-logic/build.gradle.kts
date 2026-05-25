@@ -8,6 +8,8 @@ dependencies {
     implementation(libs.compose.gradle.plugin)
     implementation(libs.compose.compiler.gradle.plugin)
     implementation(libs.detekt.gradle.plugin)
+    implementation(libs.spotless.gradle.plugin)
+    implementation(libs.kover.gradle.plugin)
 }
 
 gradlePlugin {

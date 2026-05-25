@@ -30,9 +30,9 @@ A complete `:feature-<feature_name>` Gradle module containing:
 
 These are non-negotiable. Surface a clear error and stop if any conflict with the user's request:
 
-1. ViewModel **must** extend `androidx.lifecycle.ViewModel` and implement `ContainerHost<State, Effect>`. Never plain `ViewModel`, never custom base classes.
-2. State **must** be a single `data class` with sensible defaults. Mutations only via `intent { reduce { ... } }`.
-3. One-shot events go via `sealed interface <Name>Effect` and `postSideEffect`. Never via state.
+1. ViewModel **must** extend `androidx.lifecycle.ViewModel` and implement `ContainerHost<State, Nothing>`. Never plain `ViewModel`, never custom base classes. **Effect type is always `Nothing`** — the locked stack uses state-only events.
+2. State **must** be a single `data class` with sensible defaults (or a `sealed interface` with `data object`/`data class` children when mutually-exclusive page-level sub-states warrant it — Loading/Loaded/Error). Mutations only via `intent { reduce { ... } }`.
+3. One-shot events **must** be modeled as consumable state slots: `pendingNavigation: Route? = null`, `pendingMessage: String? = null`, etc. UI consumes via `LaunchedEffect(state.pendingX) { ...; viewModel.onXConsumed() }`. **Never `postSideEffect`** — that's the previous Orbit idiom; the locked stack rejects it.
 4. Composables **must** be stateless. The top-level `<Name>Screen` is allowed to hold a `viewModel = koinViewModel<...>()` — but it immediately hoists `state` to a stateless `<Name>Content`.
 5. Nav 3 route **must** be `@Serializable` and implement `NavKey`.
 6. Koin module **must** declare `viewModelOf(::<Name>ViewModel)`.

@@ -155,9 +155,9 @@ For v0.1.0: just print which opt-in libs were selected and remind the user to fo
 
 If user picked Apache-2.0, replace the `LICENSE` text (currently MIT from kmp.new's default if any) accordingly. If Proprietary, write a short proprietary notice.
 
-### 8. Git init + first commit
+### 8. Git init + first commit + optional GitHub repo
 
-If user opted in:
+If user opted in to git init:
 
 ```bash
 cd "$TARGET"
@@ -169,6 +169,17 @@ chmod +x .git/hooks/pre-commit
 git add -A
 git commit -q -m "chore: scaffold project via kmp-forge"
 ```
+
+Then ask via `AskUserQuestion` whether to **create the GitHub repo now**. Default: yes, private. If yes:
+
+```bash
+gh repo create "<APP_NAME>" --private --source=. --remote=origin
+git push -u origin main
+```
+
+If `gh` is not authenticated, surface `gh auth login` instructions to the user instead of failing. Never push to a public repo by default — visibility flips require explicit user opt-in.
+
+If user declines: print the manual command for them to run later (`gh repo create ... --private --source=. --remote=origin && git push -u origin main`).
 
 ### 9. Report next steps
 

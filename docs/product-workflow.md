@@ -122,6 +122,40 @@ When added, structure as phases with target dates:
 
 Updated as scope shifts. Linked from `CLAUDE.md` if present.
 
+## GitHub Issues as the project tracker
+
+`kmp-forge` projects use **GitHub Issues** as their work tracker — no Jira, no Linear, no Trello. For a one-person setup, GitHub Issues + a single GitHub Projects board configured as Kanban is the right fit: zero extra tools, one URL, integrated with PRs.
+
+**Setup** (per project, after pushing the repo):
+
+1. Repo → **Projects** tab → **New project** → **Board** template.
+2. Name it `<App> Roadmap` or just `Roadmap`.
+3. Default columns: `Backlog` · `In progress` · `In review` · `Done`. Add `Blocked` if needed.
+4. Connect to the repo so issues can be added directly from the issue view.
+5. Use labels to slice: `bug`, `enhancement`, `chore`, `adr`. Issue templates pre-tag these.
+
+**Workflow**:
+
+- Capture every idea as an issue in `Backlog` — even small ones.
+- Move to `In progress` when starting work; create the branch named `feature/<issue-number>-<short-title>` or `fix/<issue-number>-...`.
+- PR description references `Fixes #<n>` so merging auto-closes + moves to `Done`.
+- Weekly review: drag stale `In progress` back to `Backlog` if not actively worked.
+
+This is deliberately low-ceremony. Solo projects don't need sprints, story points, or velocity tracking.
+
+## OpenSpec — overkill for v0.1
+
+[OpenSpec](https://github.com/Fission-AI/OpenSpec) is a spec-driven development workflow with Claude Code support. It's a strong fit for teams where many people propose / implement specs in parallel — Claude reads structured spec files to drive implementation.
+
+For solo kmp-forge projects, **OpenSpec is overkill**: `docs/MVP_SPEC.md` + `docs/DECISIONS/*.md` already give Claude the context it needs in a single session. Adding OpenSpec means a second source of truth and a second tool to maintain.
+
+When to reconsider:
+- The project has 3+ contributors actively proposing specs
+- You want Claude to autonomously execute specs without per-session re-explanation
+- You want explicit change requests as versioned spec diffs
+
+For v0.1 / v0.2 of the kmp-forge blueprint: skip OpenSpec. Revisit if any of the above triggers.
+
 ## .github/ISSUE_TEMPLATE/
 
 Three templates ship:

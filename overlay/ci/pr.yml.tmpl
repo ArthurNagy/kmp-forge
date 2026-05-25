@@ -17,12 +17,25 @@ jobs:
           distribution: temurin
           java-version: 17
       - uses: gradle/actions/setup-gradle@v3
+      - name: Spotless (ktlint)
+        run: ./gradlew spotlessCheck
       - name: Detekt
         run: ./gradlew detekt
       - name: Build
         run: ./gradlew build -x test
       - name: Common tests
         run: ./gradlew :composeApp:commonTest :domain:commonTest :data:commonTest
+      - name: Coverage threshold (Kover)
+        run: ./gradlew koverVerify
+      - name: Coverage report
+        if: success() || failure()
+        run: ./gradlew koverXmlReport koverHtmlReport
+      - uses: actions/upload-artifact@v4
+        if: success() || failure()
+        with:
+          name: kover-report
+          path: '**/build/reports/kover/'
+          if-no-files-found: ignore
 
   build-ios:
     if: ${{ vars.IOS_ENABLED == 'true' }}

@@ -1,5 +1,11 @@
 # Git conventions
 
+## Repository defaults
+
+- Host: **GitHub**.
+- Visibility: **private** by default for personal projects. Make public only when you're ready to share publicly. `/kmp-forge-init` creates `--private` when it runs `gh repo create`.
+- CLI: install `gh` locally (`brew install gh`); authenticate once with `gh auth login`. The blueprint and most slash commands assume `gh` is on PATH.
+
 ## Branching
 
 **Trunk-based.** `main` is always shippable. No long-lived `develop` or `release/*` branches.

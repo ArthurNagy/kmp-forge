@@ -8,10 +8,12 @@ Every locked library, why it was chosen, when it's used, and idiomatic usage.
 The foundation. Compose Multiplatform 1.10+ for Material 3 + multi-platform UI.
 
 ### Orbit MVI
-- **Why**: explicit MVI shape (intent → reduce → state), built-in `postSideEffect` for one-shot events, built-in `ContainerHost.test()` harness. KMP-ready.
+- **Why**: explicit MVI shape (intent → reduce → state), built-in `ContainerHost.test()` harness, KMP-ready.
 - **Where**: every ViewModel in every `:feature-*` module.
-- **Idiom**: `class FooViewModel : ViewModel(), ContainerHost<FooState, FooEffect> { override val container = container(FooState()); fun load() = intent { reduce { state.copy(...) } } }`
-- **Anti-patterns**: mutating state outside `intent {}`; emitting one-shot events via state (use `postSideEffect`); throwing exceptions inside `intent {}` blocks (let use cases return `Result`).
+- **Idiom**: `class FooViewModel : ViewModel(), ContainerHost<FooState, Nothing> { override val container = container(FooState()); fun load() = intent { reduce { state.copy(...) } } }`
+- **State-only events** (no `postSideEffect`): one-shot events live as consumable state slots (`pendingNavigation: Route?`, `pendingMessage: String?`). UI observes via `LaunchedEffect`, consumes, calls paired `onXxxConsumed()` intent to clear. Rationale: everything is state — easier to test, easier to inspect, robust across config changes / process death.
+- **Sub-states via sealed interface** when a flat data class overcomplicates state management (mutually-exclusive page-level transitions like `Loading | Loaded | Error`). See [architecture.md](architecture.md#sub-states-via-sealed-interface).
+- **Anti-patterns**: mutating state outside `intent {}`; using `postSideEffect` (effect type is `Nothing`); throwing exceptions inside `intent {}` blocks (let use cases return `Result`); page-level sub-states modeled as booleans on a flat data class (promote to sealed interface).
 
 ### Koin
 - **Why**: pure-Kotlin DI, KMP-native, runtime registration, low ceremony, easy to test.
@@ -91,6 +93,24 @@ The foundation. Compose Multiplatform 1.10+ for Material 3 + multi-platform UI.
 - **When**: project needs relational storage. Choose over Exposed for mobile-first KMP work (mobile-proven, lightweight drivers, type-safe SQL from `.sq` files).
 - **Where**: `:data` module. Drivers per platform via `expect/actual`.
 - **Idiom**: SQL in `.sq` files; generated `Database` class accessed via Koin singleton.
+
+### Store (MobileNativeFoundation/Store)
+- **When**: offline-first repository with multiple backing sources (remote + cache + db). Common in feeds, lists, profile data — anywhere you want SWR-style staleness behavior with fallback to local.
+- **Where**: `:data` module. One `Store<Key, Value>` per data type.
+- **Idiom**:
+  ```kotlin
+  val userStore: Store<UserId, User> = StoreBuilder
+      .from(
+          fetcher = Fetcher.of { id -> api.getUser(id).toDomain() },
+          sourceOfTruth = SourceOfTruth.of(
+              reader = { id -> db.userQueries.byId(id).asFlow().mapToOneOrNull() },
+              writer = { id, user -> db.userQueries.upsert(user.toEntity()) },
+          ),
+      )
+      .build()
+  ```
+- **Why over a hand-rolled repo**: builds in stale-while-revalidate, error handling, and Flow-based reactivity. Worth it once a feature has both network + db sources.
+- **Anti-pattern**: using Store for single-source data (only network, only db) — direct repo is simpler.
 
 ### Sentry
 - **When**: opt into observability beyond Play Vitals / App Store Connect Crashes.

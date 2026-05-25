@@ -17,10 +17,14 @@ Alternatives considered:
 
 ## Decision
 
-Use [Orbit MVI](https://orbit-mvi.org/) on every ViewModel. ViewModels extend `androidx.lifecycle.ViewModel` and implement `ContainerHost<State, Effect>`. State mutations go through `intent { reduce { ... } }`; one-shot events via `postSideEffect(...)`.
+Use [Orbit MVI](https://orbit-mvi.org/) on every ViewModel. ViewModels extend `androidx.lifecycle.ViewModel` and implement `ContainerHost<State, Nothing>`. State mutations go through `intent { reduce { ... } }`.
+
+**State-only events** — we do NOT use `postSideEffect`. Effect type is always `Nothing`. One-shot events (navigation, toasts, snackbars) are modeled as consumable state slots (`pendingNavigation: Route?`, `pendingMessage: String?`) set inside `intent {}` and cleared by paired `onXxxConsumed()` intents the UI calls after rendering.
+
+**Sub-states via sealed interface** when a flat data class would force boolean spaghetti at the page level (mutually-exclusive `Loading | Loaded | Error`). Default is flat data class; promote only when warranted.
 
 ## Consequences
 
-- Easier: consistent MVI shape across features; built-in `ContainerHost.test()` harness for unit tests; clean separation of state vs side effects.
-- Harder: one more library dependency to maintain; new contributors learn Orbit's DSL.
-- Reviewer enforces: no state mutation outside `intent {}`; no one-shot events via state.
+- Easier: consistent MVI shape across features; built-in `ContainerHost.test()` harness for unit tests; every piece of UI behavior is observable state — robust across config changes / process death; testing one-shot events is trivial (just assert state slot transitions).
+- Harder: one more library dependency to maintain; new contributors learn the consumable-slot pattern; bookkeeping of `onXxxConsumed()` intent pairs.
+- Reviewer enforces: no state mutation outside `intent {}`; no `postSideEffect` anywhere; `ContainerHost<State, Nothing>` only; page-level boolean spaghetti gets promoted to a sealed interface.

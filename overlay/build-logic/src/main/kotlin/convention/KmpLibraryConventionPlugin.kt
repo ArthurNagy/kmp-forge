@@ -16,6 +16,21 @@ class KmpLibraryConventionPlugin : Plugin<Project> {
         with(target) {
             pluginManager.apply("org.jetbrains.kotlin.multiplatform")
             pluginManager.apply("io.gitlab.arturbosch.detekt")
+            pluginManager.apply("com.diffplug.spotless")
+            pluginManager.apply("org.jetbrains.kotlinx.kover")
+
+            // Spotless wraps ktlint — formats and verifies Kotlin sources.
+            // ktlint version pinned in libs.versions.toml; consumers may override.
+            extensions.configure(com.diffplug.gradle.spotless.SpotlessExtension::class.java) { spotless ->
+                spotless.kotlin { k ->
+                    k.target("src/**/*.kt")
+                    k.ktlint("1.5.0")
+                }
+                spotless.kotlinGradle { kg ->
+                    kg.target("*.gradle.kts")
+                    kg.ktlint("1.5.0")
+                }
+            }
 
             extensions.configure(KotlinMultiplatformExtension::class.java) { kmp ->
                 val targets = (findProperty("kmpForge.targets") as String?)

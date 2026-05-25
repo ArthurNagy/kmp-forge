@@ -5,6 +5,28 @@ All notable changes to `kmp-forge` will be documented in this file.
 Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.2.0] - 2026-05-25
+
+Refinements pass after user's expanded notes.
+
+### Changed (BREAKING)
+- **State-only events** — `postSideEffect` removed from the locked stack. `ContainerHost` effect type is now `Nothing`. One-shot events (navigation, toasts, snackbars) modeled as **consumable state slots** on the state class, cleared by paired `onXxxConsumed()` intents the UI calls after rendering. Reason: everything is state — robust across config changes / process death, trivially testable. Affected: feature templates (State/ViewModel/Screen/Test), `docs/architecture.md`, `docs/stack.md`, ADR 0001, `kmp-reviewer`, `kmp-feature-builder`.
+
+### Added
+- **ktlint via Spotless** alongside detekt. Convention plugin applies Spotless to every shared module; ktlint version pinned in `libs.versions.toml`. CI runs `spotlessCheck`; `spotlessApply` for local auto-fix.
+- **Kover coverage** with target 75%. Convention plugin applies Kover per module. CI runs `koverVerify` and uploads HTML + XML reports as a workflow artifact. Verify rule lives in root `build.gradle.kts`.
+- **Store (MobileNativeFoundation/Store)** as opt-in library for offline-first multi-source repositories.
+- **Single-type repository rule** documented in `docs/architecture.md` and enforced by `kmp-reviewer` (one `*Repository` per domain type — never an `AppRepository` god object).
+- **Sealed-interface sub-states pattern** documented for mutually-exclusive page-level transitions (Loading/Loaded/Error); feature template comments show the shape.
+- **Feature-owned analytics** noted in `docs/architecture.md` — analytics events specific to a feature live in the feature module, not centralized.
+- **GitHub Issues + Projects (Kanban) workflow** documented in `docs/product-workflow.md` as the v0.1 product tracker. No Jira/Linear.
+- **OpenSpec recommendation** in `docs/product-workflow.md` — skip for solo projects; revisit when 3+ contributors or autonomous-execution scenarios appear.
+- **Private repo default** for `/kmp-forge-init`. Optional `gh repo create --private` step after `git init`, documented in `docs/git-conventions.md`.
+
+### Notes
+- `docs/ci.md` updated: PR workflow now runs `spotlessCheck detekt build koverVerify`. Runner matrix entry split. New "Code quality + coverage" section.
+- `libs.versions.toml.additions.tmpl` gained: `spotless`, `ktlint`, `kover`, `store`, plus Spotless + Kover gradle-plugin libraries and plugin aliases.
+
 ## [0.1.0] - 2026-05-25
 
 Initial release.

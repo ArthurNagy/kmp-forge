@@ -26,7 +26,7 @@ jobs:
       - uses: actions/setup-java@v4
         with: { distribution: 'temurin', java-version: '17' }
       - uses: gradle/actions/setup-gradle@v3
-      - run: ./gradlew detekt build :composeApp:commonTest
+      - run: ./gradlew spotlessCheck detekt build :composeApp:commonTest koverVerify
 
   build-ios:
     if: ${{ env.IOS_ENABLED == 'true' }}
@@ -106,7 +106,8 @@ jobs:
 
 | Job | Runner | When |
 |---|---|---|
-| Lint, detekt | `ubuntu-latest` | always |
+| Spotless (ktlint) + detekt | `ubuntu-latest` | always |
+| Kover coverage verify + reports | `ubuntu-latest` | always |
 | Common + JVM tests | `ubuntu-latest` | always |
 | Android assemble + bundle | `ubuntu-latest` | always |
 | iOS framework link | `macos-latest` | iOS opt-in |
@@ -115,6 +116,40 @@ jobs:
 | Web build | `ubuntu-latest` | web opt-in |
 
 macOS minutes are billed at ~10× Linux on private repos. Gate iOS jobs behind explicit env to avoid burning budget when iOS is disabled.
+
+## Code quality + coverage
+
+**Spotless + ktlint** — format + lint. ktlint version pinned in `libs.versions.toml`. Convention plugin applies Spotless to every shared module and configures it to verify `src/**/*.kt` and `*.gradle.kts`. CI runs `./gradlew spotlessCheck`; auto-fix locally via `./gradlew spotlessApply`.
+
+**Detekt** — static analysis (complexity, smells). Convention plugin applies it; config in `detekt.yml` at project root.
+
+**Kover** — JetBrains' KMP-native coverage tool. Convention plugin applies Kover per module. Target coverage **75%**. CI runs `./gradlew koverVerify` against a root-project rule and uploads `koverHtmlReport` + `koverXmlReport` as a workflow artifact.
+
+Add the verify rule to root `build.gradle.kts`:
+
+```kotlin
+plugins { alias(libs.plugins.kover) }
+
+dependencies {
+    kover(projects.composeApp)
+    kover(projects.domain)
+    kover(projects.data)
+    kover(projects.ui)
+    // kover(projects.featureGallery)  // one per feature module
+}
+
+kover {
+    reports {
+        verify {
+            rule {
+                bound { minValue.set(75) }
+            }
+        }
+    }
+}
+```
+
+Adjust the 75 threshold or carve exclusions (`excludes { classes("*Module") }`) if the threshold is too aggressive for early-stage projects.
 
 ## Required secrets
 

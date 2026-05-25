@@ -19,4 +19,15 @@ class ${FEATURE_NAME_PASCAL}ViewModelTest {
             expectState { copy(loading = false) }
         }
     }
+
+    @Test
+    fun `pending message clears after consumed`() = runTest {
+        val vm = ${FEATURE_NAME_PASCAL}ViewModel()
+
+        vm.test(this, ${FEATURE_NAME_PASCAL}State(pendingMessage = "Hi")) {
+            expectInitialState()
+            containerHost.onPendingMessageConsumed()
+            expectState { copy(pendingMessage = null) }
+        }
+    }
 }

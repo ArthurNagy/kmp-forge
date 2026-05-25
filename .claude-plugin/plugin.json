@@ -1,0 +1,13 @@
+{
+  "name": "kmp-forge",
+  "description": "Scaffold and guide Kotlin Multiplatform + Compose Multiplatform projects. Drives kmp.jetbrains.com for base scaffold, overlays locked architecture, CI, git, product workflow, observability, and release plumbing.",
+  "author": {
+    "name": "Arthur Nagy",
+    "email": "arthur.93.nagy@gmail.com",
+    "url": "https://github.com/arthurnagy"
+  },
+  "homepage": "https://github.com/arthurnagy/kmp-forge",
+  "repository": "https://github.com/arthurnagy/kmp-forge",
+  "license": "MIT",
+  "keywords": ["kotlin-multiplatform", "compose-multiplatform", "kmp", "scaffolding", "blueprint"]
+}

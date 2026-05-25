@@ -1,0 +1,22 @@
+package ${BASE_PACKAGE}.feature.${FEATURE_NAME}
+
+import kotlin.test.Test
+import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.test.runTest
+import org.orbitmvi.orbit.test.test
+
+@OptIn(ExperimentalCoroutinesApi::class)
+class ${FEATURE_NAME_PASCAL}ViewModelTest {
+
+    @Test
+    fun `load toggles loading flag`() = runTest {
+        val vm = ${FEATURE_NAME_PASCAL}ViewModel()
+
+        vm.test(this, ${FEATURE_NAME_PASCAL}State()) {
+            expectInitialState()
+            containerHost.load()
+            expectState { copy(loading = true, error = null) }
+            expectState { copy(loading = false) }
+        }
+    }
+}

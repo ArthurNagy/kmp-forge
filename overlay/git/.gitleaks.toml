@@ -1,0 +1,19 @@
+title = "kmp-forge default gitleaks config"
+
+# Inherits gitleaks default rules. See https://github.com/gitleaks/gitleaks for full ruleset.
+[extend]
+useDefault = true
+
+[allowlist]
+description = "Common false-positive locations for KMP+Compose projects"
+paths = [
+    '''composeApp/src/.*/composeResources/.*''',  # Compose MP Resources (icons, strings)
+    '''.*build/.*''',                              # Build outputs
+    '''gradle/wrapper/.*''',                       # Gradle wrapper
+    '''.*\.lock''',                                # Lock files
+]
+regexes = [
+    '''ANDROID_KEYSTORE_PASSWORD''',               # variable names in workflows/build files
+    '''SENTRY_DSN''',                              # variable names
+    '''APP_STORE_CONNECT_API_KEY_ID''',
+]

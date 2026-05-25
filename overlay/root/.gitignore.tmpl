@@ -1,0 +1,44 @@
+# --- Build ---
+.gradle/
+build/
+.kotlin/
+local.properties
+
+# --- IDE ---
+.idea/
+*.iml
+*.ipr
+*.iws
+
+# --- OS ---
+.DS_Store
+Thumbs.db
+
+# --- Xcode / iOS ---
+xcuserdata/
+*.xcuserstate
+iosApp/build/
+iosApp/Pods/
+
+# --- Secrets — NEVER commit ---
+*.keystore
+*.jks
+signing.properties
+.env
+.env.local
+.env.*.local
+google-services.json
+GoogleService-Info.plist
+AuthKey_*.p8
+
+# --- Generated build config ---
+composeApp/src/commonMain/kotlin/AppBuildConfig.kt
+
+# --- Fastlane (if added) ---
+fastlane/report.xml
+fastlane/Preview.html
+fastlane/screenshots/
+fastlane/test_output/
+
+# --- Web ---
+kotlin-js-store/

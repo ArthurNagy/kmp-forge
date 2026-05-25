@@ -1,0 +1,18 @@
+package ${BASE_PACKAGE}.feature.${FEATURE_NAME}
+
+/**
+ * UI state for [${FEATURE_NAME_PASCAL}Screen]. Immutable; mutated only inside
+ * [${FEATURE_NAME_PASCAL}ViewModel.container] via `intent { reduce { ... } }`.
+ */
+data class ${FEATURE_NAME_PASCAL}State(
+    val loading: Boolean = false,
+    val error: String? = null,
+)
+
+/**
+ * One-shot side effects emitted via Orbit's `postSideEffect`.
+ * Use for navigation, toasts, snackbars — anything that should fire exactly once.
+ */
+sealed interface ${FEATURE_NAME_PASCAL}Effect {
+    data class ShowMessage(val text: String) : ${FEATURE_NAME_PASCAL}Effect
+}

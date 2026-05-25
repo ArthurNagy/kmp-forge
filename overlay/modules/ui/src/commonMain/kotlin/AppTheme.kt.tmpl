@@ -1,0 +1,31 @@
+package ${BASE_PACKAGE}.ui
+
+import androidx.compose.foundation.isSystemInDarkTheme
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.runtime.Composable
+
+/**
+ * App theme wrapper. Resolves color scheme via [isSystemInDarkTheme] by default.
+ * Per-app override (DataStore-stored) plugs in via [themeMode]; default null = follow system.
+ *
+ * Composables consume:
+ *   - MaterialTheme.colorScheme  → semantic colors
+ *   - MaterialTheme.typography   → AppType styles
+ *   - AppSpacing / AppDimens     → spacing + sizing tokens
+ */
+@Composable
+fun AppTheme(
+    themeMode: ThemeMode = ThemeMode.SYSTEM,
+    content: @Composable () -> Unit,
+) {
+    val isDark = when (themeMode) {
+        ThemeMode.LIGHT -> false
+        ThemeMode.DARK -> true
+        ThemeMode.SYSTEM -> isSystemInDarkTheme()
+    }
+    MaterialTheme(
+        colorScheme = if (isDark) DarkScheme else LightScheme,
+        typography = AppType.material,
+        content = content,
+    )
+}

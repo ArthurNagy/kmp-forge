@@ -1,0 +1,14 @@
+package ${BASE_PACKAGE}.domain
+
+import kotlinx.coroutines.CoroutineDispatcher
+
+/**
+ * Abstraction over coroutine dispatchers so production code (use cases, repos)
+ * never references `Dispatchers.IO/Default/Main` directly. Tests inject a
+ * `TestDispatcherProvider` backed by `StandardTestDispatcher` for deterministic timing.
+ */
+interface DispatcherProvider {
+    val main: CoroutineDispatcher
+    val io: CoroutineDispatcher
+    val default: CoroutineDispatcher
+}

@@ -1,0 +1,27 @@
+name: ADR proposal
+description: Propose an architecture decision worth recording
+labels: [adr]
+body:
+  - type: input
+    id: title
+    attributes:
+      label: Proposed title
+      placeholder: "Switch from X to Y"
+    validations:
+      required: true
+  - type: textarea
+    id: context
+    attributes:
+      label: Context
+      description: What's driving this decision?
+    validations:
+      required: true
+  - type: textarea
+    id: decision
+    attributes:
+      label: Decision
+  - type: textarea
+    id: consequences
+    attributes:
+      label: Consequences
+      description: What becomes easier? What becomes harder?

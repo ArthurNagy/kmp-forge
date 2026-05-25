@@ -1,0 +1,15 @@
+package ${BASE_PACKAGE}.domain
+
+/**
+ * Base for sealed error types per use case or domain area.
+ * Each feature/area defines its own sealed children:
+ *
+ *   sealed interface GalleryError : DomainError {
+ *       data object NetworkUnavailable : GalleryError
+ *       data object Unauthorized : GalleryError
+ *       data class Unknown(val cause: Throwable) : GalleryError
+ *   }
+ *
+ * Use cases return `Result<T, DomainError>`; UI maps exhaustively in state.
+ */
+interface DomainError

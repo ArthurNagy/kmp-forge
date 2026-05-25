@@ -1,0 +1,14 @@
+package ${BASE_PACKAGE}.data
+
+import ${BASE_PACKAGE}.domain.DispatcherProvider
+import kotlinx.coroutines.Dispatchers
+
+/**
+ * Production dispatcher provider. The ONLY place in :data that may reference
+ * Dispatchers.* directly. Bound to the DispatcherProvider interface in dataModule.
+ */
+class RealDispatcherProvider : DispatcherProvider {
+    override val main get() = Dispatchers.Main
+    override val io get() = Dispatchers.IO
+    override val default get() = Dispatchers.Default
+}

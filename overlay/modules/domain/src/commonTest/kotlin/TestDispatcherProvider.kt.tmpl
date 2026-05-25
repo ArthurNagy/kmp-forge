@@ -1,0 +1,19 @@
+package ${BASE_PACKAGE}.domain
+
+import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.test.StandardTestDispatcher
+import kotlinx.coroutines.test.TestDispatcher
+
+/**
+ * Test double for DispatcherProvider. All three dispatchers point to a single
+ * TestDispatcher so test code can advance virtual time consistently via
+ * runTest { ... }.
+ */
+@OptIn(ExperimentalCoroutinesApi::class)
+class TestDispatcherProvider(
+    private val testDispatcher: TestDispatcher = StandardTestDispatcher(),
+) : DispatcherProvider {
+    override val main get() = testDispatcher
+    override val io get() = testDispatcher
+    override val default get() = testDispatcher
+}

@@ -1,0 +1,17 @@
+package ${BASE_PACKAGE}.feature.${FEATURE_NAME}
+
+import androidx.lifecycle.ViewModel
+import org.orbitmvi.orbit.ContainerHost
+import org.orbitmvi.orbit.container
+import org.orbitmvi.orbit.viewmodel.container
+
+class ${FEATURE_NAME_PASCAL}ViewModel : ViewModel(), ContainerHost<${FEATURE_NAME_PASCAL}State, ${FEATURE_NAME_PASCAL}Effect> {
+
+    override val container = container<${FEATURE_NAME_PASCAL}State, ${FEATURE_NAME_PASCAL}Effect>(${FEATURE_NAME_PASCAL}State())
+
+    fun load() = intent {
+        reduce { state.copy(loading = true, error = null) }
+        // TODO: invoke use case from :domain via constructor-injected dependency
+        reduce { state.copy(loading = false) }
+    }
+}

@@ -1,0 +1,16 @@
+package ${BASE_PACKAGE}.data
+
+import ${BASE_PACKAGE}.domain.DispatcherProvider
+import org.koin.core.module.dsl.singleOf
+import org.koin.dsl.bind
+import org.koin.dsl.module
+
+/**
+ * Koin module for :data. Binds repository interfaces (declared in :domain) to
+ * implementations defined here. Also binds the production DispatcherProvider.
+ */
+val dataModule = module {
+    singleOf(::RealDispatcherProvider) bind DispatcherProvider::class
+
+    // singleOf(::UserRepositoryImpl) bind UserRepository::class
+}

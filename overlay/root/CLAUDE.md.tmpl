@@ -1,0 +1,46 @@
+# CLAUDE.md
+
+Scaffolded with the [**kmp-forge**](https://github.com/arthurnagy/kmp-forge) Claude Code plugin. Plugin docs are the source of truth for architecture, stack, CI, git, product, release, observability, testing, secrets, and i18n/a11y. This file holds only project-specific facts.
+
+## Product
+- **Name:** ${APP_NAME}
+- **One-liner:** ${APP_TAGLINE}
+- **Spec:** [docs/MVP_SPEC.md](docs/MVP_SPEC.md)
+- **Figma:** ${FIGMA_URL}
+
+## Platforms
+${PLATFORM_LIST}
+
+## Build & Run
+${BUILD_COMMANDS}
+
+## Modules
+${MODULE_LIST}
+
+Features: ${FEATURE_LIST}
+
+## Stack (locked — see plugin [docs/stack.md](https://github.com/arthurnagy/kmp-forge/blob/main/docs/stack.md))
+KMP + Compose Multiplatform · Orbit MVI · Koin · Navigation 3 · Coil 3 · Kermit · kotlinx-datetime · kotlinx-serialization · Compose Multiplatform Resources.
+
+Optional in this project: ${OPTIONAL_LIBS}.
+
+## Project conventions (linked to plugin docs)
+- Architecture: https://github.com/arthurnagy/kmp-forge/blob/main/docs/architecture.md
+- Stack: https://github.com/arthurnagy/kmp-forge/blob/main/docs/stack.md
+- Testing: https://github.com/arthurnagy/kmp-forge/blob/main/docs/testing.md
+- Git & PRs: https://github.com/arthurnagy/kmp-forge/blob/main/docs/git-conventions.md
+- CI: https://github.com/arthurnagy/kmp-forge/blob/main/docs/ci.md
+- Release: https://github.com/arthurnagy/kmp-forge/blob/main/docs/release.md
+- Observability: https://github.com/arthurnagy/kmp-forge/blob/main/docs/observability.md
+- Secrets: https://github.com/arthurnagy/kmp-forge/blob/main/docs/secrets.md
+- i18n & a11y: https://github.com/arthurnagy/kmp-forge/blob/main/docs/i18n-a11y.md
+- iOS troubleshooting: https://github.com/arthurnagy/kmp-forge/blob/main/docs/ios-troubleshooting.md
+
+Prefer kmp-forge slash commands over hand-rolled scaffolding:
+`/kmp-forge-add-feature`, `/kmp-forge-add-screen`, `/kmp-forge-add-platform`, `/kmp-forge-add-library`, `/kmp-forge-bump-stack`, `/kmp-forge-spec`, `/kmp-forge-doctor`.
+
+## Project-specific overrides
+${PROJECT_OVERRIDES}
+
+## Timeline
+${TIMELINE}

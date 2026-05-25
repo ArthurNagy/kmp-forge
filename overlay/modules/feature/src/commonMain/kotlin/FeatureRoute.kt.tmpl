@@ -1,0 +1,11 @@
+package ${BASE_PACKAGE}.feature.${FEATURE_NAME}
+
+import androidx.navigation3.runtime.NavKey
+import kotlinx.serialization.Serializable
+
+/**
+ * Navigation 3 destination for [${FEATURE_NAME_PASCAL}Screen].
+ * Use as: `backStack.add(${FEATURE_NAME_PASCAL}Route)` or `backStack.add(${FEATURE_NAME_PASCAL}Route(arg))`.
+ */
+@Serializable
+data object ${FEATURE_NAME_PASCAL}Route : NavKey

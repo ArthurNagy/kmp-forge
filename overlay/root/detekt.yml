@@ -1,0 +1,54 @@
+build:
+  maxIssues: 0
+  weights:
+    complexity: 2
+    LongParameterList: 1
+    style: 1
+    comments: 1
+
+complexity:
+  active: true
+  ComplexMethod:
+    threshold: 15
+  LongMethod:
+    threshold: 60
+  LongParameterList:
+    functionThreshold: 8
+    constructorThreshold: 8
+  TooManyFunctions:
+    thresholdInFiles: 30
+    thresholdInClasses: 15
+
+empty-blocks:
+  active: true
+
+exceptions:
+  active: true
+  TooGenericExceptionCaught:
+    active: true
+  SwallowedException:
+    active: true
+
+naming:
+  active: true
+  FunctionNaming:
+    functionPattern: "([a-z][a-zA-Z0-9]*)|(`.*`)"   # allow PascalCase for @Composable
+
+performance:
+  active: true
+
+potential-bugs:
+  active: true
+
+style:
+  active: true
+  MagicNumber:
+    ignoreAnnotation: true
+    ignoreNumbers: ['-1', '0', '1', '2', '100', '1000']
+  MaxLineLength:
+    maxLineLength: 140
+  ReturnCount:
+    max: 4
+  WildcardImport:
+    active: true
+    excludeImports: ['kotlinx.coroutines.*', 'kotlin.test.*']

@@ -1,0 +1,26 @@
+name: Bug report
+description: Something is broken or behaving unexpectedly
+labels: [bug]
+body:
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened?
+      description: Concrete steps + expected vs actual behavior
+    validations:
+      required: true
+  - type: input
+    id: platform
+    attributes:
+      label: Platform
+      placeholder: "Android 14 / iOS 17 / desktop macOS 14 / web Chrome 120"
+  - type: input
+    id: app-version
+    attributes:
+      label: App version
+      placeholder: "v0.3.2"
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs / screenshots
+      render: shell

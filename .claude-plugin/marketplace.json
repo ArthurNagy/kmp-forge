@@ -1,0 +1,18 @@
+{
+  "$schema": "https://anthropic.com/claude-code/marketplace.schema.json",
+  "name": "kmp-forge",
+  "description": "Marketplace for kmp-forge: scaffold and guide Kotlin Multiplatform + Compose Multiplatform projects on a locked, opinionated stack.",
+  "owner": {
+    "name": "Arthur Nagy",
+    "url": "https://github.com/arthurnagy"
+  },
+  "plugins": [
+    {
+      "name": "kmp-forge",
+      "description": "Scaffold and guide Kotlin Multiplatform + Compose Multiplatform projects with a locked, opinionated stack.",
+      "source": "./",
+      "category": "development",
+      "version": "0.2.0"
+    }
+  ]
+}

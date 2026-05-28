@@ -5,6 +5,11 @@ All notable changes to `kmp-forge` will be documented in this file.
 Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Changed
+- **Self-contained marketplace** — collapsed the standalone `arthurnagy/claude-plugins` marketplace repo into this repo. `.claude-plugin/marketplace.json` now lives at the repo root with `source: "./"` (caveman-style). Install path is now `/plugin marketplace add arthurnagy/kmp-forge` + `/plugin install kmp-forge@kmp-forge`. Reason: the standalone marketplace was triggering an SSH clone of `arthurnagy/kmp-forge` regardless of source shape (`github`, `git`, `git-subdir` all failed in different ways); a single self-contained repo sidesteps the second-repo clone entirely.
+
 ## [0.2.0] - 2026-05-25
 
 Refinements pass after user's expanded notes.

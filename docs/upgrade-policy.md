@@ -54,5 +54,5 @@ If migration demand grows post-v1 (multiple personal projects, real friction), v
 
 - Bump major version in `.claude-plugin/plugin.json`
 - Add `## [v2.0.0] — YYYY-MM-DD` section to `CHANGELOG.md` listing every breaking template change with manual-migration steps
-- Update `marketplace.json` in `arthurnagy-claude-plugins` to point to the new tag
+- Update `.claude-plugin/marketplace.json` in this repo to bump the plugin `version` to the new tag
 - Open a tracking issue in the plugin repo for the migration; link from the README's "Currently supported" badge

@@ -9,8 +9,8 @@ A Claude Code plugin that scaffolds and guides Kotlin Multiplatform + Compose Mu
 ## Install
 
 ```
-/plugin marketplace add arthurnagy/claude-plugins
-/plugin install kmp-forge@arthurnagy-claude-plugins
+/plugin marketplace add arthurnagy/kmp-forge
+/plugin install kmp-forge@kmp-forge
 ```
 
 ## Slash commands

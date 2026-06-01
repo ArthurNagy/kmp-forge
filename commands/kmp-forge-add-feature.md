@@ -1,6 +1,6 @@
 ---
 description: Add a new :feature-<name> module (Compose screen + Orbit ViewModel + state + Koin module + Nav 3 destination + commonTest skeleton).
-arguments: <feature-name>
+argument-hint: <feature-name>
 ---
 
 # /kmp-forge-add-feature

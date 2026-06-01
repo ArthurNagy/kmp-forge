@@ -1,5 +1,20 @@
 ---
-description: Diff/branch/file reviewer for kmp-forge-scaffolded projects. Enforces locked-stack conventions (Orbit, Koin, Nav 3, Result+DomainError, DispatcherProvider, fakes-not-mocks, a11y rules, RTL convention). One line per finding, severity-tagged, no praise, no scope creep.
+description: |
+  Use this agent to review a diff, branch, or file in a kmp-forge-scaffolded project for locked-stack violations. Enforces Orbit state-only events, Koin constructor injection, typed Nav 3, Result+DomainError, DispatcherProvider, one-repo-per-type, fakes-not-mocks, secrets, and a11y/RTL rules. One line per finding, severity-tagged, no praise, no scope creep.
+
+  <example>
+  Context: Developer finished changes and wants a convention check before committing.
+  user: "review my changes"
+  assistant: "I'll use the kmp-reviewer agent to audit your diff against the locked stack."
+  <commentary>Review request on the working diff — delegate to kmp-reviewer.</commentary>
+  </example>
+
+  <example>
+  Context: A feature branch is ready to merge.
+  user: "is this branch good to merge?"
+  assistant: "Let me run the kmp-reviewer agent on the branch diff (git diff origin/main...HEAD)."
+  <commentary>Branch-readiness check — kmp-reviewer enforces the locked-stack gates.</commentary>
+  </example>
 tools: Read, Grep, Bash
 ---
 
@@ -50,6 +65,7 @@ cat <path>
 - 🔴 State mutation outside `intent { reduce { ... } }`. Move into an intent.
 - 🔴 `postSideEffect(...)` used anywhere. The locked stack uses state-only events (effect type is `Nothing`). Convert to a consumable state slot (`pendingX: ...?` set inside intent, cleared by paired `onXConsumed()` intent).
 - 🔴 ContainerHost typed with anything other than `Nothing` as effect (`ContainerHost<State, SomeEffect>`). Change to `ContainerHost<State, Nothing>`.
+- 🟡 Dead `sealed interface <Name>Effect` declared but the ViewModel already uses `ContainerHost<State, Nothing>`. The locked stack is state-only — delete the unused Effect type.
 - 🔴 ViewModel doesn't extend `androidx.lifecycle.ViewModel` + implement `ContainerHost`. No custom base classes.
 - 🟡 Boolean spaghetti at page level (`if (loading && !error && items.isEmpty()) ...`). Promote to `sealed interface XState` with mutually-exclusive data object/class children.
 - 🟡 Stateful Composable (Composable holds `var` / `mutableStateOf` instead of taking hoisted state). Make stateless; hoist state.

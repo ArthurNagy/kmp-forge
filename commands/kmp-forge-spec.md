@@ -1,6 +1,6 @@
 ---
 description: Author docs/MVP_SPEC.md interactively or by structuring a free-form dump.
-arguments: [--from-dump]
+argument-hint: [--from-dump]
 ---
 
 # /kmp-forge-spec

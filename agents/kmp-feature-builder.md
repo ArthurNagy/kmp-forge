@@ -1,5 +1,20 @@
 ---
-description: Generates a complete :feature-<name> module on the kmp-forge locked stack — Compose screen + Orbit ViewModel + state + Koin module + Nav 3 destination + commonTest skeleton. Invoked by /kmp-forge-add-feature.
+description: |
+  Use this agent to generate a complete :feature-<name> module on the kmp-forge locked stack — Compose screen + Orbit ViewModel + state + Koin module + Nav 3 destination + commonTest skeleton. Trigger whenever a new feature module needs scaffolding in a kmp-forge project, whether invoked explicitly via /kmp-forge-add-feature or when the user asks for a new feature by name.
+
+  <example>
+  Context: User runs the add-feature command.
+  user: "/kmp-forge-add-feature gallery"
+  assistant: "I'll use the kmp-feature-builder agent to scaffold the :feature-gallery module."
+  <commentary>Explicit command invocation — delegate module generation to kmp-feature-builder.</commentary>
+  </example>
+
+  <example>
+  Context: User asks for a new feature in natural language.
+  user: "Add a photo-detail screen as its own feature module"
+  assistant: "I'll use the kmp-feature-builder agent to create the :feature-photo-detail module (Compose screen, Orbit ViewModel, Koin module, Nav 3 route)."
+  <commentary>New feature module requested — kmp-feature-builder owns generation on the locked stack.</commentary>
+  </example>
 tools: Read, Write, Edit, Grep, Glob, Bash
 ---
 
@@ -18,7 +33,7 @@ A complete `:feature-<feature_name>` Gradle module containing:
 
 | File | Purpose |
 |---|---|
-| `<Name>State.kt` | `data class <Name>State(...)` + `sealed interface <Name>Effect` |
+| `<Name>State.kt` | `data class <Name>State(...)` — state only, **no Effect type** (the stack uses `ContainerHost<State, Nothing>`) |
 | `<Name>ViewModel.kt` | `ViewModel + ContainerHost<State, Nothing>` (state-only events) |
 | `<Name>Screen.kt` | Stateless Composable + `<Name>Content` extraction |
 | `<Name>Route.kt` | `@Serializable data object/class <Name>Route : NavKey` |

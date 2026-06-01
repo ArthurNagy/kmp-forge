@@ -1,6 +1,6 @@
 ---
 description: Search klibs.io for a KMP library, present matches, and add the chosen one to gradle/libs.versions.toml plus a target module.
-arguments: <search-query>
+argument-hint: <search-query>
 ---
 
 # /kmp-forge-add-library

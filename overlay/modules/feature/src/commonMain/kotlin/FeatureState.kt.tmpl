@@ -1,5 +1,7 @@
 package ${BASE_PACKAGE}.feature.${FEATURE_NAME}
 
+import ${BASE_PACKAGE}.domain.DomainError
+
 /**
  * UI state for [${FEATURE_NAME_PASCAL}Screen]. Immutable; mutated only inside
  * [${FEATURE_NAME_PASCAL}ViewModel.container] via `intent { reduce { ... } }`.
@@ -16,7 +18,9 @@ package ${BASE_PACKAGE}.feature.${FEATURE_NAME}
  */
 data class ${FEATURE_NAME_PASCAL}State(
     val loading: Boolean = false,
-    val error: String? = null,
+    // DomainError carried as-is; the UI maps it to a string resource at render time
+    // (domain stays free of presentation strings — see docs/i18n-a11y.md).
+    val error: DomainError? = null,
 
     // Consumable event slots — set inside intent {}, cleared by paired onXxxConsumed().
     val pendingMessage: String? = null,

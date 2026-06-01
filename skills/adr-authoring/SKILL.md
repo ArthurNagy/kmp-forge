@@ -67,7 +67,7 @@ Every scaffolded project ships with these 6, documenting the locked-stack ration
 - `0002-koin.md` — why Koin over kotlin-inject / Metro
 - `0003-hybrid-architecture.md` — why feature-presentation + shared domain/data
 - `0004-nav3.md` — why Nav 3 over AndroidX Nav 2 / Voyager / Decompose
-- `0005-result-domain-error.md` — why Result + sealed DomainError over Arrow / exceptions
+- `0005-result-domain-error.md` — why kotlin-result (Result<V, E>) + sealed DomainError over Arrow / exceptions
 - `0006-dispatcher-provider.md` — why inject DispatcherProvider
 
 The project's first author-written ADR starts at `0007`.
@@ -113,13 +113,13 @@ Three pillars:
 Don't edit Accepted ADRs in place. Write a new ADR that supersedes:
 
 ```markdown
-# 0014. Switch from Result<T> to Arrow Either
+# 0014. Switch from kotlin-result to Arrow Either
 
 Date: 2026-09-01
 Status: Accepted (supersedes [0005](0005-result-domain-error.md))
 
 ## Context
-After 18 months, multi-step domain workflows have grown verbose with Result.fold chaining...
+After 18 months, multi-step domain workflows have grown verbose even with kotlin-result's `coroutineBinding`; we want Raise's typed-error effect scopes...
 
 ## Decision
 Adopt arrow-kt's Either<DomainError, T> with Raise DSL across :domain...

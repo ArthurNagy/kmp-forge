@@ -101,7 +101,7 @@ Full stack table lives in `README.md`. The rules below are the ones literally en
 
 - **State-only events**: `ContainerHost<State, Nothing>`. `postSideEffect` forbidden. One-shot events (nav, toasts) → consumable state slots (`pendingNavigation: Route?`) cleared by `onXxxConsumed()` intents the UI calls after `LaunchedEffect`.
 - **No raw dispatchers**: `Dispatchers.IO/Default/Main` forbidden in `:domain`/`:data`/`:feature-*`. Inject `DispatcherProvider`.
-- **Result + sealed DomainError**: use cases return `Result<T, DomainError>`. No throws, no `try/catch` in `intent {}`.
+- **Result + sealed DomainError**: use cases return `Result<T, DomainError>` — kotlin-result's two-param `Result<V, E>` (Gradle `com.michael-bull.kotlin-result:kotlin-result`, import `com.github.michaelbull.result.*`), declared `api` in `:domain`. Not stdlib `kotlin.Result`. No throws, no `try/catch` in `intent {}`.
 - **Typed nav**: Nav 3 routes are `@Serializable ... : NavKey`. No string keys.
 - **Koin constructor injection only**: `viewModelOf(::Foo)`, no `GlobalContext.get()`, no `KoinComponent` service locator.
 - **One repo per domain type**: never `AppRepository` god object.

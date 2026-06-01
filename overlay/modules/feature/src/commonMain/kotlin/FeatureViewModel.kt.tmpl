@@ -10,7 +10,11 @@ class ${FEATURE_NAME_PASCAL}ViewModel : ViewModel(), ContainerHost<${FEATURE_NAM
 
     fun load() = intent {
         reduce { state.copy(loading = true, error = null) }
-        // TODO: invoke use case from :domain via constructor-injected dependency
+        // TODO: inject a use case from :domain via the constructor and consume its
+        //   Result<T, DomainError> with kotlin-result (import com.github.michaelbull.result.*):
+        //     getX()
+        //         .onSuccess { data -> reduce { state.copy(loading = false, /* ... = data */) } }
+        //         .onFailure { error -> reduce { state.copy(loading = false, error = error) } }
         reduce { state.copy(loading = false) }
     }
 

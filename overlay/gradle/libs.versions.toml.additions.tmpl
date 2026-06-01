@@ -25,6 +25,7 @@ spotless = "7.0.2"
 ktlint = "1.5.0"
 kover = "0.9.1"
 store = "5.1.0-alpha05"
+kotlinResult = "2.3.1"
 
 # --- gradle plugins used by build-logic ---
 kotlinGradlePlugin = "2.2.20"
@@ -63,6 +64,12 @@ ktor-client-js = { module = "io.ktor:ktor-client-js", version.ref = "ktor" }
 
 # Kermit
 kermit = { module = "co.touchlab:kermit", version.ref = "kermit" }
+
+# kotlin-result — two-param Result<V, E> for Result + DomainError error handling.
+# Maven Central coordinate is "com.michael-bull.kotlin-result"; the Kotlin import
+# package is "com.github.michaelbull.result.*" (Ok/Err/onSuccess/onFailure/fold/...).
+kotlin-result = { module = "com.michael-bull.kotlin-result:kotlin-result", version.ref = "kotlinResult" }
+kotlin-result-coroutines = { module = "com.michael-bull.kotlin-result:kotlin-result-coroutines", version.ref = "kotlinResult" }
 
 # KotlinX
 kotlinx-coroutines-core = { module = "org.jetbrains.kotlinx:kotlinx-coroutines-core", version.ref = "kotlinxCoroutines" }

@@ -57,6 +57,13 @@ The foundation. Compose Multiplatform 1.10+ for Material 3 + multi-platform UI.
 - **Where**: every suspending boundary; Flow for reactive streams.
 - **Anti-patterns**: `Dispatchers.IO` referenced directly in ViewModels or repos — use `DispatcherProvider` instead.
 
+### kotlin-result (Result + DomainError)
+- **Why**: a two-parameter `Result<V, E>` makes each use case's failure modes explicit in its signature, without Arrow's weight. Kotlin's stdlib `Result<T>` is single-param with a `Throwable`-only failure and can't carry a typed `DomainError`.
+- **Where**: every use case returns `Result<T, DomainError>`; ViewModels consume it with `onSuccess`/`onFailure`; repositories return it from `:data`.
+- **Coordinates**: Gradle `com.michael-bull.kotlin-result:kotlin-result` (+ `kotlin-result-coroutines` for `coroutineBinding`). Kotlin import package is `com.github.michaelbull.result.*` — **note the coordinate and package differ**. Declared `api` in `:domain` so it flows transitively to `:data`/`:feature-*`.
+- **Idiom**: `repo.find(id)?.let { Ok(it) } ?: Err(UserError.NotFound)`; consume with `result.onSuccess { ... }.onFailure { ... }` or `result.fold(success = { ... }, failure = { ... })`. Multi-step: `coroutineBinding { val a = stepA().bind(); val b = stepB(a).bind(); b }`.
+- **Anti-patterns**: importing `kotlin.Result` / using `runCatching` (returns the stdlib type — shadows this one); making `DomainError` extend `Throwable`; careless `.get()!!` / `unwrap()` instead of `fold`/`onSuccess`/`onFailure`/`getOrElse`.
+
 ### kotlinx-datetime
 - **Why**: KMP-native date/time primitives (`Instant`, `LocalDate`, `Clock`).
 - **Where**: any timestamp-aware code.

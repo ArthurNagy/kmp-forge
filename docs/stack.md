@@ -38,7 +38,7 @@ The foundation. Compose Multiplatform 1.10+ for Material 3 + multi-platform UI.
       }
   }
   ```
-- **Anti-patterns**: untyped routes (string keys); mutating the back stack from outside Composition (do it inside `intent {}` via `postSideEffect`).
+- **Anti-patterns**: untyped routes (string keys); mutating the back stack from outside Composition; using `postSideEffect` for navigation (effect type is `Nothing`) — instead set a consumable `pendingNavigation: Route?` slot inside `intent {}` and mutate the back stack in a `LaunchedEffect` observing it.
 - **Artifact**: `androidx.navigation3:navigation3-ui:1.1.2`, `androidx.navigation3:navigation3-runtime:1.1.2`.
 
 ### Coil 3

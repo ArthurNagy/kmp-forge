@@ -6,6 +6,15 @@ import ${BASE_PACKAGE}.domain.DomainError
  * UI state for [${FEATURE_NAME_PASCAL}Screen]. Immutable; mutated only inside
  * [${FEATURE_NAME_PASCAL}ViewModel.container] via `intent { reduce { ... } }`.
  *
+ * **No default values.** Every property is explicit so the call site states its
+ * full intent and adding a field forces every constructor to be revisited. The
+ * starting state lives in [Companion.Initial] (the single source of truth used by
+ * the ViewModel's `container(...)` and by tests) — not as constructor defaults.
+ *
+ * **`internal`.** State never leaves the feature module. The feature's only public
+ * surface is [${FEATURE_NAME_PASCAL}Route], its Koin module, and `add${FEATURE_NAME_PASCAL}Entries`
+ * (see ${FEATURE_NAME_PASCAL}NavEntry.kt). See docs/architecture.md § Visibility.
+ *
  * One-shot events (navigation, toasts, snackbars) live as **consumable state slots**
  * on this class — not as Orbit `SideEffect`s. UI observes the slot, consumes it,
  * then calls the matching `onXxxConsumed()` intent to clear it. See README and
@@ -16,20 +25,31 @@ import ${BASE_PACKAGE}.domain.DomainError
  * `sealed interface ${FEATURE_NAME_PASCAL}State` with `data object`/`data class`
  * children. Keep the flat shape when in doubt — easier to evolve.
  */
-data class ${FEATURE_NAME_PASCAL}State(
-    val loading: Boolean = false,
+internal data class ${FEATURE_NAME_PASCAL}State(
+    val loading: Boolean,
     // DomainError carried as-is; the UI maps it to a string resource at render time
     // (domain stays free of presentation strings — see docs/i18n-a11y.md).
-    val error: DomainError? = null,
+    val error: DomainError?,
 
     // Consumable event slots — set inside intent {}, cleared by paired onXxxConsumed().
-    val pendingMessage: String? = null,
-)
+    val pendingMessage: String?,
+) {
+    companion object {
+        /** Starting state. Used by the ViewModel's `container(...)` and by tests. */
+        val Initial = ${FEATURE_NAME_PASCAL}State(
+            loading = false,
+            error = null,
+            pendingMessage = null,
+        )
+    }
+}
 
-// Example of the sealed-state shape, when warranted:
+// Example of the sealed-state shape, when warranted. Note there are no constructor
+// defaults — the starting state is an explicit object (e.g. Loading), not `State()`:
 //
 //   sealed interface ${FEATURE_NAME_PASCAL}State {
 //       data object Loading : ${FEATURE_NAME_PASCAL}State
-//       data class Loaded(val items: List<Item>, val pendingMessage: String? = null) : ${FEATURE_NAME_PASCAL}State
+//       data class Loaded(val items: List<Item>, val pendingMessage: String?) : ${FEATURE_NAME_PASCAL}State
 //       data class Error(val cause: DomainError) : ${FEATURE_NAME_PASCAL}State
 //   }
+//   // container(${FEATURE_NAME_PASCAL}State.Loading)

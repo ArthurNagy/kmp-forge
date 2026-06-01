@@ -1,6 +1,6 @@
 ---
 description: |
-  Use this agent to migrate an EXISTING Kotlin Multiplatform project's code onto the kmp-forge locked patterns, one layer at a time (DispatcherProvider, Result+DomainError, one-repo-per-type, Koin DI, Orbit state-only events, typed Nav 3, module deps, fakes-not-mocks, a11y/i18n). Write-capable; incremental; builds + re-greps to verify each layer. Trigger when refactoring an existing project onto the locked stack — invoked by /kmp-forge-adopt Phase B, or directly for a single layer.
+  Use this agent to migrate an EXISTING Kotlin Multiplatform project's code onto the kmp-forge locked patterns, one layer at a time (DispatcherProvider, Result+DomainError, one-repo-per-type, Koin DI, Orbit state-only events, typed Nav 3, module deps, restrictive visibility, fakes-not-mocks, a11y/i18n). Write-capable; incremental; builds + re-greps to verify each layer. Trigger when refactoring an existing project onto the locked stack — invoked by /kmp-forge-adopt Phase B, or directly for a single layer.
 
   <example>
   Context: /kmp-forge-adopt Phase B drives the guided refactor layer by layer.
@@ -25,7 +25,7 @@ You refactor existing KMP code onto the kmp-forge locked stack. You are the **wr
 - `project_root` (absolute path)
 - `base_package` (reverse-domain, e.g. `com.example.myapp`)
 - `claude_plugin_root` (absolute path to the installed kmp-forge plugin)
-- `layer` — **one** of: `dispatchers` · `result` · `repos` · `koin` · `orbit` · `nav` · `module-deps` · `tests` · `a11y` (the dependency-ordered layers). Optionally `foundations` to only establish `:domain` base types.
+- `layer` — **one** of: `dispatchers` · `result` · `repos` · `koin` · `orbit` · `nav` · `module-deps` · `visibility` · `tests` · `a11y` (the dependency-ordered layers). Optionally `foundations` to only establish `:domain` base types.
 - `target` (optional) — scope to one module/feature, e.g. `feature-gallery`. Default: all relevant modules.
 
 You execute **exactly one layer per invocation**. Refactoring all layers at once is forbidden — each layer must build and self-verify before the next depends on it.
@@ -97,14 +97,14 @@ For each: read the doc, run **detect**, apply **transform**, run **verify** (res
 ### `orbit` — state-only events (largest; per-feature)
 - Doc: `architecture.md` § ViewModel + Orbit pattern.
 - **Detect (per feature):** `grep -rnE "ContainerHost<[^,]+,\s*(?!Nothing)" feature-X/src` (effect type ≠ `Nothing`); `postSideEffect`; `collectSideEffect`; `grep -rnE "sealed interface \w+Effect" feature-X/src` (dead Effect types — appear even in freshly-generated features, must be removed); state mutations outside `reduce {`.
-- **Transform:** change `ContainerHost<State, XEffect>` → `ContainerHost<State, Nothing>` and `container<State, XEffect>(...)` → `container<State, Nothing>(...)`. For each `postSideEffect(XEffect.Foo(arg))`: add a consumable slot to State (`pendingFoo: ArgType? = null`), replace the post with `reduce { state.copy(pendingFoo = arg) }`, add `fun onFooConsumed() = intent { reduce { state.copy(pendingFoo = null) } }`. In the Composable, replace `viewModel.collectSideEffect { ... }` with `LaunchedEffect(state.pendingFoo) { state.pendingFoo?.let { ...; viewModel.onFooConsumed() } }`. Delete the now-dead `sealed interface XEffect`. Move stray mutations into `intent { reduce { } }`.
+- **Transform:** change `ContainerHost<State, XEffect>` → `ContainerHost<State, Nothing>` and `container<State, XEffect>(...)` → `container<State, Nothing>(...)`. For each `postSideEffect(XEffect.Foo(arg))`: add a consumable slot to State — declared **without a default** (`val pendingFoo: ArgType?`) and initialized to `null` in the State's `companion object { val Initial }` (the `visibility` layer establishes `Initial`; if it hasn't run yet, keep the slot non-default and seed it in whatever initial-state construction exists). Replace the post with `reduce { state.copy(pendingFoo = arg) }`, add `fun onFooConsumed() = intent { reduce { state.copy(pendingFoo = null) } }`. In the Composable, replace `viewModel.collectSideEffect { ... }` with `LaunchedEffect(state.pendingFoo) { state.pendingFoo?.let { ...; viewModel.onFooConsumed() } }`. Delete the now-dead `sealed interface XEffect`. Move stray mutations into `intent { reduce { } }`.
 - **Verify:** no `postSideEffect`/`collectSideEffect`, no non-`Nothing` ContainerHost in the feature; `./gradlew :feature-X:build :feature-X:commonTest`.
 
-### `nav` — typed Nav 3 routes
-- Doc: `architecture.md` § feature, reviewer Navigation section.
-- **Detect:** string route keys, `Bundle` args, routes missing `@Serializable` or not implementing `NavKey`.
-- **Transform:** define `@Serializable data class/object XRoute(...) : NavKey`; replace string-key navigation with typed routes; ensure each route is handled in `NavDisplay`'s `when`.
-- **Verify:** build.
+### `nav` — typed Nav 3 routes + entry contributions
+- Doc: `architecture.md` § feature + § Navigation wiring, reviewer Navigation section.
+- **Detect:** string route keys, `Bundle` args, routes missing `@Serializable` or not implementing `NavKey`; an app-side `NavDisplay(backStack) { key -> when (key) { ... XScreen(...) } }` that references feature screens directly.
+- **Transform:** define `@Serializable data class/object XRoute(...) : NavKey` (public); replace string-key navigation with typed routes. Migrate the app's `when` to the `entryProvider { }` DSL: for each feature add a public `fun EntryProviderBuilder<NavKey>.addXEntries(onNavigateBack: () -> Unit, /* onOpenY callbacks */) { entry<XRoute> { XScreen(...) } }` in the feature module, and call `addXEntries(...)` inside `NavDisplay(entryProvider = entryProvider { ... })`. Pass cross-feature navigation as callbacks (the app owns target routes) so no feature imports another feature's Route. This is what lets the `visibility` layer make `XScreen`/`XViewModel`/`XState` `internal`.
+- **Verify:** build; no app-side `when (key)` referencing feature screens remains.
 
 ### `module-deps` — dependency direction (structural — surface, apply mechanical)
 - Doc: `architecture.md` § Dependency direction.
@@ -112,10 +112,24 @@ For each: read the doc, run **detect**, apply **transform**, run **verify** (res
 - **Transform:** remove the illegal dependency from `build.gradle.kts` and repoint the code to a `:domain` interface (inject the repo via Koin instead of a direct `:data` reference). When the fix requires moving code (decision-bearing), apply the mechanical part and `// TODO(kmp-forge):` + report the rest.
 - **Verify:** build (compilation enforces the boundary).
 
+### `visibility` — restrict visibility + explicit state (run after `nav`/`module-deps`)
+- Doc: `architecture.md` § Visibility. Run this **after** `nav` (screens can only go `internal` once the app composes them via `addXEntries`, not a `when`) and `module-deps` (structure settled).
+- **Detect:**
+  - `grep -rnE "^(public )?(data )?class \w+(RepositoryImpl|DataSource|Dto)\b|RealDispatcherProvider" "$project_root"/data/src` — repo impls / data sources / DTOs / dispatcher provider that aren't `internal`.
+  - In `:feature-*`: `State`/`ViewModel`/`Screen` declarations that are `public` (no `internal`/`private` modifier); `Content` Composables that are `public`.
+  - Default values on domain entities + presentation `State` (`grep -rnE "val \w+: [^=]+= " domain/src feature-*/src` — filter to entity/State data classes by hand); `State` lacking a `companion object { val Initial }`; any residual no-arg `XState()` construction (`container(XState())`, `vm.test(this, XState())`).
+- **Transform:**
+  - `:data` — prefix repo impls, data sources, DTOs, and `RealDispatcherProvider` with `internal`. Koin bindings (`singleOf(::XImpl) bind X::class`) keep working because the module is in the same module.
+  - `:feature-*` — make `State`/`ViewModel`/`Screen` `internal`, `Content` `private`. Drop the `viewModel =` default param from `XScreen` (would leak the internal type) and resolve `koinViewModel<XViewModel>()` in the body. Keep `Route`, the Koin `Module`, and `addXEntries(...)` public.
+  - **State without defaults** — remove constructor defaults from each `State`; add a `companion object { val Initial = XState(... all fields ...) }`; replace `container(XState())` → `container(XState.Initial)` and `vm.test(this, XState())` → `vm.test(this, XState.Initial)` (slot-seeded tests → `XState.Initial.copy(...)`).
+  - **Domain entities without defaults** — remove constructor defaults from domain entities/data classes; fix the now-broken call sites to pass every field. Leave DTO defaults alone (wire-format concern). Where a removed default encodes product behavior you can't derive, leave `// TODO(kmp-forge): <field> had a default — confirm the intended value at each call site`.
+  - **Do not** make use-case constructors `internal` — feature tests build them with fakes.
+- **Verify:** detection greps empty (no `public` impls/screens, no defaults on entities/State, no no-arg `XState()`); `./gradlew <data + feature modules>:build`.
+
 ### `tests` — fakes over mocks
 - Doc: `testing.md`.
 - **Detect:** `grep -rn "io.mockk" "$project_root"/**/src/commonTest`; ViewModel tests not using `.test()`.
-- **Transform:** replace `commonTest` MockK with hand-written `Fake<Name>` implementing the interface (in-memory state, a `nextError: DomainError? = null` slot, returning `Result`). Convert VM tests to `vm.test(this, XState()) { expectInitialState(); ...; expectState { copy(...) } }`. Genuinely-needed platform mocks move to `jvmTest`/`androidTest` with a `// mocked: <reason>` comment.
+- **Transform:** replace `commonTest` MockK with hand-written `Fake<Name>` implementing the interface (in-memory state, a `nextError: DomainError? = null` slot — a mutable test knob, defaults are fine here, returning `Result`). Convert VM tests to `vm.test(this, XState.Initial) { expectInitialState(); ...; expectState { copy(...) } }` (never a no-arg `XState()`). Genuinely-needed platform mocks move to `jvmTest`/`androidTest` with a `// mocked: <reason>` comment.
 - **Verify:** `./gradlew <module>:commonTest` (and `jvmTest` if used).
 
 ### `a11y` — accessibility / i18n (warn-level)

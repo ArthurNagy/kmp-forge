@@ -5,6 +5,9 @@ import org.koin.dsl.module
 /**
  * Koin module for :domain. Add use cases here as the project grows.
  * Repository interfaces are bound in :data's module to their implementations.
+ *
+ * Use cases keep public constructors (so :feature-* tests can build them with
+ * fakes), but in production they're constructed only here via Koin.
  */
 val domainModule = module {
     // factoryOf(::GetSomethingUseCase)

@@ -92,18 +92,19 @@ Use the Edit tool. Be defensive: if the file doesn't exist or the pattern doesn'
 
 ### 6. Wire Nav 3 destination
 
-Edit `composeApp/src/commonMain/kotlin/<base-pkg-path>/App.kt` (or wherever `NavDisplay` is called) to add a `when` branch for `<Name>Route`:
+Edit `composeApp/src/commonMain/kotlin/<base-pkg-path>/App.kt` (or wherever `NavDisplay` is called) to add the feature's entry contribution to the `entryProvider { }` block (import `add<Name>Entries` from the feature package). The screen is `internal` — never reference it directly.
 
 ```kotlin
-NavDisplay(backStack) { key ->
-    when (key) {
-        // existing branches…
-        is PhotoDetailRoute -> PhotoDetailScreen(onNavigateBack = { backStack.removeLastOrNull() })
-    }
-}
+NavDisplay(
+    backStack = backStack,
+    entryProvider = entryProvider {
+        // existing feature entries…
+        addPhotoDetailEntries(onNavigateBack = { backStack.removeLastOrNull() })  // ← add
+    },
+)
 ```
 
-Same defensive Edit pattern.
+Same defensive Edit pattern. If the app still uses a `NavDisplay(backStack) { key -> when (key) { ... } }`, surface the migration to the `entryProvider { }` DSL for the user to apply rather than adding a `when` branch.
 
 ### 7. Update CLAUDE.md
 

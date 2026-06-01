@@ -219,10 +219,11 @@ Turn the findings into a **dependency-ordered work-list** — foundations first 
 3. `repos` — **One repo per domain type** split any `AppRepository`/`DataRepository` god object.
 4. `koin` — **Koin constructor injection** remove `GlobalContext.get()`/`KoinComponent`; `viewModelOf(::X)`, `koinViewModel<T>()`.
 5. `orbit` — **Orbit state-only events** `ContainerHost<State, Nothing>`; replace every `postSideEffect` with a consumable state slot (`pendingX: ...?` set in intent, cleared by paired `onXConsumed()` intent the UI calls after `LaunchedEffect`). Biggest surface; per-feature.
-6. `nav` — **Typed Nav 3** `@Serializable ... : NavKey` routes + `NavDisplay` `when`; remove string keys.
+6. `nav` — **Typed Nav 3** `@Serializable ... : NavKey` routes; migrate the app's `NavDisplay { when }` → per-feature `addXEntries(...)` contributions composed in `entryProvider { }`; remove string keys.
 7. `module-deps` — enforce `:domain` pure Kotlin / `:feature-*` → `:domain` + `:ui` only / no feature → feature / `:data` never imports `:ui`.
-8. `tests` — move MockK out of `commonTest` → fakes + `ContainerHost.test()` harness.
-9. `a11y` (🟡) — `contentDescription`, `start/end` not `left/right`, user strings → `Res.string`, typography over hardcoded `.sp`.
+8. `visibility` — **Restrictive visibility + explicit state** repo impls/data sources/DTOs/`RealDispatcherProvider` → `internal`; feature `State`/`ViewModel`/`Screen` → `internal` (`Content` → `private`); drop default values from domain entities + `State`; add `State.Initial` companion (use cases keep public ctors). Run after `nav` + `module-deps`.
+9. `tests` — move MockK out of `commonTest` → fakes + `ContainerHost.test()` harness (seed with `State.Initial`).
+10. `a11y` (🟡) — `contentDescription`, `start/end` not `left/right`, user strings → `Res.string`, typography over hardcoded `.sp`.
 
 The layer keys above map 1:1 to the `layer` input of the **`kmp-migrator`** agent.
 
@@ -266,8 +267,9 @@ Phase B refactor remaining (from kmp-reviewer):
   [ ] one-repo-per-type      <count>
   [ ] Koin constructor DI    <count>
   [ ] Orbit state-only       <count>  (per-feature)
-  [ ] Typed Nav 3            <count>
+  [ ] Typed Nav 3 + entries  <count>
   [ ] Module deps            <count>
+  [ ] Visibility + explicit  <count>
   [ ] Tests (fakes)          <count>
   [ ] a11y / i18n            <count>
 

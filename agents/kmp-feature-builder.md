@@ -31,27 +31,30 @@ You generate a new `:feature-<name>` module in a kmp-forge-scaffolded project. Y
 
 A complete `:feature-<feature_name>` Gradle module containing:
 
-| File | Purpose |
-|---|---|
-| `<Name>State.kt` | `data class <Name>State(...)` — state only, **no Effect type** (the stack uses `ContainerHost<State, Nothing>`) |
-| `<Name>ViewModel.kt` | `ViewModel + ContainerHost<State, Nothing>` (state-only events) |
-| `<Name>Screen.kt` | Stateless Composable + `<Name>Content` extraction |
-| `<Name>Route.kt` | `@Serializable data object/class <Name>Route : NavKey` |
-| `<feature_pkg>Module.kt` | Koin module with `viewModelOf(::<Name>ViewModel)` |
-| `<Name>ViewModelTest.kt` | `ContainerHost.test()` happy-path test |
-| `build.gradle.kts` | Standard feature module Gradle config |
+| File | Visibility | Purpose |
+|---|---|---|
+| `<Name>State.kt` | `internal` | `data class <Name>State(...)` — state only, **no Effect type** (the stack uses `ContainerHost<State, Nothing>`); **no constructor defaults**; carries `companion object { val Initial = ... }` |
+| `<Name>ViewModel.kt` | `internal` | `ViewModel + ContainerHost<State, Nothing>` (state-only events); `container(<Name>State.Initial)` |
+| `<Name>Screen.kt` | `internal` | Stateless Composable + `private <Name>Content` extraction; resolves `koinViewModel<<Name>ViewModel>()` in the body |
+| `<Name>Route.kt` | **public** | `@Serializable data object/class <Name>Route : NavKey` |
+| `<Name>NavEntry.kt` | **public** | `fun EntryProviderBuilder<NavKey>.add<Name>Entries(onNavigateBack: () -> Unit, ...) { entry<<Name>Route> { <Name>Screen(...) } }` — the feature's only screen-facing public API |
+| `<feature_pkg>Module.kt` | **public** | Koin module with `viewModelOf(::<Name>ViewModel)` |
+| `<Name>ViewModelTest.kt` | — | `ContainerHost.test()` happy-path test, seeded with `<Name>State.Initial` |
+| `build.gradle.kts` | — | Standard feature module Gradle config |
+
+A feature's public surface is exactly its `Route`, its Koin `Module`, and `add<Name>Entries(...)`. Everything else is `internal`/`private`. See docs/architecture.md § Visibility.
 
 ## Locked-stack rules you enforce
 
 These are non-negotiable. Surface a clear error and stop if any conflict with the user's request:
 
-1. ViewModel **must** extend `androidx.lifecycle.ViewModel` and implement `ContainerHost<State, Nothing>`. Never plain `ViewModel`, never custom base classes. **Effect type is always `Nothing`** — the locked stack uses state-only events.
-2. State **must** be a single `data class` with sensible defaults (or a `sealed interface` with `data object`/`data class` children when mutually-exclusive page-level sub-states warrant it — Loading/Loaded/Error). Mutations only via `intent { reduce { ... } }`.
-3. One-shot events **must** be modeled as consumable state slots: `pendingNavigation: Route? = null`, `pendingMessage: String? = null`, etc. UI consumes via `LaunchedEffect(state.pendingX) { ...; viewModel.onXConsumed() }`. **Never `postSideEffect`** — that's the previous Orbit idiom; the locked stack rejects it.
-4. Composables **must** be stateless. The top-level `<Name>Screen` is allowed to hold a `viewModel = koinViewModel<...>()` — but it immediately hoists `state` to a stateless `<Name>Content`.
-5. Nav 3 route **must** be `@Serializable` and implement `NavKey`.
+1. ViewModel **must** extend `androidx.lifecycle.ViewModel` and implement `ContainerHost<State, Nothing>`, and **must** be `internal`. Never plain `ViewModel`, never custom base classes. **Effect type is always `Nothing`** — the locked stack uses state-only events.
+2. State **must** be a single `internal data class` with **no constructor defaults** and a `companion object { val Initial = <Name>State(...) }` (the single starting-state source used by `container(...)` and tests) — or an `internal sealed interface` with `data object`/`data class` children when mutually-exclusive page-level sub-states warrant it (Loading/Loaded/Error; its initial is an explicit object like `Loading`, not a no-arg ctor). Mutations only via `intent { reduce { ... } }`.
+3. One-shot events **must** be modeled as consumable state slots, declared **without defaults** (`val pendingNavigation: Route?`, `val pendingMessage: String?`) and initialized to `null` in `Initial`. UI consumes via `LaunchedEffect(state.pendingX) { ...; viewModel.onXConsumed() }`. **Never `postSideEffect`** — that's the previous Orbit idiom; the locked stack rejects it.
+4. Composables **must** be stateless. The top-level `<Name>Screen` is `internal` and resolves `val viewModel = koinViewModel<<Name>ViewModel>()` in its body (no `viewModel =` parameter — a public param would leak the internal type, and the app never calls `<Name>Screen` directly), then hoists `state` to a `private <Name>Content`. The app composes the feature via `add<Name>Entries(...)`, never by referencing the screen.
+5. Nav 3 route **must** be `@Serializable` and implement `NavKey` (public). The feature **must** expose a public `fun EntryProviderBuilder<NavKey>.add<Name>Entries(onNavigateBack: () -> Unit, ...)` that contributes `entry<<Name>Route> { <Name>Screen(...) }`; outgoing navigation to other features is taken as `onOpenX` callbacks — never import another feature's Route.
 6. Koin module **must** declare `viewModelOf(::<Name>ViewModel)`.
-7. Test **must** use `vm.test(this, <Name>State()) { ... }` Orbit harness — never raw Turbine for the happy path.
+7. Test **must** use `vm.test(this, <Name>State.Initial) { ... }` Orbit harness — never raw Turbine for the happy path; never a no-arg `<Name>State()`.
 8. No `Dispatchers.IO`/`Default`/`Main` references — use injected `DispatcherProvider` via use cases.
 9. No hardcoded `.sp` in the Composable. Use `MaterialTheme.typography`.
 10. Strings on user-facing `Text(...)` should be `stringResource(Res.string.foo)` once the project has resources — if no string table exists yet, use a placeholder literal with a `TODO: extract to Res.string` comment.
@@ -96,7 +99,7 @@ These are non-negotiable. Surface a clear error and stop if any conflict with th
    ```
 
 5. **Inject use-case wiring** (if you found one in step 2). Use `Edit` to:
-   - Add the use case to `<Name>ViewModel`'s constructor: `class <Name>ViewModel(private val getX: GetXUseCase) : ViewModel(), ContainerHost<...>`
+   - Add the use case to `<Name>ViewModel`'s constructor: `internal class <Name>ViewModel(private val getX: GetXUseCase) : ViewModel(), ContainerHost<...>`
    - Replace the `TODO: invoke use case from :domain` line with a real call (kotlin-result — add `import com.github.michaelbull.result.*`; `state.error` is a `DomainError?`, carried as-is and mapped to a string at the UI layer):
      ```kotlin
      getX().onSuccess { data -> reduce { state.copy(loading = false, items = data) } }
@@ -113,7 +116,8 @@ These are non-negotiable. Surface a clear error and stop if any conflict with th
 7. **Wire into composeApp**:
    - Find `App.kt` (or main `@Composable` entrypoint) under `${project_root}/composeApp/src/commonMain/kotlin/`
    - Use `Edit` to add `<feature_pkg>Module` to `startKoin { modules(...) }`
-   - Use `Edit` to add `is <Name>Route -> <Name>Screen(onNavigateBack = { backStack.removeLastOrNull() })` branch to `NavDisplay`'s `when` block
+   - Use `Edit` to add `add<Name>Entries(onNavigateBack = { backStack.removeLastOrNull() })` inside `NavDisplay`'s `entryProvider { ... }` block (import the `add<Name>Entries` extension from the feature package). Do **not** add a `when` branch or reference `<Name>Screen` directly — the screen is `internal`.
+   - If the app still renders nav with a `NavDisplay(backStack) { key -> when (key) { ... } }`, surface the migration to the `entryProvider { }` DSL for the user to apply rather than guessing.
    - If `App.kt` doesn't have `startKoin` or `NavDisplay`, surface the diff for the user to apply manually rather than guessing.
 
 8. **Update CLAUDE.md**:

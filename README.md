@@ -16,6 +16,7 @@ A Claude Code plugin that scaffolds and guides Kotlin Multiplatform + Compose Mu
 ## Slash commands
 
 - `/kmp-forge-init` — scaffold a new project via kmp.new + apply overlay
+- `/kmp-forge-adopt` — adopt the locked stack into an existing KMP project (non-destructive overlay + reviewer-led refactor plan)
 - `/kmp-forge-add-feature <name>` — add a `:feature-<name>` module (UI + ViewModel + state + Koin + Nav 3 destination + tests)
 - `/kmp-forge-add-screen <feature> <screen>` — add an Orbit screen inside an existing feature
 - `/kmp-forge-add-platform <desktop|web|ios>` — add a platform to an existing project

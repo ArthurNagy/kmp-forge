@@ -93,9 +93,11 @@ docs/                        Source-of-truth conventions linked from every scaff
 
 `/kmp-forge-add-feature <name>` delegates to the `kmp-feature-builder` subagent: renders `overlay/modules/feature/` into `feature-<name>/`, renames `Feature*` → `<Name>*` files, wires a matching `:domain` use case if found via grep, edits `composeApp` `startKoin { modules(...) }` + `NavDisplay` `when` block, runs `./gradlew :feature-<name>:build` and reports.
 
+`/kmp-forge-adopt` is `init`'s sibling for an **existing** project — no kmp.new download. It reuses the same `apply-overlay.sh` sub-commands but **non-destructively**: additive ops (`patch-libs`, `patch-settings`, new docs) run automatically; overwrite-danger files (`overlay/root` → CLAUDE.md, .gitignore, .editorconfig, detekt.yml, cliff.toml; CI) are rendered to a scratch dir and hand-merged via `git --no-index diff` + the Edit tool, never blind-copied. `render-module` is skipped when the project already has ui/domain/data layering (would duplicate). Phase B is a guided refactor: the `kmp-reviewer` agent audits the code, findings become a dependency-ordered work-list (DispatcherProvider → Result/DomainError → repos → Koin → Orbit state-only → Nav 3 → module deps → tests → a11y), refactored one layer at a time with `./gradlew spotlessCheck detekt build koverVerify` + reviewer re-run between layers.
+
 ## Locked-stack rules the agents/templates enforce in code
 
-Full stack table lives in `README.md`. The rules below are the ones literally encoded across `agents/kmp-reviewer.md`, `agents/kmp-feature-builder.md`, and `overlay/modules/feature/`. Change one → change all three (plus the canonical `docs/<area>.md`).
+Full stack table lives in `README.md`. The rules below are the ones literally encoded across `agents/kmp-reviewer.md` (audit), `agents/kmp-feature-builder.md` (generation), `agents/kmp-migrator.md` (refactor existing code onto the rules), and `overlay/modules/feature/`. Change one → change all four (plus the canonical `docs/<area>.md`).
 
 - **State-only events**: `ContainerHost<State, Nothing>`. `postSideEffect` forbidden. One-shot events (nav, toasts) → consumable state slots (`pendingNavigation: Route?`) cleared by `onXxxConsumed()` intents the UI calls after `LaunchedEffect`.
 - **No raw dispatchers**: `Dispatchers.IO/Default/Main` forbidden in `:domain`/`:data`/`:feature-*`. Inject `DispatcherProvider`.
@@ -133,7 +135,7 @@ There is no build system here. Work is:
 
 - Conventional Commits (see `docs/git-conventions.md`). Releases tagged from `main`, changelog rendered by git-cliff (see `cliff.toml` analogue if added).
 - When adding a new overlay variable, update both: (a) the `.tmpl` that uses it and (b) the `commands/kmp-forge-init.md` step 4 `export` block. Unset envsubst vars silently become empty strings — easy footgun.
-- When changing a locked-stack rule, update **all three** in lockstep: `docs/<area>.md` (canonical), `agents/kmp-reviewer.md` (enforcement), `agents/kmp-feature-builder.md` (generation), plus the relevant template under `overlay/modules/feature/` if shape changes. The v0.2 release in `CHANGELOG.md` is the example: state-only events touched 6 surfaces.
+- When changing a locked-stack rule, update **all four** in lockstep: `docs/<area>.md` (canonical), `agents/kmp-reviewer.md` (enforcement), `agents/kmp-feature-builder.md` (generation), `agents/kmp-migrator.md` (refactor recipe — detect/transform/verify for that rule), plus the relevant template under `overlay/modules/feature/` if shape changes. The v0.2 release in `CHANGELOG.md` is the example: state-only events touched 6 surfaces.
 - Plugin docs (`docs/*.md`) are the source of truth — scaffolded `CLAUDE.md.tmpl` links to them on GitHub `main`, so docs ship with the plugin via the repo, not via copy.
 - Paths in user-facing instructions must quote (`"$TARGET"`) — the user's Personal projects directory contains a space.
 - Do NOT push to GitHub or enable branch protection from inside any command — the user opts into both manually.

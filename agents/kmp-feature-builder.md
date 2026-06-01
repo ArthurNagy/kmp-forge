@@ -19,7 +19,7 @@ A complete `:feature-<feature_name>` Gradle module containing:
 | File | Purpose |
 |---|---|
 | `<Name>State.kt` | `data class <Name>State(...)` + `sealed interface <Name>Effect` |
-| `<Name>ViewModel.kt` | `ViewModel + ContainerHost<State, Effect>` |
+| `<Name>ViewModel.kt` | `ViewModel + ContainerHost<State, Nothing>` (state-only events) |
 | `<Name>Screen.kt` | Stateless Composable + `<Name>Content` extraction |
 | `<Name>Route.kt` | `@Serializable data object/class <Name>Route : NavKey` |
 | `<feature_pkg>Module.kt` | Koin module with `viewModelOf(::<Name>ViewModel)` |

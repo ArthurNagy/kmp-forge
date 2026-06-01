@@ -1,6 +1,6 @@
 ---
 description: Add a new screen (Composable + Orbit ViewModel + state + Nav 3 destination) inside an existing :feature-<name> module.
-arguments: <feature-name> <screen-name>
+argument-hint: <feature-name> <screen-name>
 ---
 
 # /kmp-forge-add-screen

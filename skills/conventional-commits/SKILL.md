@@ -1,6 +1,6 @@
 ---
 name: conventional-commits
-description: Author Conventional Commits messages for kmp-forge-scaffolded projects. Use when writing a commit, drafting commit messages, or reviewing commit-message style. Auto-trigger when user asks "write a commit", "commit this", or invokes a commit-related command.
+description: Author Conventional Commits in a kmp-forge-scaffolded project, where git-cliff generates the changelog and GitHub Release notes from commit prefixes. Use when committing changes in such a repo and deciding the correct type/scope and semver impact so the release notes categorize correctly, or when reviewing commit-message style against the project's git-cliff config.
 ---
 
 # Conventional Commits — kmp-forge style

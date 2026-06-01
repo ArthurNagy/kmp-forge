@@ -1,5 +1,20 @@
 ---
-description: Migrates an EXISTING Kotlin Multiplatform project's code onto the kmp-forge locked patterns, one layer at a time (DispatcherProvider, Result+DomainError, one-repo-per-type, Koin DI, Orbit state-only events, typed Nav 3, module deps, fakes-not-mocks, a11y/i18n). Invoked by /kmp-forge-adopt Phase B. Write-capable; incremental; builds + re-greps to verify each layer.
+description: |
+  Use this agent to migrate an EXISTING Kotlin Multiplatform project's code onto the kmp-forge locked patterns, one layer at a time (DispatcherProvider, Result+DomainError, one-repo-per-type, Koin DI, Orbit state-only events, typed Nav 3, module deps, fakes-not-mocks, a11y/i18n). Write-capable; incremental; builds + re-greps to verify each layer. Trigger when refactoring an existing project onto the locked stack — invoked by /kmp-forge-adopt Phase B, or directly for a single layer.
+
+  <example>
+  Context: /kmp-forge-adopt Phase B drives the guided refactor layer by layer.
+  user: "Phase B: migrate the dispatchers layer"
+  assistant: "I'll use the kmp-migrator agent with layer=dispatchers to inject DispatcherProvider across :domain/:data/:feature-*."
+  <commentary>Adopt Phase B — kmp-migrator executes exactly one layer, then builds + re-greps.</commentary>
+  </example>
+
+  <example>
+  Context: User wants one layer migrated for a specific feature.
+  user: "Convert feature-gallery to Orbit state-only events"
+  assistant: "I'll use the kmp-migrator agent with layer=orbit target=feature-gallery to remove postSideEffect and switch to consumable state slots."
+  <commentary>Scoped single-layer migration — kmp-migrator owns the detect/transform/verify recipe.</commentary>
+  </example>
 tools: Read, Write, Edit, Grep, Glob, Bash
 ---
 
@@ -81,7 +96,7 @@ For each: read the doc, run **detect**, apply **transform**, run **verify** (res
 
 ### `orbit` — state-only events (largest; per-feature)
 - Doc: `architecture.md` § ViewModel + Orbit pattern.
-- **Detect (per feature):** `grep -rnE "ContainerHost<[^,]+,\s*(?!Nothing)" feature-X/src` (effect type ≠ `Nothing`); `postSideEffect`; `collectSideEffect`; state mutations outside `reduce {`.
+- **Detect (per feature):** `grep -rnE "ContainerHost<[^,]+,\s*(?!Nothing)" feature-X/src` (effect type ≠ `Nothing`); `postSideEffect`; `collectSideEffect`; `grep -rnE "sealed interface \w+Effect" feature-X/src` (dead Effect types — appear even in freshly-generated features, must be removed); state mutations outside `reduce {`.
 - **Transform:** change `ContainerHost<State, XEffect>` → `ContainerHost<State, Nothing>` and `container<State, XEffect>(...)` → `container<State, Nothing>(...)`. For each `postSideEffect(XEffect.Foo(arg))`: add a consumable slot to State (`pendingFoo: ArgType? = null`), replace the post with `reduce { state.copy(pendingFoo = arg) }`, add `fun onFooConsumed() = intent { reduce { state.copy(pendingFoo = null) } }`. In the Composable, replace `viewModel.collectSideEffect { ... }` with `LaunchedEffect(state.pendingFoo) { state.pendingFoo?.let { ...; viewModel.onFooConsumed() } }`. Delete the now-dead `sealed interface XEffect`. Move stray mutations into `intent { reduce { } }`.
 - **Verify:** no `postSideEffect`/`collectSideEffect`, no non-`Nothing` ContainerHost in the feature; `./gradlew :feature-X:build :feature-X:commonTest`.
 

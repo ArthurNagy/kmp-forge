@@ -1,6 +1,6 @@
 ---
 description: Add a platform (desktop, web, or ios) to an existing kmp-forge project.
-arguments: <desktop|web|ios>
+argument-hint: <desktop|web|ios>
 ---
 
 # /kmp-forge-add-platform

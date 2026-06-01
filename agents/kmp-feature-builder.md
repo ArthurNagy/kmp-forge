@@ -82,10 +82,10 @@ These are non-negotiable. Surface a clear error and stop if any conflict with th
 
 5. **Inject use-case wiring** (if you found one in step 2). Use `Edit` to:
    - Add the use case to `<Name>ViewModel`'s constructor: `class <Name>ViewModel(private val getX: GetXUseCase) : ViewModel(), ContainerHost<...>`
-   - Replace the `TODO: invoke use case from :domain` line with a real call:
+   - Replace the `TODO: invoke use case from :domain` line with a real call (kotlin-result — add `import com.github.michaelbull.result.*`; `state.error` is a `DomainError?`, carried as-is and mapped to a string at the UI layer):
      ```kotlin
      getX().onSuccess { data -> reduce { state.copy(loading = false, items = data) } }
-           .onFailure { err -> reduce { state.copy(loading = false, error = err.toString()) } }
+           .onFailure { err -> reduce { state.copy(loading = false, error = err) } }
      ```
    - Add the use case parameter to the Koin module: `viewModelOf(::<Name>ViewModel)` already auto-resolves; no change needed.
 

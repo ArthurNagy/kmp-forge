@@ -46,9 +46,10 @@ DOMT="$project_root/domain/src/commonTest/kotlin/$(echo "$base_package" | tr . /
 
 Adapt module paths to the project's real layout (detected by `/kmp-forge-adopt` step 1). Ensure `dataModule` binds the provider: `singleOf(::RealDispatcherProvider) bind DispatcherProvider::class`.
 
-**The Result type — read this.** The locked patterns use a **two-type-parameter** `Result<T, DomainError>` (`.onSuccess { value }`, `.onFailure { error: DomainError }`, `.fold`). Kotlin's stdlib `Result<T>` is single-parameter with a `Throwable` failure and **cannot** express this — ADR 0005's "stdlib `Result<T>`" wording is a known kmp-forge inconsistency. So, for the `result` layer:
-- If the project **already has** a two-param `Result<T, E>` (project-local sealed type, or a lib like `com.github.michaelbull:kotlin-result`), use it.
-- If it does **not**, do not silently pick. Establish a minimal project-local `Result<out T, out E>` in `:domain` (sealed `Ok`/`Err` + `onSuccess`/`onFailure`/`fold`/`map`) and **report this choice to the caller** so they can confirm or swap for a lib. Flag the ADR-0005 wording discrepancy.
+**The Result type.** The locked patterns use **kotlin-result**'s two-parameter `Result<V, E>` (`Ok`/`Err`, `.onSuccess`/`.onFailure`/`.fold`) — **not** stdlib `kotlin.Result` (single-param, `Throwable`-only, can't carry a typed `DomainError`). Before the `result` layer, ensure it's wired:
+- Catalog: run `patch-libs` so `gradle/libs.versions.toml` has `kotlin-result` + `kotlin-result-coroutines` (Gradle coordinate `com.michael-bull.kotlin-result:kotlin-result`).
+- `:domain` build.gradle.kts: `api(libs.kotlin.result)` (the `Result` type is in public use-case signatures, so it must be `api` to reach `:data`/`:feature-*`) and `implementation(libs.kotlin.result.coroutines)`.
+- Imports in code use the package `com.github.michaelbull.result.*` (note: differs from the Gradle coordinate).
 
 ## Layer recipes
 
@@ -60,11 +61,11 @@ For each: read the doc, run **detect**, apply **transform**, run **verify** (res
 - **Transform:** add `private val dispatchers: DispatcherProvider` to the constructor of each offending use case / repo / data source; replace `Dispatchers.IO→dispatchers.io`, `.Default→dispatchers.default`, `.Main→dispatchers.main`. Koin `*Of(::X)` definitions auto-resolve once the provider is bound. ViewModels should **not** take `DispatcherProvider` directly (ADR 0006) — dispatcher switching belongs in use cases; if a ViewModel switches dispatchers, leave a TODO to move that work into a use case rather than injecting the provider into the VM.
 - **Verify:** residual grep empty in those modules; `./gradlew :domain:build :data:build` + affected features.
 
-### `result` — Result<T, DomainError>, no throws
-- Doc: `architecture.md` § ViewModel, `DECISIONS/0005-result-domain-error.md`. Establish the Result type per Foundations note above.
-- **Detect:** use cases that `throw` or return non-`Result` types; `grep -rnE "try \{|catch \(" "$project_root"/feature-*/src` for `try/catch` inside `intent {`; `getOrThrow()` / `getOrNull()!!` on results.
-- **Transform:** use-case signatures → `Result<T, DomainError>`; replace `throw X` with returning a failure carrying a per-area `sealed interface <Area>Error : DomainError` case; wrap success. Remove `try/catch` from `intent {}` — call the use case and use `.onSuccess { reduce { ... } }.onFailure { reduce { state.copy(error = it) } }`. Replace `.getOrThrow()`/`!!` with `.fold`/`onSuccess`/`onFailure`. Preserve any existing exception→error mapping; if the mapping is unclear, `// TODO(kmp-forge): map <exception> to a DomainError case`.
-- **Verify:** no `throw` in `:domain` business paths, no `try/catch` in any `intent {`; build + `:domain:commonTest`.
+### `result` — Result<T, DomainError> (kotlin-result), no throws
+- Doc: `architecture.md` § ViewModel, `DECISIONS/0005-result-domain-error.md`. Wire kotlin-result per the Foundations note above **first**.
+- **Detect:** use cases that `throw` or return non-`Result` types; `import kotlin.Result` / `runCatching` (stdlib, wrong type); `grep -rnE "try \{|catch \(" "$project_root"/feature-*/src` for `try/catch` inside `intent {`; careless `.get()!!` / `unwrap()` / `getOrThrow()` on results.
+- **Transform:** add `import com.github.michaelbull.result.*`. Use-case signatures → `Result<T, DomainError>`; replace `throw X` with `Err(<Area>Error.Case)` carrying a per-area `sealed interface <Area>Error : DomainError`, and wrap success values in `Ok(...)`. Remove `try/catch` from `intent {}` — call the use case and use `.onSuccess { reduce { ... } }.onFailure { reduce { state.copy(error = it) } }`. Replace stdlib `Result.success/failure` with `Ok`/`Err`; replace `.get()!!`/`getOrThrow()` with `.fold`/`onSuccess`/`onFailure`/`getOrElse`. For multi-step compositions, prefer `coroutineBinding { stepA().bind(); ... }` over nested folds. Preserve any existing exception→error mapping; if unclear, `// TODO(kmp-forge): map <exception> to a DomainError case`.
+- **Verify:** no `throw` in `:domain` business paths, no `try/catch` in any `intent {`, no `kotlin.Result`/`runCatching`; build + `:domain:commonTest`.
 
 ### `repos` — one repository per domain type (structural — confirm per object)
 - Doc: `architecture.md` § Single-type rule.

@@ -61,9 +61,11 @@ cat <path>
 
 ### Error handling (blocking)
 
-- 🔴 Use case throws an exception. Use cases return `Result<T, DomainError>`.
+- 🔴 Use case throws an exception. Use cases return `Result<T, DomainError>` (kotlin-result's two-param `Result<V, E>`, `com.github.michaelbull.result.*`).
 - 🔴 `try/catch` inside `intent { ... }` block. Let the use case return `Result`; use `onSuccess` / `onFailure`.
-- 🟡 `getOrThrow()` or `getOrNull()!!` on a `Result`. Use `.fold` or `.onSuccess { ... }.onFailure { ... }` for exhaustive handling.
+- 🔴 `kotlin.Result` (stdlib) or `runCatching` used where a domain `Result<T, DomainError>` is expected. Stdlib `Result` is single-param / `Throwable`-only — import `com.github.michaelbull.result.*` instead.
+- 🟡 `DomainError` declared as a `Throwable`/`Exception` subtype. `DomainError` is a plain `sealed interface` — it's a value, not an exception.
+- 🟡 Careless `.get()!!` / `unwrap()` / `getOrThrow()` on a `Result`. Use `.fold` or `.onSuccess { ... }.onFailure { ... }` / `getOrElse { ... }` for exhaustive handling.
 
 ### Navigation (blocking)
 

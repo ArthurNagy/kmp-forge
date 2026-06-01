@@ -21,7 +21,7 @@ build-logic/             Gradle convention plugins (KmpLibrary, ComposeApp)
 :feature-*  ──▶ :ui
             └─▶ :domain
 :data       ──▶ :domain         (implements interfaces declared in :domain)
-:domain     ──▶ (nothing internal — pure Kotlin + Coroutines + kotlinx-datetime + kotlinx-serialization)
+:domain     ──▶ (nothing internal — pure Kotlin + Coroutines + kotlinx-datetime + kotlinx-serialization + kotlin-result)
 ```
 
 Rules:
@@ -39,6 +39,8 @@ Rules:
 - `DomainError` sealed types per use case or per domain area
 - `DispatcherProvider` interface
 - Pure Kotlin only.
+
+`Result<T, DomainError>` is [kotlin-result](https://github.com/michaelbull/kotlin-result)'s two-param `Result<V, E>` — Gradle coordinate `com.michael-bull.kotlin-result:kotlin-result`, Kotlin import package `com.github.michaelbull.result.*` (`Ok`/`Err`/`onSuccess`/`onFailure`/`fold`/`andThen`/…). It's declared `api` in `:domain` so the type flows transitively to `:data` and `:feature-*`. **Not** `kotlin.Result` (stdlib, single-param, `Throwable`-only). See ADR `0005-result-domain-error` in your project's `docs/DECISIONS/`.
 
 ### `:data`
 - Repository **implementations** (`UserRepositoryImpl`)

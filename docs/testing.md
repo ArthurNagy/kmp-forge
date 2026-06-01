@@ -23,18 +23,24 @@
 Default: write hand-rolled `Fake<Name>` implementations of every interface in `commonTest`. Fakes encode realistic stateful behavior (in-memory store, predictable responses).
 
 ```kotlin
+import com.github.michaelbull.result.Ok
+import com.github.michaelbull.result.Err
+import com.github.michaelbull.result.Result
+
 class FakeUserRepository : UserRepository {
     private val users = mutableMapOf<UserId, User>()
     var nextError: DomainError? = null
 
     override suspend fun getUser(id: UserId): Result<User, DomainError> =
-        nextError?.let { Result.failure(it) }
-            ?: users[id]?.let { Result.success(it) }
-            ?: Result.failure(DomainError.NotFound)
+        nextError?.let { Err(it) }
+            ?: users[id]?.let { Ok(it) }
+            ?: Err(UserError.NotFound)
 
     fun seed(user: User) { users[user.id] = user }
 }
 ```
+
+`Result`/`Ok`/`Err` are [kotlin-result](https://github.com/michaelbull/kotlin-result) (`com.github.michaelbull.result.*`), not `kotlin.Result`. `UserError.NotFound` is a `sealed interface UserError : DomainError` case.
 
 ## When MockK is allowed
 
@@ -138,7 +144,7 @@ class GetPhotosUseCaseTest {
         val repo = FakeUserRepository()
         val useCase = GetPhotosUseCase(repo, TestDispatcherProvider())
         val result = useCase()
-        assertEquals(Result.failure(DomainError.NotFound), result)
+        assertEquals(Err(PhotosError.NotFound), result)
     }
 }
 ```

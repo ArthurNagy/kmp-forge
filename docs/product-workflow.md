@@ -68,7 +68,7 @@ Numbers are sequential. Never reuse a number. Never reorder.
 - `0002-koin.md` — why Koin over kotlin-inject/Metro
 - `0003-hybrid-architecture.md` — why feature-presentation + shared domain/data
 - `0004-nav3.md` — why Navigation 3 over AndroidX Nav 2 / Voyager / Decompose
-- `0005-result-domain-error.md` — why Result<T> + sealed DomainError over Arrow Either / exceptions
+- `0005-result-domain-error.md` — why kotlin-result (Result<V, E>) + sealed DomainError over Arrow Either / exceptions
 - `0006-dispatcher-provider.md` — why inject DispatcherProvider over using Dispatchers.IO directly
 
 These document *why this stack was chosen for this project* and serve as starting context. The user can amend or supersede them per project.

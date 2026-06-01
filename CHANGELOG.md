@@ -7,7 +7,11 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+- **`/kmp-forge-adopt` command + `kmp-migrator` agent** — bring the locked stack to an *existing* KMP project (no kmp.new download). Phase A applies the overlay non-destructively (additive merges auto; overwrite-danger files diffed and hand-merged); Phase B is a dependency-ordered, `kmp-reviewer`-audited refactor delegated to the new `kmp-migrator` agent, one locked-stack layer per invocation (dispatchers, result, repos, koin, orbit, nav, module-deps, tests, a11y).
+
 ### Changed
+- **Error handling now uses [kotlin-result](https://github.com/michaelbull/kotlin-result)** — `Result<T, DomainError>` is its two-param `Result<V, E>` (`Ok`/`Err`), Gradle coordinate `com.michael-bull.kotlin-result:kotlin-result` (+ `kotlin-result-coroutines`), import package `com.github.michaelbull.result.*`, declared `api` in `:domain`. Resolves the prior contradiction where ADR 0005 said stdlib `Result<T>` (single-param, `Throwable`-only) while every signature used the two-param form. Feature-state `error` slot is now typed `DomainError?` (was `String?`). Touched: catalog additions, `:domain` build, feature State/ViewModel templates, ADR 0005, `docs/{architecture,stack,testing,product-workflow}.md`, `kmp-reviewer`, `kmp-feature-builder`, `kmp-migrator`, `CLAUDE.md`.
 - **Self-contained marketplace** — collapsed the standalone `arthurnagy/claude-plugins` marketplace repo into this repo. `.claude-plugin/marketplace.json` now lives at the repo root with `source: "./"` (caveman-style). Install path is now `/plugin marketplace add arthurnagy/kmp-forge` + `/plugin install kmp-forge@kmp-forge`. Reason: the standalone marketplace was triggering an SSH clone of `arthurnagy/kmp-forge` regardless of source shape (`github`, `git`, `git-subdir` all failed in different ways); a single self-contained repo sidesteps the second-repo clone entirely.
 
 ## [0.2.0] - 2026-05-25

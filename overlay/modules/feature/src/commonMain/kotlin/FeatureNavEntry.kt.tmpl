@@ -1,0 +1,28 @@
+package ${BASE_PACKAGE}.feature.${FEATURE_NAME}
+
+import androidx.navigation3.runtime.EntryProviderBuilder
+import androidx.navigation3.runtime.NavKey
+import androidx.navigation3.runtime.entry
+
+/**
+ * Navigation 3 entry contribution for this feature — the **only** screen-facing
+ * public API of `:feature-${FEATURE_NAME}`. [${FEATURE_NAME_PASCAL}Screen] / [${FEATURE_NAME_PASCAL}ViewModel] /
+ * [${FEATURE_NAME_PASCAL}State] stay `internal`; the app composes the feature by calling this from
+ * its `NavDisplay(entryProvider = entryProvider { add${FEATURE_NAME_PASCAL}Entries(...) })`.
+ *
+ * Outgoing navigation is passed in as callbacks so the feature stays decoupled —
+ * the app owns the back stack and any target routes. A feature never imports
+ * another feature's Route; to navigate forward, take an `onOpenX: (Arg) -> Unit`
+ * callback here and let the app supply `{ backStack.add(OtherRoute(it)) }`.
+ *
+ * Plural (`...Entries`) because a feature can host multiple screens — add another
+ * `entry<OtherRoute> { OtherScreen(...) }` line here as the feature grows
+ * (see /kmp-forge-add-screen).
+ */
+fun EntryProviderBuilder<NavKey>.add${FEATURE_NAME_PASCAL}Entries(
+    onNavigateBack: () -> Unit,
+) {
+    entry<${FEATURE_NAME_PASCAL}Route> {
+        ${FEATURE_NAME_PASCAL}Screen(onNavigateBack = onNavigateBack)
+    }
+}

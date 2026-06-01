@@ -61,7 +61,7 @@ class GalleryViewModelTest {
         val repo = FakeUserRepository().apply { seed(samplePhoto) }
         val vm = GalleryViewModel(GetPhotosUseCase(repo, TestDispatcherProvider()))
 
-        vm.test(this, GalleryState()) {
+        vm.test(this, GalleryState.Initial) {
             expectInitialState()
             containerHost.load()
             expectState { copy(loading = true) }
@@ -74,7 +74,7 @@ class GalleryViewModelTest {
         val repo = FakeUserRepository().apply { nextError = DomainError.NetworkUnavailable }
         val vm = GalleryViewModel(GetPhotosUseCase(repo, TestDispatcherProvider()))
 
-        vm.test(this, GalleryState()) {
+        vm.test(this, GalleryState.Initial) {
             containerHost.load()
             expectState { copy(loading = true) }
             expectState { copy(loading = false, error = DomainError.NetworkUnavailable) }

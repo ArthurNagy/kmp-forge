@@ -10,7 +10,7 @@ The foundation. Compose Multiplatform 1.10+ for Material 3 + multi-platform UI.
 ### Orbit MVI
 - **Why**: explicit MVI shape (intent → reduce → state), built-in `ContainerHost.test()` harness, KMP-ready.
 - **Where**: every ViewModel in every `:feature-*` module.
-- **Idiom**: `class FooViewModel : ViewModel(), ContainerHost<FooState, Nothing> { override val container = container(FooState()); fun load() = intent { reduce { state.copy(...) } } }`
+- **Idiom**: `internal class FooViewModel : ViewModel(), ContainerHost<FooState, Nothing> { override val container = container(FooState.Initial); fun load() = intent { reduce { state.copy(...) } } }`. State is `internal`, has no constructor defaults, and exposes its starting value as `FooState.Initial` (see [architecture.md § Visibility](architecture.md#visibility)).
 - **State-only events** (no `postSideEffect`): one-shot events live as consumable state slots (`pendingNavigation: Route?`, `pendingMessage: String?`). UI observes via `LaunchedEffect`, consumes, calls paired `onXxxConsumed()` intent to clear. Rationale: everything is state — easier to test, easier to inspect, robust across config changes / process death.
 - **Sub-states via sealed interface** when a flat data class overcomplicates state management (mutually-exclusive page-level transitions like `Loading | Loaded | Error`). See [architecture.md](architecture.md#sub-states-via-sealed-interface).
 - **Anti-patterns**: mutating state outside `intent {}`; using `postSideEffect` (effect type is `Nothing`); throwing exceptions inside `intent {}` blocks (let use cases return `Result`); page-level sub-states modeled as booleans on a flat data class (promote to sealed interface).
@@ -24,21 +24,34 @@ The foundation. Compose Multiplatform 1.10+ for Material 3 + multi-platform UI.
 
 ### Navigation 3 (Compose Multiplatform)
 - **Why**: official Compose Navigation library with first-class KMP support since Compose MP 1.10. User-owned back stack as `SnapshotStateList<NavKey>`.
-- **Where**: every screen defines a `@Serializable data class FooRoute(...) : NavKey`. App-level back stack constructed with `rememberNavBackStack(RootRoute)` and rendered via `NavDisplay`.
+- **Where**: every screen defines a `@Serializable data class FooRoute(...) : NavKey` (public). The app-level back stack is constructed with `rememberNavBackStack(RootRoute)` and rendered via `NavDisplay`. Each feature contributes its screens through a public `addFooEntries(...)` entry-provider extension — the app never references `FooScreen` directly, which keeps screens/VMs/state `internal` (see [architecture.md § Navigation wiring](architecture.md#navigation-wiring-nav-3-entry-contributions)).
 - **Idiom**:
   ```kotlin
-  @Serializable data object GalleryListRoute : NavKey
+  @Serializable data object GalleryRoute : NavKey
   @Serializable data class PhotoDetailRoute(val id: String) : NavKey
 
-  val backStack = rememberNavBackStack(GalleryListRoute)
-  NavDisplay(backStack) { key ->
-      when (key) {
-          GalleryListRoute -> GalleryScreen(onOpen = { backStack.add(PhotoDetailRoute(it)) })
-          is PhotoDetailRoute -> PhotoDetailScreen(id = key.id, onBack = { backStack.removeLastOrNull() })
-      }
+  // :feature-gallery — the feature's only screen-facing public symbol
+  fun EntryProviderBuilder<NavKey>.addGalleryEntries(
+      onOpenPhoto: (String) -> Unit,
+      onNavigateBack: () -> Unit,
+  ) {
+      entry<GalleryRoute> { GalleryScreen(onOpenPhoto = onOpenPhoto, onNavigateBack = onNavigateBack) }
   }
+
+  // :composeApp — owns the back stack and every target route
+  val backStack = rememberNavBackStack(GalleryRoute)
+  NavDisplay(
+      backStack = backStack,
+      entryProvider = entryProvider {
+          addGalleryEntries(
+              onOpenPhoto = { backStack.add(PhotoDetailRoute(it)) },
+              onNavigateBack = { backStack.removeLastOrNull() },
+          )
+          addPhotoDetailEntries(onNavigateBack = { backStack.removeLastOrNull() })
+      },
+  )
   ```
-- **Anti-patterns**: untyped routes (string keys); mutating the back stack from outside Composition; using `postSideEffect` for navigation (effect type is `Nothing`) — instead set a consumable `pendingNavigation: Route?` slot inside `intent {}` and mutate the back stack in a `LaunchedEffect` observing it.
+- **Anti-patterns**: untyped routes (string keys); the app referencing a feature's `Screen`/`ViewModel` directly instead of its `addFooEntries(...)` contribution; a feature importing another feature's Route (pass outgoing nav as a callback instead); mutating the back stack from outside Composition; using `postSideEffect` for navigation (effect type is `Nothing`) — instead set a consumable `pendingNavigation: Route?` slot inside `intent {}` and mutate the back stack in a `LaunchedEffect` observing it.
 - **Artifact**: `androidx.navigation3:navigation3-ui:1.1.2`, `androidx.navigation3:navigation3-runtime:1.1.2`.
 
 ### Coil 3

@@ -8,9 +8,14 @@ import org.koin.dsl.module
 /**
  * Koin module for :data. Binds repository interfaces (declared in :domain) to
  * implementations defined here. Also binds the production DispatcherProvider.
+ *
+ * Repository implementations and data sources are `internal` to :data (e.g.
+ * `internal class UserRepositoryImpl`) — only this module references them, and
+ * binding works because the module lives in the same module. The rest of the app
+ * depends on the :domain interface, never the impl. See docs/architecture.md § Visibility.
  */
 val dataModule = module {
     singleOf(::RealDispatcherProvider) bind DispatcherProvider::class
 
-    // singleOf(::UserRepositoryImpl) bind UserRepository::class
+    // singleOf(::UserRepositoryImpl) bind UserRepository::class   // UserRepositoryImpl is internal
 }

@@ -4,8 +4,12 @@ import androidx.navigation3.runtime.NavKey
 import kotlinx.serialization.Serializable
 
 /**
- * Navigation 3 destination for [${FEATURE_NAME_PASCAL}Screen].
- * Use as: `backStack.add(${FEATURE_NAME_PASCAL}Route)` or `backStack.add(${FEATURE_NAME_PASCAL}Route(arg))`.
+ * Navigation 3 destination for this feature. Public — it's part of the feature's
+ * cross-module API so the app (and other features, via app-owned callbacks) can
+ * push it: `backStack.add(${FEATURE_NAME_PASCAL}Route)` or `backStack.add(${FEATURE_NAME_PASCAL}Route(arg))`.
+ *
+ * The screen itself is rendered by `add${FEATURE_NAME_PASCAL}Entries(...)` (see ${FEATURE_NAME_PASCAL}NavEntry.kt),
+ * not by referencing [${FEATURE_NAME_PASCAL}Screen] directly — that stays `internal`.
  */
 @Serializable
 data object ${FEATURE_NAME_PASCAL}Route : NavKey

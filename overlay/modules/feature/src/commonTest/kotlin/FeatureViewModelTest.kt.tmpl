@@ -12,7 +12,7 @@ class ${FEATURE_NAME_PASCAL}ViewModelTest {
     fun `load toggles loading flag`() = runTest {
         val vm = ${FEATURE_NAME_PASCAL}ViewModel()
 
-        vm.test(this, ${FEATURE_NAME_PASCAL}State()) {
+        vm.test(this, ${FEATURE_NAME_PASCAL}State.Initial) {
             expectInitialState()
             containerHost.load()
             expectState { copy(loading = true, error = null) }
@@ -24,7 +24,7 @@ class ${FEATURE_NAME_PASCAL}ViewModelTest {
     fun `pending message clears after consumed`() = runTest {
         val vm = ${FEATURE_NAME_PASCAL}ViewModel()
 
-        vm.test(this, ${FEATURE_NAME_PASCAL}State(pendingMessage = "Hi")) {
+        vm.test(this, ${FEATURE_NAME_PASCAL}State.Initial.copy(pendingMessage = "Hi")) {
             expectInitialState()
             containerHost.onPendingMessageConsumed()
             expectState { copy(pendingMessage = null) }

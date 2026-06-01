@@ -87,6 +87,18 @@ cat <path>
 
 - 🔴 Nav 3 route not annotated with `@Serializable`. Add `@Serializable` and ensure it implements `NavKey`.
 - 🔴 Untyped nav (string keys, `Bundle`, etc). Use typed `@Serializable` route classes.
+- 🟡 App (`:composeApp`) references a feature's `Screen`/`ViewModel` directly (e.g. a `NavDisplay { when }` calling `FooScreen(...)`). Features should expose `EntryProviderBuilder<NavKey>.addFooEntries(...)`; the app composes them in `entryProvider { addFooEntries(...) }` so screens stay `internal`.
+- 🟡 Feature imports another feature's `Route`. Pass outgoing navigation as a callback (`onOpenX: (Arg) -> Unit`); the app owns target routes.
+
+### Visibility (warn)
+
+- 🟡 Domain entity / data class declares default values (`val x: T = ...`). Remove the defaults; construct explicitly. (DTOs in `:data` may keep defaults where the wire format needs them.)
+- 🟡 Repository implementation, data source, DTO, or `RealDispatcherProvider` is `public`. Make it `internal` to `:data` — only the Koin module references it; the rest of the app uses the `:domain` interface.
+- 🟡 Feature `State`, `ViewModel`, or `Screen` is `public`. Make it `internal`. A feature's only public API is its `Route`, its Koin `Module`, and `addFooEntries(...)`. (`Content` Composables should be `private`.)
+- 🟡 Presentation `State` declares default values, or lacks a `companion object { val Initial = ... }`. Drop the defaults; add `Initial` as the single starting-state source used by `container(...)` and tests.
+- 🟢 A `public` declaration has no consumer outside its module. Tighten to `internal` (or `private` if file-local).
+
+Note: use-case **constructors stay public** — feature tests build them with fakes. Do not flag a public use-case constructor.
 
 ### DI (blocking)
 
@@ -97,7 +109,7 @@ cat <path>
 
 - 🔴 MockK import in `commonTest`. Move to `jvmTest`/`androidTest`, or replace with a hand-written `Fake<Name>`.
 - 🟡 Test uses mocks where a fake would do. Prefer fakes.
-- 🟡 ViewModel test doesn't use `ContainerHost.test()` harness. Convert to `vm.test(this, XState()) { ... }`.
+- 🟡 ViewModel test doesn't use `ContainerHost.test()` harness. Convert to `vm.test(this, XState.Initial) { ... }`.
 
 ### a11y / i18n (warn)
 
@@ -121,7 +133,7 @@ cat <path>
 ### Module / build (warn)
 
 - 🟡 New `:feature-*` module not added to `composeApp` Koin `startKoin { modules(...) }` block.
-- 🟡 New Nav 3 route not handled in `NavDisplay`'s `when` block.
+- 🟡 New feature's `addFooEntries(...)` not added to the app's `NavDisplay(entryProvider = entryProvider { ... })`, or a new route not contributed via `entry<FooRoute> { ... }`.
 - 🟡 New library added to module's `build.gradle.kts` without matching entry in `gradle/libs.versions.toml`.
 
 ## What you don't do

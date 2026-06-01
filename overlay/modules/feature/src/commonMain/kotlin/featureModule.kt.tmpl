@@ -3,6 +3,11 @@ package ${BASE_PACKAGE}.feature.${FEATURE_NAME}
 import org.koin.core.module.dsl.viewModelOf
 import org.koin.dsl.module
 
+/**
+ * Koin module for this feature. Public (the app adds it to `startKoin { modules(...) }`),
+ * but it resolves the `internal` [${FEATURE_NAME_PASCAL}ViewModel] — legal because this module lives
+ * in the same module as the ViewModel.
+ */
 val ${FEATURE_NAME}Module = module {
     viewModelOf(::${FEATURE_NAME_PASCAL}ViewModel)
 }

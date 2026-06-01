@@ -20,12 +20,15 @@ import ${BASE_PACKAGE}.ui.AppSpacing
  * Stateless entry point — wires the ViewModel + hoists state to [${FEATURE_NAME_PASCAL}Content].
  * Consumable event slots (pendingMessage, etc.) are observed via LaunchedEffect and
  * cleared by calling the matching onXxxConsumed() intent on the ViewModel.
+ *
+ * `internal`: the app never calls this directly — it composes the feature via
+ * `add${FEATURE_NAME_PASCAL}Entries(...)` inside its `entryProvider { }` (see ${FEATURE_NAME_PASCAL}NavEntry.kt).
  */
 @Composable
-fun ${FEATURE_NAME_PASCAL}Screen(
+internal fun ${FEATURE_NAME_PASCAL}Screen(
     onNavigateBack: () -> Unit,
-    viewModel: ${FEATURE_NAME_PASCAL}ViewModel = koinViewModel(),
 ) {
+    val viewModel = koinViewModel<${FEATURE_NAME_PASCAL}ViewModel>()
     val state by viewModel.collectAsState()
     val snackbarHostState = remember { SnackbarHostState() }
 

@@ -4,9 +4,9 @@ import androidx.lifecycle.ViewModel
 import org.orbitmvi.orbit.ContainerHost
 import org.orbitmvi.orbit.viewmodel.container
 
-class ${FEATURE_NAME_PASCAL}ViewModel : ViewModel(), ContainerHost<${FEATURE_NAME_PASCAL}State, Nothing> {
+internal class ${FEATURE_NAME_PASCAL}ViewModel : ViewModel(), ContainerHost<${FEATURE_NAME_PASCAL}State, Nothing> {
 
-    override val container = container<${FEATURE_NAME_PASCAL}State, Nothing>(${FEATURE_NAME_PASCAL}State())
+    override val container = container<${FEATURE_NAME_PASCAL}State, Nothing>(${FEATURE_NAME_PASCAL}State.Initial)
 
     fun load() = intent {
         reduce { state.copy(loading = true, error = null) }

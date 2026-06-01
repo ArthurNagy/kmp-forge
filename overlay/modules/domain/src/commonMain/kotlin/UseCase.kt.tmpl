@@ -4,5 +4,18 @@ package ${BASE_PACKAGE}.domain
  * Marker interface for use cases. Not strictly required (Kotlin uses
  * `operator fun invoke`), but useful as a documentation + grep target,
  * and lets reviewer tooling distinguish use cases from utility classes.
+ *
+ * Conventions (see docs/architecture.md § Visibility):
+ * - A use case is a **public** class with a **public constructor** — its type
+ *   flows to `:feature-*` ViewModels, and `:feature-*` tests build it with a fake
+ *   repository (`GetX(FakeRepo(), TestDispatcherProvider())`). In production it's
+ *   only ever constructed by `domainModule` via Koin.
+ * - **Domain entities / data classes take no default values.** Construct them
+ *   explicitly so call sites state full intent and every added field is surfaced:
+ *
+ *       data class User(val id: UserId, val name: String, val email: String?)  // no `= ...`
+ *
+ *   (DTOs in `:data` may keep defaults where the wire format needs them — this
+ *   rule targets domain entities + presentation State.)
  */
 interface UseCase

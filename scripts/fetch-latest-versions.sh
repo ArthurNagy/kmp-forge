@@ -25,7 +25,7 @@ declare -a coords=(
     "org.jetbrains.kotlinx:kotlinx-coroutines-core:kotlinxCoroutines:maven-central"
     "org.jetbrains.kotlinx:kotlinx-datetime:kotlinxDatetime:maven-central"
     "org.jetbrains.kotlinx:kotlinx-serialization-json:kotlinxSerialization:maven-central"
-    "org.jetbrains.androidx.lifecycle:lifecycle-viewmodel:androidxLifecycle:google-maven"
+    "org.jetbrains.androidx.lifecycle:lifecycle-viewmodel:androidxLifecycle:maven-central"
     "androidx.navigation3:navigation3-ui:androidxNavigation3:google-maven"
     "androidx.datastore:datastore-core:androidxDatastore:google-maven"
     "app.cash.sqldelight:runtime:sqldelight:maven-central"
@@ -41,31 +41,25 @@ is_stable() {
     [[ ! "$v" =~ -alpha|-beta|-rc|-SNAPSHOT|-dev|-eap|-M[0-9]+ ]]
 }
 
-fetch_maven_central() {
-    local group="$1" artifact="$2"
-    local url="https://search.maven.org/solrsearch/select?q=g:%22${group}%22+AND+a:%22${artifact}%22&rows=20&core=gav&wt=json"
-    local versions
-    versions="$(curl -sfL "$url" | python3 -c "
-import json,sys
-try:
-    d=json.load(sys.stdin)
-    for r in d.get('response',{}).get('docs',[]):
-        v=r.get('v')
-        if v: print(v)
-except Exception:
-    pass
-" || true)"
-    while IFS= read -r v; do
-        if is_stable "$v"; then echo "$v"; return; fi
-    done <<< "$versions"
-    echo ""
+# Authoritative maven-metadata.xml is the source of truth for both repos.
+# (The old search.maven.org/solrsearch endpoint lagged the index — it returned
+# versions OLDER than current pins, so a blind follow proposed downgrades.)
+metadata_base() {
+    case "$1" in
+        maven-central) echo "https://repo1.maven.org/maven2" ;;
+        google-maven)  echo "https://dl.google.com/dl/android/maven2" ;;
+    esac
 }
 
-fetch_google_maven() {
-    local group="$1" artifact="$2"
-    local group_path="${group//.//}"
-    local url="https://dl.google.com/dl/android/maven2/${group_path}/${artifact}/maven-metadata.xml"
-    local versions
+# Fetch newest stable version from a repo's maven-metadata.xml. <versions> is in
+# chronological release order, so tac yields newest-first; we take the first
+# stable. Returns "" on 404 / no stable release (caller emits a WARN line).
+fetch_latest() {
+    local repo="$1" group="$2" artifact="$3"
+    local base group_path url versions
+    base="$(metadata_base "$repo")"
+    group_path="${group//.//}"
+    url="${base}/${group_path}/${artifact}/maven-metadata.xml"
     versions="$(curl -sfL "$url" 2>/dev/null | grep -oE '<version>[^<]+</version>' | sed 's/<[^>]*>//g' | tac || true)"
     while IFS= read -r v; do
         [[ -z "$v" ]] && continue
@@ -79,11 +73,8 @@ emit_toml() {
     echo "[versions]"
     for entry in "${coords[@]}"; do
         IFS=':' read -r g a key repo <<< "$entry"
-        local v=""
-        case "$repo" in
-            maven-central) v="$(fetch_maven_central "$g" "$a")" ;;
-            google-maven)  v="$(fetch_google_maven  "$g" "$a")" ;;
-        esac
+        local v
+        v="$(fetch_latest "$repo" "$g" "$a")"
         if [[ -z "$v" ]]; then
             echo "# WARN $key ($g:$a) — not found"
         else
@@ -97,11 +88,8 @@ emit_json() {
     local first=1
     for entry in "${coords[@]}"; do
         IFS=':' read -r g a key repo <<< "$entry"
-        local v=""
-        case "$repo" in
-            maven-central) v="$(fetch_maven_central "$g" "$a")" ;;
-            google-maven)  v="$(fetch_google_maven  "$g" "$a")" ;;
-        esac
+        local v
+        v="$(fetch_latest "$repo" "$g" "$a")"
         [[ $first -eq 1 ]] || echo ","
         first=0
         printf '  "%s": "%s"' "$key" "$v"

@@ -7,6 +7,11 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.3.1] - 2026-06-05
+
+### Fixed
+- **`fetch-latest-versions.sh` returned stale/missing versions** (#7) — the script backing `/kmp-forge-bump-stack` queried the deprecated `search.maven.org/solrsearch` endpoint, whose lagging index returned versions *older* than the current pins across the maven-central stack (e.g. orbit 10 vs 11, ktor 3.2 vs 3.5, kotlin 2.2 vs 2.4), so a blind follow proposed downgrades; and it tagged `androidxLifecycle` (`org.jetbrains.androidx.lifecycle`, a JetBrains MPP port on Maven Central) as `google-maven`, which 404'd into a bogus WARN. Both repos now read the authoritative `maven-metadata.xml` via one shared `fetch_latest` helper, dropping the `python3` dependency. `androidx.navigation3` correctly stays on Google Maven.
+
 ## [0.3.0] - 2026-06-01
 
 ### Changed (BREAKING)

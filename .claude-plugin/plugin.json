@@ -1,6 +1,6 @@
 {
   "name": "kmp-forge",
-  "version": "0.3.0",
+  "version": "0.3.1",
   "description": "Scaffold and guide Kotlin Multiplatform + Compose Multiplatform projects. Drives kmp.jetbrains.com for base scaffold, overlays locked architecture, CI, git, product workflow, observability, and release plumbing.",
   "author": {
     "name": "Arthur Nagy",

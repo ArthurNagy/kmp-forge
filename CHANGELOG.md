@@ -7,6 +7,9 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Fixed
+- **`navigation3-ui` now uses the JetBrains Compose Multiplatform port** — the locked stack pinned Google's `androidx.navigation3:navigation3-ui`, whose only KMP variants are `androidJvm`/`jvm`/`linux_x64`; sitting in `commonMain`, it cannot resolve for iOS/macOS/js/wasm targets, so any non-Android scaffold would fail to build. Switched the UI artifact to `org.jetbrains.androidx.navigation3:navigation3-ui` (full multiplatform) and dropped the pin `1.1.2 → 1.1.1` (the port's latest stable — `1.1.2` never existed for it). `navigation3-runtime` correctly stays on Google's `androidx.navigation3:navigation3-runtime`: that artifact *is* fully multiplatform and is exactly what the UI port depends on, so the shared `androidxNavigation3` ref still resolves both. `fetch-latest-versions.sh` now tracks the UI port on Maven Central (was Google Maven — the version-line mismatch behind the upstream bug report). Corrects the 0.3.1 note "`androidx.navigation3` correctly stays on Google Maven", which held only for the runtime, not the UI. Touched (lockstep): `overlay/gradle/libs.versions.toml.additions.tmpl`, `docs/stack.md`, ADR 0004, `scripts/fetch-latest-versions.sh`.
+
 ## [0.3.1] - 2026-06-05
 
 ### Fixed

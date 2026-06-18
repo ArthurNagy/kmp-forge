@@ -16,7 +16,7 @@ kotlinxCoroutines = "1.10.2"
 kotlinxDatetime = "0.6.2"
 kotlinxSerialization = "1.8.1"
 androidxLifecycle = "2.9.0-rc01"
-androidxNavigation3 = "1.1.2"
+androidxNavigation3 = "1.1.1"
 androidxDatastore = "1.1.7"
 sqldelight = "2.1.0"
 turbine = "1.2.1"
@@ -80,8 +80,11 @@ kotlinx-serialization-json = { module = "org.jetbrains.kotlinx:kotlinx-serializa
 # AndroidX
 androidx-lifecycle-viewmodel = { module = "org.jetbrains.androidx.lifecycle:lifecycle-viewmodel", version.ref = "androidxLifecycle" }
 androidx-lifecycle-viewmodel-compose = { module = "org.jetbrains.androidx.lifecycle:lifecycle-viewmodel-compose", version.ref = "androidxLifecycle" }
+# Nav 3: runtime stays on Google's androidx.navigation3 (a true KMP artifact — iOS/macOS/js/wasm);
+# the UI port lives under org.jetbrains.androidx.navigation3 because Google's navigation3-ui is
+# Android/JVM-only. The UI port depends on the matching Google runtime, so one version ref drives both.
 androidx-navigation3-runtime = { module = "androidx.navigation3:navigation3-runtime", version.ref = "androidxNavigation3" }
-androidx-navigation3-ui = { module = "androidx.navigation3:navigation3-ui", version.ref = "androidxNavigation3" }
+androidx-navigation3-ui = { module = "org.jetbrains.androidx.navigation3:navigation3-ui", version.ref = "androidxNavigation3" }
 androidx-datastore-core = { module = "androidx.datastore:datastore-core", version.ref = "androidxDatastore" }
 androidx-datastore-preferences-core = { module = "androidx.datastore:datastore-preferences-core", version.ref = "androidxDatastore" }
 

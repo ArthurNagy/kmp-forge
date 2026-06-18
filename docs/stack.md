@@ -52,7 +52,7 @@ The foundation. Compose Multiplatform 1.10+ for Material 3 + multi-platform UI.
   )
   ```
 - **Anti-patterns**: untyped routes (string keys); the app referencing a feature's `Screen`/`ViewModel` directly instead of its `addFooEntries(...)` contribution; a feature importing another feature's Route (pass outgoing nav as a callback instead); mutating the back stack from outside Composition; using `postSideEffect` for navigation (effect type is `Nothing`) — instead set a consumable `pendingNavigation: Route?` slot inside `intent {}` and mutate the back stack in a `LaunchedEffect` observing it.
-- **Artifact**: `androidx.navigation3:navigation3-ui:1.1.2`, `androidx.navigation3:navigation3-runtime:1.1.2`.
+- **Artifact**: `org.jetbrains.androidx.navigation3:navigation3-ui:1.1.1` (the JetBrains Compose Multiplatform port — Google's `androidx.navigation3:navigation3-ui` is Android/JVM-only and won't resolve in `commonMain` on iOS/web) plus `androidx.navigation3:navigation3-runtime:1.1.1` (Google's runtime *is* a true KMP artifact and is exactly what the UI port depends on, so both share the one `androidxNavigation3` version ref).
 
 ### Coil 3
 - **Why**: KMP-native image loader, Compose integration, pluggable fetchers (Ktor when HTTP is on), shared memory + disk cache.

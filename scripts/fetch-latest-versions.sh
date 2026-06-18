@@ -26,7 +26,11 @@ declare -a coords=(
     "org.jetbrains.kotlinx:kotlinx-datetime:kotlinxDatetime:maven-central"
     "org.jetbrains.kotlinx:kotlinx-serialization-json:kotlinxSerialization:maven-central"
     "org.jetbrains.androidx.lifecycle:lifecycle-viewmodel:androidxLifecycle:maven-central"
-    "androidx.navigation3:navigation3-ui:androidxNavigation3:google-maven"
+    # Nav 3: navigation3-ui is the JetBrains CMP port (Maven Central) — Google's
+    # androidx.navigation3:navigation3-ui is Android/JVM-only and breaks commonMain
+    # on iOS/web. We track the UI port's version line; navigation3-runtime (Google,
+    # fully multiplatform) is what the port depends on and shares this version ref.
+    "org.jetbrains.androidx.navigation3:navigation3-ui:androidxNavigation3:maven-central"
     "androidx.datastore:datastore-core:androidxDatastore:google-maven"
     "app.cash.sqldelight:runtime:sqldelight:maven-central"
     "app.cash.turbine:turbine:turbine:maven-central"

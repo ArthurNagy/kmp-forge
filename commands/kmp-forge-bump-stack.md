@@ -39,7 +39,7 @@ Use `AskUserQuestion` to confirm the bump, showing the full list of changes:
 Libraries to bump:
   - orbitMvi: 9.0.0 → 9.1.0
   - coil: 3.1.0 → 3.2.0
-  - androidxNavigation3: 1.1.2 → 1.1.3
+  - ktor: 3.1.2 → 3.2.0
 
 Continue?
 ```
@@ -70,7 +70,7 @@ chore(deps): bump locked stack to latest stable
 
 - orbitMvi 9.0.0 → 9.1.0
 - coil 3.1.0 → 3.2.0
-- androidxNavigation3 1.1.2 → 1.1.3
+- ktor 3.1.2 → 3.2.0
 ```
 
 User commits when they're ready (don't auto-commit — give them a chance to amend after manual review).

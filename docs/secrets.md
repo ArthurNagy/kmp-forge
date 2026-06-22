@@ -34,7 +34,7 @@ keyAlias=release
 keyPassword=<password>
 ```
 
-Read by `composeApp/build.gradle.kts`:
+Read by `androidApp/build.gradle.kts`:
 
 ```kotlin
 val signingProps = Properties().apply {
@@ -51,7 +51,7 @@ SENTRY_DSN=https://...
 API_BASE_URL=https://api.example.com
 ```
 
-Loaded by a small Gradle task that emits a `BuildConfig`-like Kotlin object in `:composeApp`:
+Loaded by a small Gradle task that emits a `BuildConfig`-like Kotlin object in `:shared`:
 
 ```kotlin
 val envFile = file(".env.local")
@@ -78,7 +78,7 @@ tasks.named("preBuild").configure { dependsOn("generateAppBuildConfig") }
 `AppBuildConfig.kt` itself is **gitignored** since it contains injected values. Add it to `.gitignore`:
 
 ```
-composeApp/src/commonMain/kotlin/AppBuildConfig.kt
+shared/src/commonMain/kotlin/AppBuildConfig.kt
 ```
 
 ## CI secrets
@@ -124,8 +124,8 @@ Gradle reads `KEYSTORE_PATH=$RUNNER_TEMP/release.keystore` and signs the AAB/APK
 [allowlist]
 description = "Common false-positive locations"
 paths = [
-    '''composeApp/src/.*/composeResources/.*''',  # Compose resources
-    '''.*\.gradle\.kts''',                         # Gradle files (passwords come from props)
+    '''shared/src/.*/composeResources/.*''',  # Compose resources
+    '''.*\.gradle\.kts''',                     # Gradle files (passwords come from props)
 ]
 ```
 

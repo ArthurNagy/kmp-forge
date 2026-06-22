@@ -17,15 +17,15 @@ Run `xcodebuild -version`, `java -version`, `./gradlew --version` to verify.
 
 ## Framework integration
 
-`composeApp` exports a Kotlin/Native static framework named `ComposeApp` consumed by `iosApp/iosApp.xcodeproj`.
+`:shared` exports a Kotlin/Native static framework named `Shared` consumed by `iosApp/iosApp.xcodeproj`.
 
-### `composeApp/build.gradle.kts`
+### `shared/build.gradle.kts`
 
 ```kotlin
 kotlin {
     listOf(iosArm64(), iosSimulatorArm64()).forEach {
         it.binaries.framework {
-            baseName = "ComposeApp"
+            baseName = "Shared"
             isStatic = true
         }
     }
@@ -38,30 +38,30 @@ The Xcode project has a "Run Script" build phase that invokes Gradle to build/em
 
 ```bash
 cd "$SRCROOT/.."
-./gradlew :composeApp:embedAndSignAppleFrameworkForXcode
+./gradlew :shared:embedAndSignAppleFrameworkForXcode
 ```
 
 If this is missing or runs in the wrong directory, the framework doesn't end up where Xcode expects it.
 
 ## Common errors
 
-### `Framework 'ComposeApp' not found`
+### `Framework 'Shared' not found`
 
 **Cause**: Gradle didn't produce the framework, or Xcode is looking in the wrong path.
 
 **Fixes**:
-1. Run manually first: `./gradlew :composeApp:embedAndSignAppleFrameworkForXcode -PXCODE_CONFIGURATION=Debug -PSDK_NAME=iphonesimulator`
-2. Check `composeApp/build/xcode-frameworks/<Config>/<Sdk>/ComposeApp.framework/` exists
+1. Run manually first: `./gradlew :shared:embedAndSignAppleFrameworkForXcode -PXCODE_CONFIGURATION=Debug -PSDK_NAME=iphonesimulator`
+2. Check `shared/build/xcode-frameworks/<Config>/<Sdk>/Shared.framework/` exists
 3. Verify Xcode build phase script runs **before** "Compile Sources"
-4. Ensure `FRAMEWORK_SEARCH_PATHS` in Xcode includes `$(SRCROOT)/../composeApp/build/xcode-frameworks/$(CONFIGURATION)/$(SDK_NAME)`
+4. Ensure `FRAMEWORK_SEARCH_PATHS` in Xcode includes `$(SRCROOT)/../shared/build/xcode-frameworks/$(CONFIGURATION)/$(SDK_NAME)`
 
 ### `Undefined symbols for architecture arm64`
 
 **Cause**: framework was built for the wrong architecture (simulator vs device).
 
 **Fixes**:
-1. Clean both: `./gradlew clean && rm -rf composeApp/build/`
-2. Rebuild explicitly: `./gradlew :composeApp:linkDebugFrameworkIosArm64` (for device) or `linkDebugFrameworkIosSimulatorArm64` (for simulator)
+1. Clean both: `./gradlew clean && rm -rf shared/build/`
+2. Rebuild explicitly: `./gradlew :shared:linkDebugFrameworkIosArm64` (for device) or `linkDebugFrameworkIosSimulatorArm64` (for simulator)
 3. Confirm Xcode's "Build Active Architecture Only" matches what you built
 
 ### Gradle daemon out-of-memory during iOS link
@@ -87,18 +87,18 @@ listOf(iosArm64(), iosSimulatorArm64())   // no iosX64
 
 **Cause**: the framework's module name doesn't match the import.
 
-**Fix**: framework `baseName` (e.g. `ComposeApp`) is what Swift imports as:
+**Fix**: framework `baseName` (`Shared`) is what Swift imports as:
 ```swift
-import ComposeApp
+import Shared
 ```
 
-Not `import shared`, not `import composeApp`. The case matters.
+Not `import shared`, not `import SHARED`. The case matters.
 
 ### Cocoapods integration breaks after Gradle sync
 
 **Cause**: this blueprint doesn't use Cocoapods. If the iOS app was set up with `kotlin("native.cocoapods")` plugin, it conflicts.
 
-**Fix**: remove the `kotlin.native.cocoapods` plugin from `composeApp/build.gradle.kts`. Use the `embedAndSignAppleFrameworkForXcode` task instead (the JetBrains modern default since Compose MP 1.6+).
+**Fix**: remove the `kotlin.native.cocoapods` plugin from `shared/build.gradle.kts`. Use the `embedAndSignAppleFrameworkForXcode` task instead (the JetBrains modern default since Compose MP 1.6+).
 
 ### Hot reload / Compose preview not working on iOS
 
@@ -109,7 +109,7 @@ Compose Multiplatform doesn't yet support hot reload on iOS the way it does on A
 ### `signingConfigs not found` when archiving Android side from iOS macOS host
 
 You ran an Android Gradle task while iOS work is in progress and signing.properties is missing. Either:
-1. Run only iOS-relevant tasks: `./gradlew :composeApp:linkReleaseFrameworkIosArm64`
+1. Run only iOS-relevant tasks: `./gradlew :shared:linkReleaseFrameworkIosArm64`
 2. Or create a placeholder `signing.properties` with debug-only values
 
 ## Useful commands
@@ -120,7 +120,7 @@ xcrun simctl list devices available
 
 # Wipe + rebuild iOS framework
 ./gradlew clean
-./gradlew :composeApp:embedAndSignAppleFrameworkForXcode
+./gradlew :shared:embedAndSignAppleFrameworkForXcode
 
 # Open iOS workspace
 open iosApp/iosApp.xcodeproj
@@ -142,8 +142,8 @@ xcodebuild -exportArchive \
 
 1. Run `/kmp-forge-doctor` to verify tool versions match what `CLAUDE.md` declares.
 2. Spawn the `ios-build-doctor` agent (added in v2; for v1 run `kmp-reviewer` over the build log).
-3. Last resort: scaffold a fresh KMP project via kmp.jetbrains.com (no overlay), confirm iOS builds in that, then diff against your project's `composeApp/build.gradle.kts` and Xcode project.
+3. Last resort: scaffold a fresh KMP project via kmp.jetbrains.com (no overlay), confirm iOS builds in that, then diff against your project's `shared/build.gradle.kts` and Xcode project.
 
 ## Note on iosApp module
 
-`iosApp/` is an **Xcode project**, not a Gradle module. Never add `include(":iosApp")` to `settings.gradle.kts`. The Xcode project consumes the `composeApp.framework`; Gradle drives the framework build via `embedAndSignAppleFrameworkForXcode`.
+`iosApp/` is an **Xcode project**, not a Gradle module. Never add `include(":iosApp")` to `settings.gradle.kts`. The Xcode project consumes the `Shared.framework`; Gradle drives the framework build via `embedAndSignAppleFrameworkForXcode`.

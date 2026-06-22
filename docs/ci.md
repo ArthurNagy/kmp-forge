@@ -26,7 +26,7 @@ jobs:
       - uses: actions/setup-java@v4
         with: { distribution: 'temurin', java-version: '17' }
       - uses: gradle/actions/setup-gradle@v3
-      - run: ./gradlew spotlessCheck detekt build :composeApp:commonTest koverVerify
+      - run: ./gradlew spotlessCheck detekt build :shared:jvmTest koverVerify
 
   build-ios:
     if: ${{ env.IOS_ENABLED == 'true' }}
@@ -36,7 +36,7 @@ jobs:
       - uses: actions/setup-java@v4
         with: { distribution: 'temurin', java-version: '17' }
       - uses: gradle/actions/setup-gradle@v3
-      - run: ./gradlew :composeApp:linkReleaseFrameworkIosSimulatorArm64
+      - run: ./gradlew :shared:linkReleaseFrameworkIosSimulatorArm64
 ```
 
 - **Ubuntu** for everything that doesn't need Xcode (cheap).
@@ -66,7 +66,7 @@ jobs:
       - name: Decode keystore
         run: echo "$ANDROID_KEYSTORE_BASE64" | base64 -d > $RUNNER_TEMP/release.keystore
         env: { ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }} }
-      - run: ./gradlew :composeApp:bundleRelease :composeApp:assembleRelease
+      - run: ./gradlew :androidApp:bundleRelease :androidApp:assembleRelease
         env:
           KEYSTORE_PATH: ${{ runner.temp }}/release.keystore
           KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
@@ -75,7 +75,7 @@ jobs:
       - uses: actions/upload-artifact@v4
         with:
           name: android
-          path: composeApp/build/outputs/**/*.{aab,apk}
+          path: androidApp/build/outputs/**/*.{aab,apk}
 
   ios:
     if: ${{ env.IOS_ENABLED == 'true' }}
@@ -95,8 +95,8 @@ jobs:
         with:
           body: ${{ steps.cliff.outputs.content }}
           files: |
-            composeApp/build/outputs/bundle/release/*.aab
-            composeApp/build/outputs/apk/release/*.apk
+            androidApp/build/outputs/bundle/release/*.aab
+            androidApp/build/outputs/apk/release/*.apk
 ```
 
 - Tag-triggered. Push `v0.1.0` → release builds + GitHub Release with auto-generated body.
@@ -131,7 +131,7 @@ Add the verify rule to root `build.gradle.kts`:
 plugins { alias(libs.plugins.kover) }
 
 dependencies {
-    kover(projects.composeApp)
+    kover(projects.shared)
     kover(projects.domain)
     kover(projects.data)
     kover(projects.ui)

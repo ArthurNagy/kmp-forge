@@ -5,19 +5,27 @@
 ## Module map
 
 ```
-:composeApp              app entry point per platform; wires Koin + composes nav graph
+:shared                  composition host — App.kt, startKoin bootstrap, Nav 3 back stack; emits the iOS `Shared` framework. Depends on :ui/:domain/:data/:feature-*
+:androidApp              thin Android application — MainActivity, manifest, signing, AAB/APK; depends on :shared
+:desktopApp              thin desktop JVM app — main(), native packaging (dmg/msi/deb); depends on :shared
+iosApp/                  Xcode project consuming the Shared framework
 :ui                      AppTheme, design tokens (AppColors/AppType/AppSpacing/AppDimens), reusable Composables
 :domain                  use cases, domain entities, repository interfaces, DispatcherProvider, DomainError sealed base
 :data                    repository implementations, data sources (network, db, prefs), DTOs, mappers
 :feature-<name>          Compose UI + ViewModel + state + nav destination for one feature
-build-logic/             Gradle convention plugins (KmpLibrary, ComposeApp)
+build-logic/             the `kmp-forge.kmp.library` precompiled-script convention plugin
 ```
+
+> kmp.new generates `:shared` + the thin `:androidApp`/`:desktopApp` (+ `iosApp/`) instead of
+> the older single `:composeApp`. `:shared` is the composition root; the app modules are platform
+> entry points over it.
 
 ## Dependency direction
 
 ```
-:composeApp ──▶ :feature-*    ──▶ :ui
-                            └─▶ :domain
+:androidApp / :desktopApp ──▶ :shared    (thin platform entry points; iosApp/ consumes the Shared framework)
+:shared     ──▶ :feature-*    ──▶ :ui
+                              └─▶ :domain
 :feature-*  ──▶ :ui
             └─▶ :domain
 :data       ──▶ :domain         (implements interfaces declared in :domain)
@@ -69,14 +77,14 @@ The feature's **public surface is exactly three things**: its `Route`, its Koin 
 - One `*NavEntry.kt` — **public** `fun EntryProviderBuilder<NavKey>.addFooEntries(onNavigateBack: () -> Unit, ...)` containing `entry<FooRoute> { FooScreen(...) }`. The feature's only screen-facing public API.
 - One `*Module.kt` — **public** Koin module exposing the ViewModel via `viewModelOf(::FooViewModel)` (resolves the `internal` VM; legal because it's the same module).
 - `commonTest/FooViewModelTest.kt` with `ContainerHost.test()` and `FooState.Initial`.
-- Feature-owned analytics: any analytics events specific to this feature live in the feature module (e.g. `FooAnalytics.kt` with named event constants + a thin wrapper around an injected analytics client). Cross-feature analytics interfaces live in `:domain` or a shared `:analytics` module if it grows. Don't centralize all events in `:composeApp`.
+- Feature-owned analytics: any analytics events specific to this feature live in the feature module (e.g. `FooAnalytics.kt` with named event constants + a thin wrapper around an injected analytics client). Cross-feature analytics interfaces live in `:domain` or a shared `:analytics` module if it grows. Don't centralize all events in `:shared`.
 - Feature-owned navigation contribution: the feature exposes `addFooEntries(...)` (and its `FooRoute`) for the app to compose into `NavDisplay`'s `entryProvider { }`. Outgoing navigation is passed in as callbacks so the feature stays decoupled — the app owns the back stack and any target routes; a feature never imports another feature's Route.
 
-### `:composeApp`
-- Per-platform entry point (`MainActivity` on Android, `MainViewController` on iOS, `main()` on desktop/web)
-- `App.kt` in `commonMain` — composes `AppTheme {}` + owns the back stack, and builds the nav graph by calling each feature's `addFooEntries(...)` inside `NavDisplay(entryProvider = entryProvider { ... })`. The app supplies cross-feature navigation as callbacks (e.g. `onOpenPhoto = { backStack.add(PhotoDetailRoute(it)) }`) — this is the one place that knows about more than one feature's routes.
-- `startKoin` bootstrap pulling in `domainModule + dataModule + uiModule + every featureModule`
-- Crash reporter / Sentry init (when opted in) before `App()`
+### `:shared` (composition host) + `:androidApp` / `:desktopApp` / `iosApp`
+- `App.kt` in `:shared/commonMain` — composes `AppTheme {}`, owns the back stack, and builds the nav graph by calling each feature's `addFooEntries(...)` inside `NavDisplay(entryProvider = entryProvider { ... })`. The app supplies cross-feature navigation as callbacks (e.g. `onOpenPhoto = { backStack.add(PhotoDetailRoute(it)) }`) — this is the one place that knows about more than one feature's routes.
+- `startKoin` bootstrap in `:shared` pulling in `domainModule + dataModule + uiModule + every featureModule`; each platform entry point invokes it.
+- `AppBuildConfig` (generated build config) + crash-reporter / Sentry init (when opted in, before `App()`) live in `:shared`.
+- The per-platform **entry points are thin and live in the app modules**: `MainActivity` in `:androidApp`, `main()` in `:desktopApp`, `MainViewController` + the Xcode project in `iosApp/` — each just renders `:shared`'s `App()`.
 
 ## Visibility
 
@@ -202,7 +210,7 @@ fun EntryProviderBuilder<NavKey>.addGalleryEntries(
     entry<GalleryRoute> { GalleryScreen(onNavigateBack = onNavigateBack, onOpenPhoto = onOpenPhoto) }
 }
 
-// :composeApp — owns the back stack and every target route
+// :shared (App.kt) — owns the back stack and every target route
 val backStack = rememberNavBackStack(GalleryRoute)
 NavDisplay(
     backStack = backStack,

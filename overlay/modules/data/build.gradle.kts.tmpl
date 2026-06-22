@@ -1,9 +1,21 @@
+import org.jetbrains.kotlin.gradle.dsl.JvmTarget
+
 plugins {
     id("kmp-forge.kmp.library")
+    alias(libs.plugins.androidMultiplatformLibrary)
     alias(libs.plugins.kotlinx.serialization)
 }
 
 kotlin {
+    androidLibrary {
+        namespace = "${BASE_PACKAGE}.data"
+        compileSdk = libs.versions.android.compileSdk.get().toInt()
+        minSdk = libs.versions.android.minSdk.get().toInt()
+        compilerOptions {
+            jvmTarget = JvmTarget.JVM_17
+        }
+    }
+
     sourceSets {
         commonMain.dependencies {
             implementation(projects.domain)

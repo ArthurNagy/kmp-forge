@@ -23,8 +23,8 @@ jobs:
         run: ./gradlew detekt
       - name: Build
         run: ./gradlew build -x test
-      - name: Common tests
-        run: ./gradlew :composeApp:commonTest :domain:commonTest :data:commonTest
+      - name: Host tests (commonTest + jvmTest source sets)
+        run: ./gradlew jvmTest
       - name: Coverage threshold (Kover)
         run: ./gradlew koverVerify
       - name: Coverage report
@@ -48,4 +48,4 @@ jobs:
           java-version: 17
       - uses: gradle/actions/setup-gradle@v3
       - name: Link iOS framework (simulator arm64)
-        run: ./gradlew :composeApp:linkReleaseFrameworkIosSimulatorArm64
+        run: ./gradlew :shared:linkReleaseFrameworkIosSimulatorArm64

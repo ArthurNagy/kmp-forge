@@ -9,6 +9,21 @@ insert_final_newline = true
 max_line_length = 140
 trim_trailing_whitespace = true
 
+[*.{kt,kts}]
+# kmp-forge names Koin modules in camelCase (domainModule.kt, dataModule.kt, …) to match
+# their `val xModule` declaration — that conflicts with ktlint's filename rule, which wants
+# PascalCase. Disable it; every other standard rule stays on.
+ktlint_standard_filename = disabled
+# These two wrapping rules fight idiomatic Kotlin/Gradle: multiline-expression-wrapping
+# forces `val fooModule =` onto its own line before `module { … }` (the standard Koin idiom),
+# and chain-method-continuation breaks `libs.versions.x.get().toInt()` (the version-catalog
+# idiom kmp.new generates) across lines even when it fits. Disabled; all other rules stay on.
+ktlint_standard_multiline-expression-wrapping = disabled
+ktlint_standard_chain-method-continuation = disabled
+# @Composable functions are PascalCase by convention — exempt them from function-naming
+# (keeps the rule active for ordinary functions).
+ktlint_function_naming_ignore_when_annotated_with = Composable
+
 [*.{yml,yaml,json,md}]
 indent_size = 2
 

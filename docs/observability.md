@@ -61,14 +61,14 @@ sentry = "8.x.x"
 sentryKotlinMultiplatform = "0.x.x"
 ```
 
-`composeApp/build.gradle.kts` (add to common dependencies):
+`shared/build.gradle.kts` (add to common dependencies):
 ```kotlin
 sourceSets.commonMain.dependencies {
     implementation("io.sentry:sentry-kotlin-multiplatform:${libs.versions.sentryKotlinMultiplatform.get()}")
 }
 ```
 
-`composeApp/src/commonMain/kotlin/App.kt` (or platform entry points):
+`shared/src/commonMain/kotlin/App.kt` (or platform entry points):
 ```kotlin
 Sentry.init { options ->
     options.dsn = AppBuildConfig.sentryDsn
@@ -105,7 +105,7 @@ CI uploads dSYMs (iOS) and mapping files (Android R8/Proguard) via Sentry CLI:
     SENTRY_PROJECT: <your-project>
   with:
     environment: production
-    sourcemaps: composeApp/build/outputs/mapping/release/
+    sourcemaps: androidApp/build/outputs/mapping/release/
 ```
 
 For iOS dSYMs: `sentry-cli upload-dif <path-to-dsyms>` in release workflow.

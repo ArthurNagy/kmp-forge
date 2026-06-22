@@ -25,13 +25,13 @@ jobs:
           KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
           KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
           KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
-        run: ./gradlew :composeApp:bundleRelease :composeApp:assembleRelease
+        run: ./gradlew :androidApp:bundleRelease :androidApp:assembleRelease
       - uses: actions/upload-artifact@v4
         with:
           name: android
           path: |
-            composeApp/build/outputs/bundle/release/*.aab
-            composeApp/build/outputs/apk/release/*.apk
+            androidApp/build/outputs/bundle/release/*.aab
+            androidApp/build/outputs/apk/release/*.apk
           if-no-files-found: error
 
   ios:
@@ -47,7 +47,7 @@ jobs:
           java-version: 17
       - uses: gradle/actions/setup-gradle@v3
       - name: Build framework
-        run: ./gradlew :composeApp:linkReleaseFrameworkIosArm64
+        run: ./gradlew :shared:linkReleaseFrameworkIosArm64
       - name: Archive
         run: |
           xcodebuild -project iosApp/iosApp.xcodeproj \
@@ -67,6 +67,32 @@ jobs:
           name: ios
           path: build/ipa/*.ipa
           if-no-files-found: error
+
+  desktop:
+    if: ${{ vars.DESKTOP_ENABLED == 'true' }}
+    strategy:
+      matrix:
+        os: [macos-latest, windows-latest, ubuntu-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+      - uses: gradle/actions/setup-gradle@v3
+      - name: Package desktop distribution (current OS)
+        run: ./gradlew :desktopApp:packageReleaseDistributionForCurrentOS
+      - uses: actions/upload-artifact@v4
+        with:
+          name: desktop-${{ matrix.os }}
+          path: |
+            desktopApp/build/compose/binaries/main-release/dmg/*.dmg
+            desktopApp/build/compose/binaries/main-release/msi/*.msi
+            desktopApp/build/compose/binaries/main-release/deb/*.deb
+          if-no-files-found: ignore
 
   changelog-and-release:
     needs: [android]
@@ -92,4 +118,7 @@ jobs:
             artifacts/android/**/*.aab
             artifacts/android/**/*.apk
             artifacts/ios/**/*.ipa
+            artifacts/desktop-*/**/*.dmg
+            artifacts/desktop-*/**/*.msi
+            artifacts/desktop-*/**/*.deb
           generate_release_notes: false

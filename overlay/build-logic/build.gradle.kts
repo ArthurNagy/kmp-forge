@@ -12,15 +12,7 @@ dependencies {
     implementation(libs.kover.gradle.plugin)
 }
 
-gradlePlugin {
-    plugins {
-        register("kmpLibrary") {
-            id = "kmp-forge.kmp.library"
-            implementationClass = "convention.KmpLibraryConventionPlugin"
-        }
-        register("composeApp") {
-            id = "kmp-forge.compose.app"
-            implementationClass = "convention.ComposeAppConventionPlugin"
-        }
-    }
-}
+// Convention plugins are PRECOMPILED SCRIPT PLUGINS in src/main/kotlin/*.gradle.kts —
+// the `kotlin-dsl` plugin discovers and registers them by filename (e.g.
+// kmp-forge.kmp.library.gradle.kts -> id "kmp-forge.kmp.library"). No manual
+// gradlePlugin {} registration needed.

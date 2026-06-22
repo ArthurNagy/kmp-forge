@@ -26,7 +26,7 @@ FEATURE_NAME_PASCAL="$(echo "$FEATURE_NAME" | awk -F- '{for(i=1;i<=NF;i++) print
 
 ### 2. Determine base package
 
-Read from CLAUDE.md → `Base package:` line, or from `composeApp/build.gradle.kts` android config. Fallback: ask user.
+Read from CLAUDE.md → `Base package:` line, or from `androidApp/build.gradle.kts` android config (the thin Android application module, where `applicationId`/`namespace` live). Fallback: ask user.
 
 ```bash
 BASE_PACKAGE="com.example.myapp"                    # parsed
@@ -73,9 +73,13 @@ bash ${CLAUDE_PLUGIN_ROOT}/scripts/apply-overlay.sh patch-settings \
     "${PROJECT_ROOT}" "feature-${FEATURE_NAME}"
 ```
 
-### 5. Wire Koin module into composeApp
+### 5. Wire Koin module into `:shared`
 
-Edit `composeApp/src/commonMain/kotlin/<base-pkg-path>/App.kt` (or wherever `startKoin { ... }` is called) to add the new feature's Koin module to the `modules(...)` list:
+The `:shared` module is the KMP library that hosts the Compose UI, `App.kt`, `startKoin`, and the Nav 3 back stack; the thin `:androidApp`/`:desktopApp` and `iosApp/` just consume it. So feature wiring lands in `:shared`, not in any per-platform app module.
+
+First add the new feature module as a `:shared` dependency. Edit `shared/build.gradle.kts` to add `implementation(projects.feature${FEATURE_NAME_PASCAL})` (or `implementation(project(":feature-${FEATURE_NAME}"))`) to its `commonMain` dependencies.
+
+Then edit `shared/src/commonMain/kotlin/<base-pkg-path>/App.kt` (or wherever `startKoin { ... }` is called in `:shared`) to add the new feature's Koin module to the `modules(...)` list:
 
 ```kotlin
 startKoin {
@@ -92,7 +96,7 @@ Use the Edit tool. Be defensive: if the file doesn't exist or the pattern doesn'
 
 ### 6. Wire Nav 3 destination
 
-Edit `composeApp/src/commonMain/kotlin/<base-pkg-path>/App.kt` (or wherever `NavDisplay` is called) to add the feature's entry contribution to the `entryProvider { }` block (import `add<Name>Entries` from the feature package). The screen is `internal` — never reference it directly.
+Edit `shared/src/commonMain/kotlin/<base-pkg-path>/App.kt` (or wherever `NavDisplay` is called in `:shared`) to add the feature's entry contribution to the `entryProvider { }` block (import `add<Name>Entries` from the feature package). The screen is `internal` — never reference it directly.
 
 ```kotlin
 NavDisplay(
@@ -104,7 +108,7 @@ NavDisplay(
 )
 ```
 
-Same defensive Edit pattern. If the app still uses a `NavDisplay(backStack) { key -> when (key) { ... } }`, surface the migration to the `entryProvider { }` DSL for the user to apply rather than adding a `when` branch.
+Same defensive Edit pattern. If the `:shared` host still uses a `NavDisplay(backStack) { key -> when (key) { ... } }`, surface the migration to the `entryProvider { }` DSL for the user to apply rather than adding a `when` branch.
 
 ### 7. Update CLAUDE.md
 
@@ -124,7 +128,7 @@ If green, the feature is wired. Surface the result to the user.
 ```
 ✓ Added :feature-<name>
 ✓ Files: <Name>Screen.kt, <Name>ViewModel.kt, <Name>State.kt, <Name>Route.kt, <feature>Module.kt, <Name>ViewModelTest.kt
-✓ Wired Koin module + Nav 3 destination into composeApp
+✓ Wired feature dep + Koin module + Nav 3 destination into :shared
 ✓ Build: green | red (with output)
 
 Next: implement the use case in :domain, add fakes/tests, build the UI.

@@ -17,7 +17,7 @@ The foundation. Compose Multiplatform 1.10+ for Material 3 + multi-platform UI.
 
 ### Koin
 - **Why**: pure-Kotlin DI, KMP-native, runtime registration, low ceremony, easy to test.
-- **Where**: each module exposes a `<moduleName>Module: Module`. `:composeApp` calls `startKoin { modules(domainModule, dataModule, uiModule, featureGalleryModule, ...) }` in the platform entry point.
+- **Where**: each module exposes a `<moduleName>Module: Module`. `:shared` owns the `startKoin { modules(domainModule, dataModule, uiModule, featureGalleryModule, ...) }` bootstrap, invoked from each platform entry point (`:androidApp`, `:desktopApp`, `iosApp/`).
 - **Idiom**: `val galleryModule = module { viewModelOf(::GalleryViewModel) }`; in Composables, `val vm = koinViewModel<GalleryViewModel>()`.
 - **Anti-patterns**: global service locator calls (`GlobalContext.get()`); constructing classes directly inside ViewModels instead of injecting.
 - **Note**: Hilt is Android-only and cannot live in `commonMain` — Koin is the right call for any KMP project.
@@ -38,7 +38,7 @@ The foundation. Compose Multiplatform 1.10+ for Material 3 + multi-platform UI.
       entry<GalleryRoute> { GalleryScreen(onOpenPhoto = onOpenPhoto, onNavigateBack = onNavigateBack) }
   }
 
-  // :composeApp — owns the back stack and every target route
+  // :shared (App.kt) — owns the back stack and every target route
   val backStack = rememberNavBackStack(GalleryRoute)
   NavDisplay(
       backStack = backStack,
@@ -135,7 +135,7 @@ The foundation. Compose Multiplatform 1.10+ for Material 3 + multi-platform UI.
 ### Sentry
 - **When**: opt into observability beyond Play Vitals / App Store Connect Crashes.
 - **Artifact**: `io.sentry:sentry-kotlin-multiplatform`.
-- **Init**: in `:composeApp` platform entry points, before Koin start:
+- **Init**: in `:shared`'s app bootstrap (invoked from each platform entry point), before Koin start:
   ```kotlin
   Sentry.init { options ->
       options.dsn = BuildConfig.SENTRY_DSN

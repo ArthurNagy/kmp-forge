@@ -174,11 +174,11 @@ The non-negotiable CI gate is `spotlessCheck detekt build koverVerify` (ktlint v
 
 ### 6. Phase A — build-logic adoption (ask: how deep)
 
-Convention plugins (`KmpLibrary`, `ComposeApp`) are how the stack stays consistent, but adopting them rewrites every module's `build.gradle.kts`. Offer three levels via `AskUserQuestion`:
+The `kmp-forge.kmp.library` precompiled-script convention plugin is how the stack stays consistent, but adopting it rewrites every module's `build.gradle.kts`. (There is a single convention plugin — the old `ComposeApp` / `kmp-forge.compose.app` convention plugin was removed; modules apply Compose directly via `alias(libs.plugins.composeMultiplatform)` + `alias(libs.plugins.composeCompiler)`, and the Android target via `alias(libs.plugins.androidMultiplatformLibrary)` + an `androidLibrary {}` block.) Offer three levels via `AskUserQuestion`:
 
-1. **Lint-only (lightest, default)** — skip convention plugins; just ensure Spotless + detekt + Kover are applied (root or per-module) so the CI gate passes. Existing build setup untouched.
-2. **Add, don't rewire** — copy `build-logic/` + `includeBuild("build-logic")` into `pluginManagement { }`, but leave modules on their current build files. Plugins available, adopted later per-module.
-3. **Full adopt (heaviest)** — levels 2 + rewrite each module to `id("kmp.library")` / `id("kmp.compose-app")`. Big change; do per-module and build after each.
+1. **Lint-only (lightest, default)** — skip the convention plugin; just ensure Spotless + detekt + Kover are applied (root or per-module) so the CI gate passes. Existing build setup untouched.
+2. **Add, don't rewire** — copy `build-logic/` + `includeBuild("build-logic")` into `pluginManagement { }`, but leave modules on their current build files. Plugin available, adopted later per-module.
+3. **Full adopt (heaviest)** — levels 2 + rewrite each module to `id("kmp-forge.kmp.library")`, then layer Compose/Android on the modules that need it (`alias(libs.plugins.composeMultiplatform)` + `alias(libs.plugins.composeCompiler)`; `alias(libs.plugins.androidMultiplatformLibrary)` + `androidLibrary {}`). Big change; do per-module and build after each.
 
 For levels 2/3:
 

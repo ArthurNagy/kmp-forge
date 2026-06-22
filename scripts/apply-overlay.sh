@@ -88,6 +88,11 @@ cmd_patch_settings() {
     local settings="$project_dir/settings.gradle.kts"
     [[ -f "$settings" ]] || die "settings.gradle.kts not found at: $settings"
 
+    # Ensure the file ends with a newline before appending — kmp.new's generated
+    # settings.gradle.kts has no trailing newline, so a bare `>>` would concatenate
+    # the first include() onto its last line (e.g. `include(":shared")include(":ui")`).
+    [[ -s "$settings" && -n "$(tail -c1 "$settings")" ]] && printf '\n' >> "$settings"
+
     IFS=',' read -ra modules <<< "$module_csv"
     for m in "${modules[@]}"; do
         m="$(echo "$m" | xargs)"  # trim

@@ -31,7 +31,7 @@ Every `v*` tag publishes a GitHub Release with auto-generated changelog (via `gi
 - Android: `app-release.apk` + `app-release.aab`
 - iOS: `.ipa` (when iOS opted in)
 - Desktop: `.dmg` (mac), `.exe`/`.msi` (win), `.deb`/`.AppImage` (linux) — when desktop opted in
-- Web: zipped `composeApp/build/distributions/` bundle — when web opted in
+- Web: zipped `shared/build/distributions/` bundle — when web opted in
 
 Users install by downloading from the Releases page. No store presence. Zero infra cost. Good for OSS distribution, internal tools, early-stage personal projects.
 
@@ -117,7 +117,7 @@ Local:
   keyAlias=release
   keyPassword=...
   ```
-- `composeApp/build.gradle.kts` reads it:
+- `androidApp/build.gradle.kts` reads it:
   ```kotlin
   val signingProps = Properties().apply {
       file("signing.properties").takeIf { it.exists() }?.inputStream()?.use(::load)

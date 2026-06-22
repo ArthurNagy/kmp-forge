@@ -37,7 +37,7 @@ Ask via `AskUserQuestion` if missing.
 
 5. **Add VM to the feature's Koin module**: Edit `<feature_pkg>Module.kt`, append `viewModelOf(::<Pascal>ViewModel)`.
 
-6. **Wire Nav 3 destination into the feature's entry contribution**: Edit the feature's `<Feature>NavEntry.kt`, appending another `entry<<Pascal>Route> { <Pascal>Screen(...) }` line inside `add<Feature>Entries(...)`. If the new screen needs outgoing navigation, add an `onOpenX`/`onNavigateBack` callback parameter to `add<Feature>Entries(...)` and surface the matching change to the app's `entryProvider { add<Feature>Entries(...) }` call site. Same defensive Edit pattern as `/kmp-forge-add-feature` — never reference the `internal` screen from `:composeApp`.
+6. **Wire Nav 3 destination into the feature's entry contribution**: Edit the feature's `<Feature>NavEntry.kt`, appending another `entry<<Pascal>Route> { <Pascal>Screen(...) }` line inside `add<Feature>Entries(...)`. If the new screen needs outgoing navigation, add an `onOpenX`/`onNavigateBack` callback parameter to `add<Feature>Entries(...)` and surface the matching change to the `:shared` host's `entryProvider { add<Feature>Entries(...) }` call site (`:shared` owns `App.kt` + the `NavDisplay` back stack). Same defensive Edit pattern as `/kmp-forge-add-feature` — never reference the `internal` screen from `:shared`.
 
 7. **Generate matching test**: `<Pascal>ViewModelTest.kt` under `feature-<feature-name>/src/commonTest/kotlin/.../feature/<feature_pkg>/`, seeded with `<Pascal>State.Initial`.
 

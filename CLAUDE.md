@@ -67,7 +67,7 @@ overlay/                     Templated files copied into scaffolded projects
   git/                         PR/issue templates, .gitleaks.toml, pre-commit hook
   product/                     MVP_SPEC.md.tmpl + DECISIONS/ (ADR skeletons)
   modules/{ui,domain,data,feature}/   KMP module skeletons (`src/commonMain/kotlin/**/*.kt.tmpl`)
-  build-logic/                 Gradle convention plugins (KmpLibrary, ComposeApp)
+  build-logic/                 Gradle convention plugin (`kmp-forge.kmp.library` precompiled script)
   gradle/libs.versions.toml.additions.tmpl   Section-aware additions merged into existing catalog
 docs/                        Source-of-truth conventions linked from every scaffolded CLAUDE.md
                              (architecture, stack, testing, ci, git-conventions, release,
@@ -91,7 +91,7 @@ docs/                        Source-of-truth conventions linked from every scaff
 6. Manual `Edit`-tool step inserts `includeBuild("build-logic")` inside the wizard-generated `pluginManagement { ... }` block (idempotent).
 7. Optional `git init` + gitleaks pre-commit hook install + optional `gh repo create --private`.
 
-`/kmp-forge-add-feature <name>` delegates to the `kmp-feature-builder` subagent: renders `overlay/modules/feature/` into `feature-<name>/`, renames `Feature*` → `<Name>*` files, wires a matching `:domain` use case if found via grep, edits `composeApp` `startKoin { modules(...) }` + adds the feature's `add<Name>Entries(...)` to `NavDisplay`'s `entryProvider { }` block, runs `./gradlew :feature-<name>:build` and reports.
+`/kmp-forge-add-feature <name>` delegates to the `kmp-feature-builder` subagent: renders `overlay/modules/feature/` into `feature-<name>/`, renames `Feature*` → `<Name>*` files, wires a matching `:domain` use case if found via grep, edits the `:shared` composition root's `startKoin { modules(...) }` + adds the feature's `add<Name>Entries(...)` to `NavDisplay`'s `entryProvider { }` block, runs `./gradlew :feature-<name>:build` and reports.
 
 `/kmp-forge-adopt` is `init`'s sibling for an **existing** project — no kmp.new download. It reuses the same `apply-overlay.sh` sub-commands but **non-destructively**: additive ops (`patch-libs`, `patch-settings`, new docs) run automatically; overwrite-danger files (`overlay/root` → CLAUDE.md, .gitignore, .editorconfig, detekt.yml, cliff.toml; CI) are rendered to a scratch dir and hand-merged via `git --no-index diff` + the Edit tool, never blind-copied. `render-module` is skipped when the project already has ui/domain/data layering (would duplicate). Phase B is a guided refactor: the `kmp-reviewer` agent audits the code, findings become a dependency-ordered work-list (DispatcherProvider → Result/DomainError → repos → Koin → Orbit state-only → Nav 3 entry-contributions → module deps → visibility/explicit-state → tests → a11y), refactored one layer at a time with `./gradlew spotlessCheck detekt build koverVerify` + reviewer re-run between layers.
 

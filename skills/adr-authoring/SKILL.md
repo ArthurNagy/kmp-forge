@@ -88,7 +88,7 @@ Imperative: "We will adopt X."
 
 Include the specific shape of the adoption — version, library, idiomatic snippet. Reviewer should be able to enforce it.
 
-✓ "Adopt Sentry via `sentry-kotlin-multiplatform`. Init in `:composeApp` platform entry points before Koin. Wire Kermit→Sentry sink at minSeverity = Severity.Warn."
+✓ "Adopt Sentry via `sentry-kotlin-multiplatform`. Init in the `:shared` composition root (and per-platform entry points `:androidApp`/`:desktopApp`/`iosApp/` as needed) before Koin. Wire Kermit→Sentry sink at minSeverity = Severity.Warn."
 
 ✗ "Add Sentry." (no shape)
 

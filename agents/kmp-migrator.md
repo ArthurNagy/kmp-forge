@@ -72,7 +72,7 @@ For each: read the doc, run **detect**, apply **transform**, run **verify** (res
 
 ### `dispatchers` — inject DispatcherProvider
 - Doc: `architecture.md`, `DECISIONS/0006-dispatcher-provider.md`.
-- **Detect:** `grep -rnE "Dispatchers\.(IO|Default|Main)" "$project_root"/{domain,data}/src "$project_root"/feature-*/src` (exclude `RealDispatcherProvider.kt` and `:composeApp` — those may name dispatchers).
+- **Detect:** `grep -rnE "Dispatchers\.(IO|Default|Main)" "$project_root"/{domain,data}/src "$project_root"/feature-*/src` (exclude `RealDispatcherProvider.kt` and the `:shared` host — those may name dispatchers).
 - **Transform:** add `private val dispatchers: DispatcherProvider` to the constructor of each offending use case / repo / data source; replace `Dispatchers.IO→dispatchers.io`, `.Default→dispatchers.default`, `.Main→dispatchers.main`. Koin `*Of(::X)` definitions auto-resolve once the provider is bound. ViewModels should **not** take `DispatcherProvider` directly (ADR 0006) — dispatcher switching belongs in use cases; if a ViewModel switches dispatchers, leave a TODO to move that work into a use case rather than injecting the provider into the VM.
 - **Verify:** residual grep empty in those modules; `./gradlew :domain:build :data:build` + affected features.
 
@@ -102,9 +102,9 @@ For each: read the doc, run **detect**, apply **transform**, run **verify** (res
 
 ### `nav` — typed Nav 3 routes + entry contributions
 - Doc: `architecture.md` § feature + § Navigation wiring, reviewer Navigation section.
-- **Detect:** string route keys, `Bundle` args, routes missing `@Serializable` or not implementing `NavKey`; an app-side `NavDisplay(backStack) { key -> when (key) { ... XScreen(...) } }` that references feature screens directly.
-- **Transform:** define `@Serializable data class/object XRoute(...) : NavKey` (public); replace string-key navigation with typed routes. Migrate the app's `when` to the `entryProvider { }` DSL: for each feature add a public `fun EntryProviderBuilder<NavKey>.addXEntries(onNavigateBack: () -> Unit, /* onOpenY callbacks */) { entry<XRoute> { XScreen(...) } }` in the feature module, and call `addXEntries(...)` inside `NavDisplay(entryProvider = entryProvider { ... })`. Pass cross-feature navigation as callbacks (the app owns target routes) so no feature imports another feature's Route. This is what lets the `visibility` layer make `XScreen`/`XViewModel`/`XState` `internal`.
-- **Verify:** build; no app-side `when (key)` referencing feature screens remains.
+- **Detect:** string route keys, `Bundle` args, routes missing `@Serializable` or not implementing `NavKey`; a host-side `NavDisplay(backStack) { key -> when (key) { ... XScreen(...) } }` (the host is `:shared`, where `App.kt` and the back stack live) that references feature screens directly.
+- **Transform:** define `@Serializable data class/object XRoute(...) : NavKey` (public); replace string-key navigation with typed routes. Migrate the `:shared` host's `when` to the `entryProvider { }` DSL: for each feature add a public `fun EntryProviderBuilder<NavKey>.addXEntries(onNavigateBack: () -> Unit, /* onOpenY callbacks */) { entry<XRoute> { XScreen(...) } }` in the feature module, and call `addXEntries(...)` inside `:shared`'s `NavDisplay(entryProvider = entryProvider { ... })`. Pass cross-feature navigation as callbacks (the `:shared` host owns target routes) so no feature imports another feature's Route. This is what lets the `visibility` layer make `XScreen`/`XViewModel`/`XState` `internal`.
+- **Verify:** build; no host-side `when (key)` referencing feature screens remains.
 
 ### `module-deps` — dependency direction (structural — surface, apply mechanical)
 - Doc: `architecture.md` § Dependency direction.

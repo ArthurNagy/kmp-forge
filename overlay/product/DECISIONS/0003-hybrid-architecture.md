@@ -23,7 +23,7 @@ Hybrid:
 - Shared `:data` holds repository implementations, data sources, DTOs, mappers.
 - Shared `:ui` holds `AppTheme`, design tokens, reusable Composables.
 
-Dependency direction: `:composeApp → :feature-* → {:ui, :domain}`; `:data → :domain`; `:domain` depends on nothing internal.
+Dependency direction: `:shared → :feature-* → {:ui, :domain}`; `:data → :domain`; `:domain` depends on nothing internal. `:shared` is the KMP library composition root (Compose UI host, `startKoin`, Nav 3 back stack); the thin `:androidApp` and `:desktopApp` entry points and the `iosApp/` Xcode project all depend on `:shared`.
 
 ## Consequences
 

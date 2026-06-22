@@ -1,7 +1,14 @@
 # This file is APPENDED into the project's gradle/libs.versions.toml by
 # scripts/apply-overlay.sh. Sections are merged: existing [versions], [libraries],
-# [plugins], [bundles] entries are preserved; these get added (no duplicates).
-
+# [plugins], [bundles] entries are preserved; these get added (existing keys skipped).
+#
+# IMPORTANT: this overlay does NOT re-pin the toolchain (Kotlin, AGP, Compose,
+# AndroidX Lifecycle, Coroutines). kmp.new's generated catalog already owns those keys
+# (`kotlin`, `agp`, `composeMultiplatform`, `androidx-lifecycle`, `kotlinx-coroutines`),
+# and the build-logic plugin entries below reference THOSE keys — so build-logic and the
+# app modules share one toolchain version (no "plugin on classpath with different
+# version" failure) and the overlay stays drift-proof across future kmp.new bumps.
+#
 # Use `/kmp-forge-bump-stack` to refresh versions.
 
 [versions]
@@ -12,10 +19,8 @@ koinAndroidx = "4.0.4"
 coil = "3.1.0"
 ktor = "3.1.2"
 kermit = "2.0.5"
-kotlinxCoroutines = "1.10.2"
 kotlinxDatetime = "0.6.2"
 kotlinxSerialization = "1.8.1"
-androidxLifecycle = "2.9.0-rc01"
 androidxNavigation3 = "1.1.1"
 androidxDatastore = "1.1.7"
 sqldelight = "2.1.0"
@@ -23,18 +28,12 @@ turbine = "1.2.1"
 detekt = "1.23.7"
 spotless = "7.0.2"
 ktlint = "1.5.0"
-kover = "0.9.1"
+kover = "0.9.8"
 store = "5.1.0-alpha05"
 kotlinResult = "2.3.1"
 
-# --- gradle plugins used by build-logic ---
-kotlinGradlePlugin = "2.2.20"
-androidGradlePlugin = "8.13.0"
-composeGradlePlugin = "1.10.0"
-composeCompilerGradlePlugin = "2.2.20"
-detektGradlePlugin = "1.23.7"
-spotlessGradlePlugin = "7.0.2"
-koverGradlePlugin = "0.9.1"
+# NOTE: kotlin / agp / composeMultiplatform / androidx-lifecycle / kotlinx-coroutines
+# are intentionally NOT declared here — they come from kmp.new's catalog. See header.
 
 [libraries]
 # Orbit MVI
@@ -72,14 +71,16 @@ kotlin-result = { module = "com.michael-bull.kotlin-result:kotlin-result", versi
 kotlin-result-coroutines = { module = "com.michael-bull.kotlin-result:kotlin-result-coroutines", version.ref = "kotlinResult" }
 
 # KotlinX
-kotlinx-coroutines-core = { module = "org.jetbrains.kotlinx:kotlinx-coroutines-core", version.ref = "kotlinxCoroutines" }
-kotlinx-coroutines-test = { module = "org.jetbrains.kotlinx:kotlinx-coroutines-test", version.ref = "kotlinxCoroutines" }
+kotlinx-coroutines-core = { module = "org.jetbrains.kotlinx:kotlinx-coroutines-core", version.ref = "kotlinx-coroutines" }
+kotlinx-coroutines-test = { module = "org.jetbrains.kotlinx:kotlinx-coroutines-test", version.ref = "kotlinx-coroutines" }
 kotlinx-datetime = { module = "org.jetbrains.kotlinx:kotlinx-datetime", version.ref = "kotlinxDatetime" }
 kotlinx-serialization-json = { module = "org.jetbrains.kotlinx:kotlinx-serialization-json", version.ref = "kotlinxSerialization" }
 
 # AndroidX
-androidx-lifecycle-viewmodel = { module = "org.jetbrains.androidx.lifecycle:lifecycle-viewmodel", version.ref = "androidxLifecycle" }
-androidx-lifecycle-viewmodel-compose = { module = "org.jetbrains.androidx.lifecycle:lifecycle-viewmodel-compose", version.ref = "androidxLifecycle" }
+# lifecycle-viewmodel-compose is already in kmp.new's catalog as `androidx-lifecycle-viewmodelCompose`
+# (same artifact) — referenced via libs.androidx.lifecycle.viewmodelCompose. Only the non-compose
+# viewmodel artifact is unique to this overlay.
+androidx-lifecycle-viewmodel = { module = "org.jetbrains.androidx.lifecycle:lifecycle-viewmodel", version.ref = "androidx-lifecycle" }
 # Nav 3: runtime stays on Google's androidx.navigation3 (a true KMP artifact — iOS/macOS/js/wasm);
 # the UI port lives under org.jetbrains.androidx.navigation3 because Google's navigation3-ui is
 # Android/JVM-only. The UI port depends on the matching Google runtime, so one version ref drives both.
@@ -96,27 +97,28 @@ sqldelight-native-driver = { module = "app.cash.sqldelight:native-driver", versi
 sqldelight-sqlite-driver = { module = "app.cash.sqldelight:sqlite-driver", version.ref = "sqldelight" }
 sqldelight-web-worker-driver = { module = "app.cash.sqldelight:web-worker-driver", version.ref = "sqldelight" }
 
-# Test
-kotlin-test = { module = "org.jetbrains.kotlin:kotlin-test", version.ref = "kotlinGradlePlugin" }
+# Test — kotlin-test comes from kmp.new's catalog (version.ref = "kotlin").
 turbine = { module = "app.cash.turbine:turbine", version.ref = "turbine" }
 
 # Store (MobileNativeFoundation) — opt-in for offline-first multi-source repos
 store = { module = "org.mobilenativefoundation.store:store5", version.ref = "store" }
 
 # --- gradle plugins consumed by build-logic ---
-kotlin-gradle-plugin = { module = "org.jetbrains.kotlin:kotlin-gradle-plugin", version.ref = "kotlinGradlePlugin" }
-android-gradle-plugin = { module = "com.android.tools.build:gradle", version.ref = "androidGradlePlugin" }
-compose-gradle-plugin = { module = "org.jetbrains.compose:compose-gradle-plugin", version.ref = "composeGradlePlugin" }
-compose-compiler-gradle-plugin = { module = "org.jetbrains.kotlin:compose-compiler-gradle-plugin", version.ref = "composeCompilerGradlePlugin" }
-detekt-gradle-plugin = { module = "io.gitlab.arturbosch.detekt:detekt-gradle-plugin", version.ref = "detektGradlePlugin" }
-spotless-gradle-plugin = { module = "com.diffplug.spotless:spotless-plugin-gradle", version.ref = "spotlessGradlePlugin" }
-kover-gradle-plugin = { module = "org.jetbrains.kotlinx:kover-gradle-plugin", version.ref = "koverGradlePlugin" }
+# Toolchain plugins reference kmp.new's catalog keys (kotlin / agp / composeMultiplatform)
+# so build-logic compiles against the SAME versions the app modules use — no classpath clash.
+kotlin-gradle-plugin = { module = "org.jetbrains.kotlin:kotlin-gradle-plugin", version.ref = "kotlin" }
+android-gradle-plugin = { module = "com.android.tools.build:gradle", version.ref = "agp" }
+compose-gradle-plugin = { module = "org.jetbrains.compose:compose-gradle-plugin", version.ref = "composeMultiplatform" }
+compose-compiler-gradle-plugin = { module = "org.jetbrains.kotlin:compose-compiler-gradle-plugin", version.ref = "kotlin" }
+detekt-gradle-plugin = { module = "io.gitlab.arturbosch.detekt:detekt-gradle-plugin", version.ref = "detekt" }
+spotless-gradle-plugin = { module = "com.diffplug.spotless:spotless-plugin-gradle", version.ref = "spotless" }
+kover-gradle-plugin = { module = "org.jetbrains.kotlinx:kover-gradle-plugin", version.ref = "kover" }
 
 [plugins]
-kotlinx-serialization = { id = "org.jetbrains.kotlin.plugin.serialization", version.ref = "kotlinGradlePlugin" }
-composeMultiplatform = { id = "org.jetbrains.compose", version.ref = "composeGradlePlugin" }
-composeCompiler = { id = "org.jetbrains.kotlin.plugin.compose", version.ref = "composeCompilerGradlePlugin" }
-detekt = { id = "io.gitlab.arturbosch.detekt", version.ref = "detektGradlePlugin" }
-spotless = { id = "com.diffplug.spotless", version.ref = "spotlessGradlePlugin" }
-kover = { id = "org.jetbrains.kotlinx.kover", version.ref = "koverGradlePlugin" }
+# composeMultiplatform + composeCompiler come from kmp.new's catalog — only plugins
+# kmp.new does NOT define are added here.
+kotlinx-serialization = { id = "org.jetbrains.kotlin.plugin.serialization", version.ref = "kotlin" }
+detekt = { id = "io.gitlab.arturbosch.detekt", version.ref = "detekt" }
+spotless = { id = "com.diffplug.spotless", version.ref = "spotless" }
+kover = { id = "org.jetbrains.kotlinx.kover", version.ref = "kover" }
 sqldelight = { id = "app.cash.sqldelight", version.ref = "sqldelight" }

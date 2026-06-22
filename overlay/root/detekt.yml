@@ -32,7 +32,10 @@ exceptions:
 naming:
   active: true
   FunctionNaming:
-    functionPattern: "([a-z][a-zA-Z0-9]*)|(`.*`)"   # allow PascalCase for @Composable
+    # The pattern enforces camelCase (or backticked test names); @Composable functions are
+    # PascalCase by convention, so exempt them via ignoreAnnotated (the pattern alone can't).
+    functionPattern: "([a-z][a-zA-Z0-9]*)|(`.*`)"
+    ignoreAnnotated: ['Composable']
 
 performance:
   active: true
@@ -45,6 +48,10 @@ style:
   MagicNumber:
     ignoreAnnotation: true
     ignoreNumbers: ['-1', '0', '1', '2', '100', '1000']
+    # Design tokens (AppColors/AppDimens/AppSpacing/AppType) are literals in property
+    # declarations — exempt those so the :ui token files don't drown the report.
+    ignorePropertyDeclaration: true
+    ignoreCompanionObjectPropertyDeclaration: true
   MaxLineLength:
     maxLineLength: 140
   ReturnCount:

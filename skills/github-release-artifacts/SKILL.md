@@ -47,12 +47,12 @@ Set in repo Settings → Secrets and variables → Actions → Variables:
 
 ## Artifact naming
 
-Default outputs:
+Default outputs (Gradle tasks in parentheses):
 
-- Android: `composeApp/build/outputs/bundle/release/composeApp-release.aab` + `composeApp/build/outputs/apk/release/composeApp-release.apk`
-- iOS: `build/ipa/iosApp.ipa`
-- Desktop: `composeApp/build/compose/binaries/main/dmg/*.dmg` (macOS) — similar for `.msi`, `.deb`
-- Web: `composeApp/build/distributions/<app>.zip`
+- Android (`:androidApp:bundleRelease` + `:androidApp:assembleRelease`): `androidApp/build/outputs/bundle/release/androidApp-release.aab` + `androidApp/build/outputs/apk/release/androidApp-release.apk`
+- iOS (`:shared:linkReleaseFramework*` produces the `Shared` framework consumed by the `iosApp/` Xcode project): `build/ipa/iosApp.ipa`
+- Desktop (`:desktopApp:packageReleaseDistributionForCurrentOS`): `desktopApp/build/compose/binaries/main-release/dmg/*.dmg` (macOS) — similar for `.msi`, `.deb` under `main-release/{msi,deb}/`
+- Web: `shared/build/distributions/<app>.zip`
 
 The release workflow uploads them as-is. Rename via `gradlew renameRelease`-style task if you want versioned names like `myapp-0.3.0.aab` — not in v0.1.0, but trivial to add.
 
@@ -79,7 +79,7 @@ The opt-in [Firebase App Distribution](../../docs/release.md#beta-tier-opt-in-fi
 
 ## Troubleshooting
 
-- **`Error: No files found`**: artifact upload step's glob didn't match. Check the actual output path of the Gradle task (`composeApp/build/outputs/...`).
+- **`Error: No files found`**: artifact upload step's glob didn't match. Check the actual output path of the Gradle task (`androidApp/build/outputs/...` for APK/AAB, `desktopApp/build/compose/binaries/...` for installers).
 - **Signing fails in CI but works locally**: `KEYSTORE_PATH` env not set, or base64-decode produced empty file. Verify secret encoding.
 - **`xcrun altool` rejects the build**: usually missing entitlements or invalid provisioning profile. See [docs/ios-troubleshooting.md](../../docs/ios-troubleshooting.md).
 - **Release body empty**: `git-cliff` ran but found no matching commits since last tag. Check tag pattern + commit message format.
@@ -92,6 +92,6 @@ If you need to ship without CI (rare), use `gh` CLI:
 gh release create v0.3.0 \
   --title "v0.3.0" \
   --notes "$(git cliff --latest --strip header)" \
-  composeApp/build/outputs/bundle/release/*.aab \
-  composeApp/build/outputs/apk/release/*.apk
+  androidApp/build/outputs/bundle/release/*.aab \
+  androidApp/build/outputs/apk/release/*.apk
 ```

@@ -87,7 +87,7 @@ cat <path>
 
 - 🔴 Nav 3 route not annotated with `@Serializable`. Add `@Serializable` and ensure it implements `NavKey`.
 - 🔴 Untyped nav (string keys, `Bundle`, etc). Use typed `@Serializable` route classes.
-- 🟡 App (`:composeApp`) references a feature's `Screen`/`ViewModel` directly (e.g. a `NavDisplay { when }` calling `FooScreen(...)`). Features should expose `EntryProviderBuilder<NavKey>.addFooEntries(...)`; the app composes them in `entryProvider { addFooEntries(...) }` so screens stay `internal`.
+- 🟡 The composition host (`:shared`, which owns `App.kt` + the `NavDisplay` back stack) references a feature's `Screen`/`ViewModel` directly (e.g. a `NavDisplay { when }` calling `FooScreen(...)`). Features should expose `EntryProviderBuilder<NavKey>.addFooEntries(...)`; `:shared` composes them in `entryProvider { addFooEntries(...) }` so screens stay `internal`.
 - 🟡 Feature imports another feature's `Route`. Pass outgoing navigation as a callback (`onOpenX: (Arg) -> Unit`); the app owns target routes.
 
 ### Visibility (warn)
@@ -132,8 +132,8 @@ Note: use-case **constructors stay public** — feature tests build them with fa
 
 ### Module / build (warn)
 
-- 🟡 New `:feature-*` module not added to `composeApp` Koin `startKoin { modules(...) }` block.
-- 🟡 New feature's `addFooEntries(...)` not added to the app's `NavDisplay(entryProvider = entryProvider { ... })`, or a new route not contributed via `entry<FooRoute> { ... }`.
+- 🟡 New `:feature-*` module not declared as a `:shared` dependency, or not added to the `:shared` Koin bootstrap's `startKoin { modules(...) }` block.
+- 🟡 New feature's `addFooEntries(...)` not added to `:shared`'s `NavDisplay(entryProvider = entryProvider { ... })`, or a new route not contributed via `entry<FooRoute> { ... }`.
 - 🟡 New library added to module's `build.gradle.kts` without matching entry in `gradle/libs.versions.toml`.
 
 ## What you don't do

@@ -37,7 +37,7 @@ A complete `:feature-<feature_name>` Gradle module containing:
 | `<Name>ViewModel.kt` | `internal` | `ViewModel + ContainerHost<State, Nothing>` (state-only events); `container(<Name>State.Initial)` |
 | `<Name>Screen.kt` | `internal` | Stateless Composable + `private <Name>Content` extraction; resolves `koinViewModel<<Name>ViewModel>()` in the body |
 | `<Name>Route.kt` | **public** | `@Serializable data object/class <Name>Route : NavKey` |
-| `<Name>NavEntry.kt` | **public** | `fun EntryProviderBuilder<NavKey>.add<Name>Entries(onNavigateBack: () -> Unit, ...) { entry<<Name>Route> { <Name>Screen(...) } }` — the feature's only screen-facing public API |
+| `<Name>NavEntry.kt` | **public** | `fun EntryProviderBuilder<NavKey>.add<Name>Entries(onNavigateBack: () -> Unit, ...) { entry<<Name>Route> { <Name>Screen(...) } }` — the feature's only screen-facing public API; the `:shared` host composes it into `NavDisplay` |
 | `<feature_pkg>Module.kt` | **public** | Koin module with `viewModelOf(::<Name>ViewModel)` |
 | `<Name>ViewModelTest.kt` | — | `ContainerHost.test()` happy-path test, seeded with `<Name>State.Initial` |
 | `build.gradle.kts` | — | Standard feature module Gradle config |
@@ -51,7 +51,7 @@ These are non-negotiable. Surface a clear error and stop if any conflict with th
 1. ViewModel **must** extend `androidx.lifecycle.ViewModel` and implement `ContainerHost<State, Nothing>`, and **must** be `internal`. Never plain `ViewModel`, never custom base classes. **Effect type is always `Nothing`** — the locked stack uses state-only events.
 2. State **must** be a single `internal data class` with **no constructor defaults** and a `companion object { val Initial = <Name>State(...) }` (the single starting-state source used by `container(...)` and tests) — or an `internal sealed interface` with `data object`/`data class` children when mutually-exclusive page-level sub-states warrant it (Loading/Loaded/Error; its initial is an explicit object like `Loading`, not a no-arg ctor). Mutations only via `intent { reduce { ... } }`.
 3. One-shot events **must** be modeled as consumable state slots, declared **without defaults** (`val pendingNavigation: Route?`, `val pendingMessage: String?`) and initialized to `null` in `Initial`. UI consumes via `LaunchedEffect(state.pendingX) { ...; viewModel.onXConsumed() }`. **Never `postSideEffect`** — that's the previous Orbit idiom; the locked stack rejects it.
-4. Composables **must** be stateless. The top-level `<Name>Screen` is `internal` and resolves `val viewModel = koinViewModel<<Name>ViewModel>()` in its body (no `viewModel =` parameter — a public param would leak the internal type, and the app never calls `<Name>Screen` directly), then hoists `state` to a `private <Name>Content`. The app composes the feature via `add<Name>Entries(...)`, never by referencing the screen.
+4. Composables **must** be stateless. The top-level `<Name>Screen` is `internal` and resolves `val viewModel = koinViewModel<<Name>ViewModel>()` in its body (no `viewModel =` parameter — a public param would leak the internal type, and the `:shared` host never calls `<Name>Screen` directly), then hoists `state` to a `private <Name>Content`. The `:shared` host composes the feature via `add<Name>Entries(...)`, never by referencing the screen.
 5. Nav 3 route **must** be `@Serializable` and implement `NavKey` (public). The feature **must** expose a public `fun EntryProviderBuilder<NavKey>.add<Name>Entries(onNavigateBack: () -> Unit, ...)` that contributes `entry<<Name>Route> { <Name>Screen(...) }`; outgoing navigation to other features is taken as `onOpenX` callbacks — never import another feature's Route.
 6. Koin module **must** declare `viewModelOf(::<Name>ViewModel)`.
 7. Test **must** use `vm.test(this, <Name>State.Initial) { ... }` Orbit harness — never raw Turbine for the happy path; never a no-arg `<Name>State()`.
@@ -113,11 +113,12 @@ These are non-negotiable. Surface a clear error and stop if any conflict with th
        "${project_root}" "feature-${feature_name}"
    ```
 
-7. **Wire into composeApp**:
-   - Find `App.kt` (or main `@Composable` entrypoint) under `${project_root}/composeApp/src/commonMain/kotlin/`
-   - Use `Edit` to add `<feature_pkg>Module` to `startKoin { modules(...) }`
+7. **Wire into `:shared`** (the composition host — App.kt / DI bootstrap live here, not in any per-platform app module):
+   - Add `:feature-${feature_name}` to `:shared`'s `build.gradle.kts` dependencies (the `:shared` library aggregates every feature module).
+   - Find `App.kt` (or main `@Composable` entrypoint) under `${project_root}/shared/src/commonMain/kotlin/`
+   - Use `Edit` to add `<feature_pkg>Module` to the `:shared` Koin bootstrap's `startKoin { modules(...) }`
    - Use `Edit` to add `add<Name>Entries(onNavigateBack = { backStack.removeLastOrNull() })` inside `NavDisplay`'s `entryProvider { ... }` block (import the `add<Name>Entries` extension from the feature package). Do **not** add a `when` branch or reference `<Name>Screen` directly — the screen is `internal`.
-   - If the app still renders nav with a `NavDisplay(backStack) { key -> when (key) { ... } }`, surface the migration to the `entryProvider { }` DSL for the user to apply rather than guessing.
+   - If the host still renders nav with a `NavDisplay(backStack) { key -> when (key) { ... } }`, surface the migration to the `entryProvider { }` DSL for the user to apply rather than guessing.
    - If `App.kt` doesn't have `startKoin` or `NavDisplay`, surface the diff for the user to apply manually rather than guessing.
 
 8. **Update CLAUDE.md**:

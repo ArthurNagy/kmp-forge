@@ -6,6 +6,22 @@ description: Scaffold a new Kotlin Multiplatform + Compose Multiplatform project
 
 End-to-end scaffold for a new KMP+Compose project on the kmp-forge locked stack.
 
+## Layout (kmp.new output → kmp-forge overlay)
+
+kmp.jetbrains.com generates a **`:shared`** Kotlin Multiplatform library (Compose UI + the
+composition host — `App.kt`, `startKoin`, the Nav 3 back stack) plus thin per-platform app
+modules **`:androidApp`** / **`:desktopApp`**, and, when iOS is selected, an Xcode **`iosApp/`**
+project consuming the `Shared` framework. The overlay adds the locked-stack shared modules
+**`:ui` · `:domain` · `:data`** (and later `:feature-*`), wires `:shared` to depend on them,
+and installs `build-logic/`. `:shared` is the app's composition root; the app modules are just
+platform entry points.
+
+> Earlier kmp.new revisions emitted a single `:composeApp`; the current wizard splits it into
+> `:shared` + per-platform app modules. The overlay + build-logic target the current shape:
+> Kotlin 2.4 / AGP 9 (`com.android.kotlin.multiplatform.library`) / Compose MP 1.11 / Gradle 9.1,
+> with build-logic as a **precompiled script plugin** (a Kotlin class plugin can't compile against
+> KGP 2.4 under Gradle's embedded Kotlin 2.2).
+
 ## Flow
 
 Execute these steps **in order**. Stop and ask if anything is unclear.
@@ -43,22 +59,29 @@ Wait for the user to confirm download is complete.
 
 ### 3. Locate and unzip the download
 
-Ask for the downloaded zip path (or auto-detect the most recent `kmp-*.zip` under `~/Downloads/`):
+Ask for the downloaded zip path (or auto-detect — the current wizard names it `<APP_NAME>.zip`; older builds used `kmp-*.zip`):
 
 ```bash
-ls -t ~/Downloads/kmp-*.zip 2>/dev/null | head -1
+ls -t ~/Downloads/<APP_NAME>.zip ~/Downloads/kmp-*.zip 2>/dev/null | head -1
 ```
 
-Confirm path with user. Then unzip into the target directory (typically `~/Development/Personal projects/<APP_NAME>`):
+Confirm path with user. The zip contains a **single top-level folder** (the app name), so unzip
+to a temp dir and lift that folder's contents into the target (handles dotfiles like `.idea`,
+`.gitignore`):
 
 ```bash
 TARGET_DIR="$HOME/Development/Personal projects/<APP_NAME>"
-unzip -q "<zip-path>" -d "$TARGET_DIR.tmp" \
-  && mv "$TARGET_DIR.tmp"/* "$TARGET_DIR/" \
-  && rmdir "$TARGET_DIR.tmp"
+mkdir -p "$TARGET_DIR" "$TARGET_DIR.tmp"
+unzip -q "<zip-path>" -d "$TARGET_DIR.tmp"
+inner="$(find "$TARGET_DIR.tmp" -mindepth 1 -maxdepth 1 -type d | head -1)"
+shopt -s dotglob 2>/dev/null || setopt dotglob 2>/dev/null || true
+mv "$inner"/* "$TARGET_DIR/"
+rm -rf "$TARGET_DIR.tmp"
 ```
 
-If the zip's root folder name differs from `<APP_NAME>`, normalize the directory.
+If scaffolding into an **existing** directory (e.g. one that already holds `docs/` + a
+project `CLAUDE.md`), back up the existing `CLAUDE.md` first — the overlay renders its own —
+and merge the two afterward rather than letting the overlay clobber it.
 
 ### 4. Export overlay variables
 
@@ -72,12 +95,21 @@ export BASE_PACKAGE_PATH="$(echo "$BASE_PACKAGE" | tr . /)"
 export SCAFFOLD_DATE="$(date -u +%Y-%m-%d)"
 export PLATFORM_LIST="$(... markdown bullet list from selected platforms ...)"
 export BUILD_COMMANDS="$(... per-platform ./gradlew ... fenced code block ...)"
-export MODULE_LIST="- :composeApp · :ui · :domain · :data"
+export MODULE_LIST="- :shared · :androidApp · :desktopApp · :ui · :domain · :data"
 export FEATURE_LIST="_(none yet — add via /kmp-forge-add-feature)_"
 export OPTIONAL_LIBS="<csv of opted-in libs, or '(none)'>"
 export FIGMA_URL="(none)"
 export PROJECT_OVERRIDES=""
 export TIMELINE=""
+
+# Non-Android KMP targets for the overlay modules (:ui/:domain/:data). These MUST match the
+# targets :shared declares, so :shared can depend on them. The Android target is added per-module
+# by the AGP KMP plugin, so it is NOT listed here. Always include jvm (desktop + host tests);
+# add iOS / web from the platform selection. Examples:
+#   android+desktop          → "jvm"
+#   android+ios+desktop      → "iosArm64,iosSimulatorArm64,jvm"
+#   android+ios+desktop+web  → "iosArm64,iosSimulatorArm64,jvm,wasmJs"
+export KMP_TARGETS="<computed from selected platforms>"
 ```
 
 ### 5. Apply overlay
@@ -141,13 +173,37 @@ bash "${CLAUDE_PLUGIN_ROOT}/scripts/apply-overlay.sh" patch-settings "$TARGET" "
 # Merge libs.versions.toml additions
 bash "${CLAUDE_PLUGIN_ROOT}/scripts/apply-overlay.sh" patch-libs \
     "$TARGET" "$OVERLAY/gradle/libs.versions.toml.additions.tmpl"
+
+# Pin the overlay modules' non-Android targets to match :shared (Gradle property read by the
+# build-logic convention). Without this they default to iosArm64,iosSimulatorArm64,jvm.
+printf '\nkmpForge.targets=%s\n' "$KMP_TARGETS" >> "$TARGET/gradle.properties"
 ```
+
+Then wire **`:shared`** (the composition host) to the new modules. Use the Edit tool to add to
+`shared/build.gradle.kts` inside `kotlin { sourceSets { commonMain.dependencies { … } } }`:
+
+```kotlin
+implementation(projects.ui)
+implementation(projects.domain)
+implementation(projects.data)
+// composition deps :shared needs to host App.kt + startKoin + the Nav 3 back stack:
+implementation(libs.koin.core)
+implementation(libs.koin.compose)
+implementation(libs.koin.compose.viewmodel)
+implementation(libs.androidx.navigation3.runtime)
+implementation(libs.androidx.navigation3.ui)
+```
+
+(`:feature-*` modules are added later by `/kmp-forge-add-feature`, which also wires each into
+`:shared`'s deps and the `NavDisplay` entry list.) `apply-overlay.sh patch-settings` already
+guarantees a trailing newline before appending `include(...)` lines, so the kmp.new
+`settings.gradle.kts` (which ships without one) won't get a concatenated `include`.
 
 ### 6. Optional-lib post-overlay tweaks
 
-- **Sentry**: not enabled → skip. If enabled, add `sentryDsn` slot to `AppBuildConfig` generation in `composeApp/build.gradle.kts`, document the `SENTRY_DSN` secret in `docs/observability.md`. (v0.1.0: just print a note for the user to wire manually; full integration arrives in v0.2.)
+- **Sentry**: not enabled → skip. If enabled, add the `sentryDsn` slot to `AppBuildConfig` generation in `shared/build.gradle.kts` (the composition host owns `AppBuildConfig`), document the `SENTRY_DSN` secret in `docs/observability.md`. (v0.1.0: just print a note for the user to wire manually; full integration arrives in v0.2.)
 - **Firebase App Distribution**: append the firebase-android / firebase-ios jobs to `.github/workflows/release.yml` from `overlay/ci/firebase-jobs.yml.snippet` (v0.2 — for v0.1.0 just print a note).
-- **gradle-play-publisher**: append `id("com.github.triplet.play") version "3.10.1"` to `composeApp/build.gradle.kts` plugins block + a Play upload step in release.yml. (v0.2 — for v0.1.0 print a note pointing to `docs/release.md` § Store tier.)
+- **gradle-play-publisher**: append `id("com.github.triplet.play") version "3.10.1"` to `androidApp/build.gradle.kts` plugins block (the Android application module) + a Play upload step in release.yml. (v0.2 — for v0.1.0 print a note pointing to `docs/release.md` § Store tier.)
 
 For v0.1.0: just print which opt-in libs were selected and remind the user to follow the docs to wire them in.
 
@@ -187,7 +243,7 @@ Print a checklist of what the user should do next:
 
 ```
 ✓ Project scaffolded at <path>
-✓ Modules: :composeApp · :ui · :domain · :data + build-logic/
+✓ Modules: :shared · :androidApp · :desktopApp · :ui · :domain · :data + build-logic/
 ✓ CI workflows: .github/workflows/pr.yml + release.yml
 ✓ Product docs: docs/MVP_SPEC.md + docs/DECISIONS/{0001..0006}.md
 ✓ CLAUDE.md generated

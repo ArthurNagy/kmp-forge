@@ -32,7 +32,7 @@ Expected: 16.0+ (or per CLAUDE.md / Compose MP requirements).
 ls "$ANDROID_HOME/platforms/" 2>/dev/null
 ```
 
-Expected: `android-36` (or per `compileSdk` declared in `composeApp/build.gradle.kts`).
+Expected: `android-36` (or per `compileSdk` declared in `androidApp/build.gradle.kts`, the thin Android application module; the shared Android library target's `compileSdk` lives in `shared/build.gradle.kts`).
 
 ### 4. Check Gradle wrapper version
 

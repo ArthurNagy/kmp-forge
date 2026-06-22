@@ -49,7 +49,7 @@ A Claude Code plugin that scaffolds and guides Kotlin Multiplatform + Compose Mu
 | Branching | Trunk-based, Conventional Commits |
 | Changelog | git-cliff on tag |
 | Architecture | Hybrid — features = presentation only; shared `:domain`, `:data`, `:ui` |
-| Modules at scaffold | `:composeApp + :ui + :domain + :data + build-logic/` |
+| Modules at scaffold | `:shared + :androidApp + :desktopApp + iosApp/ + :ui + :domain + :data + build-logic/` |
 
 ## Documentation
 

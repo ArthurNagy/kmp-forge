@@ -7,6 +7,8 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.3.2] - 2026-06-22
+
 ### Changed (BREAKING)
 - **Target the current kmp.new output: Kotlin 2.4 / AGP 9 / Compose MP 1.11 / Gradle 9.1 and the `:shared` + app-module layout.** kmp.jetbrains.com now generates a `:shared` KMP library (the composition host — `App.kt`, `startKoin`, the Nav 3 back stack) plus thin `:androidApp`/`:desktopApp` (+ `iosApp/`) instead of a single `:composeApp`, and uses AGP 9's `com.android.kotlin.multiplatform.library` plugin. The overlay was reworked to match:
   - **Catalog** no longer re-pins the toolchain — build-logic plugin entries now reference kmp.new's own `kotlin`/`agp`/`composeMultiplatform`/`androidx-lifecycle`/`kotlinx-coroutines` keys, so the whole build shares one toolchain version (no "plugin loaded with different version" failure) and the overlay is drift-proof across future kmp.new bumps.

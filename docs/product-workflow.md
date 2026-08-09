@@ -155,6 +155,8 @@ Adopt OpenSpec when:
 - You want Claude to **autonomously execute specs** — the [autonomous build loop](autoloop.md). `/kmp-forge-add-autoloop` installs OpenSpec and everything around it.
 - You want explicit change requests as versioned spec diffs
 
+**Once adopted, OpenSpec takes priority.** If a project has an `openspec/` directory, spec-driven is its primary change workflow — supervised sessions included: route behavior changes through `/opsx:propose` (optionally gated by `kmp-spec-critic`) and implement via `/opsx:apply`, so `openspec/specs/**` stays the accurate record the gates judge against. Direct edits remain right for non-behavioral work — docs, formatting, build chores, refactors with no spec-visible behavior change. Editing spec-covered behavior without a spec delta causes drift that the spec gate will later judge proposals against.
+
 ## .github/ISSUE_TEMPLATE/
 
 Three templates ship:

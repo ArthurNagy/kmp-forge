@@ -133,6 +133,12 @@ Launch: `/loop /kmp-forge-next-increment`. Work queue + stop condition: `openspe
 Each increment auto-merges to `main` only when CI is green **and** its gate passes — spec gate =
 `kmp-spec-critic`, code gate = `kmp-loop-code-reviewer` + `kmp-reviewer`; otherwise it stops and
 escalates. Emergency stop: `touch openspec/STOP`.
+
+OpenSpec is this project's **primary change workflow, supervised sessions included**: propose
+behavior changes via `/opsx:propose` (optionally review with `kmp-spec-critic`), implement via
+`/opsx:apply`, and keep `openspec/specs/**` current. Direct edits are for non-behavioral work
+only (docs, chores, behavior-neutral refactors) — spec-covered behavior changed without a spec
+delta drifts the record the loop's gates judge against.
 ```
 
 If the project has no `CLAUDE.md`, warn and point at `/kmp-forge-adopt`.

@@ -96,6 +96,12 @@ The loop pops the first `- [ ]`, and ticks it `- [x] — PR #n, merged` when don
 
 `/kmp-forge-add-autoloop` — checks preconditions (git, `gh` auth, CI workflow, `jq`, `openspec`), runs `openspec init --tools claude` if needed, seeds `openspec/AUTOLOOP.md` + `openspec/backlog.md`, installs the merge guard + `.claude/settings.json` wiring, and appends the CLAUDE.md section. The agents and the orchestrator command ship with the plugin — nothing per-project to copy, and plugin updates reach every project.
 
+## Coexistence with supervised work
+
+Installing the loop installs OpenSpec project-wide, and **OpenSpec takes priority once present**: supervised sessions route behavior changes through the same workflow the loop uses — `/opsx:propose` → (optionally `kmp-spec-critic`) → `/opsx:apply` — rather than editing behavior directly. `openspec/specs/**` is the record `kmp-spec-critic` judges dependency-safety against; a supervised edit that changes spec-covered behavior without a spec delta silently invalidates that record, and future loop proposals get judged against stale specs.
+
+Direct edits remain right for: docs, formatting and build chores, and refactors with no spec-visible behavior change. If you must hot-fix spec-covered behavior directly, follow up with a spec delta so the record catches up.
+
 ## Limitations
 
 - **The gates + CI are the only barrier** between a proposal and `main` — by design, and reversible via `git revert` of any squashed PR commit. Watch the first 1–2 increments live before leaving it unattended.

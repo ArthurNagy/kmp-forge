@@ -1,0 +1,49 @@
+# ${APP_NAME} — autonomous build loop
+
+Runbook for this project's autonomous build loop. Theory, design rationale, and limitations:
+[kmp-forge docs/autoloop.md](https://github.com/arthurnagy/kmp-forge/blob/main/docs/autoloop.md).
+Installed by `/kmp-forge-add-autoloop` on ${SCAFFOLD_DATE}.
+
+## Launch
+
+```
+/loop /kmp-forge-next-increment
+```
+
+One invocation = one full increment: pop the top backlog slice → docs PR → spec gate → code PR → code gate → auto-merge both → tick the backlog. `/loop` provides the repetition; the loop stops when the queue is empty, on `openspec/STOP`, or on escalation.
+
+## Loop configuration
+<!-- Read by /kmp-forge-next-increment at Phase 0. Keep the keys verbatim; edit the values. -->
+
+- local-gate: `./gradlew spotlessApply detekt build -x test jvmTest koverVerify`
+- spec-workflow: opsx
+- backlog: openspec/backlog.md
+- kill-switch: openspec/STOP
+
+### Queue-empty handoff
+<!-- Printed verbatim by the loop when the queue empties. Edit freely — this is where you tell the loop (and yourself) what the checkpoint decision is. -->
+
+${AUTOLOOP_HANDOFF}
+
+## Steering (no need to interrupt)
+
+- **Reorder / edit / insert work:** edit `openspec/backlog.md`. The loop always takes the topmost unchecked `- [ ]` on its next iteration.
+- **Emergency stop:** `touch openspec/STOP`. The loop halts before starting the next increment. Delete the file to resume.
+- **Hard stop now:** interrupt the running `/loop` (Esc), or tell it to stop.
+
+## Merge guard
+
+`.claude/hooks/merge-guard.sh` runs as a `PreToolUse` hook on every Bash call and independently re-checks every `gh pr merge`: all checks green, newest `### 🤖` gate review reads PASS. Mode lives in `.claude/hooks/merge-guard.mode` (`off | log | enforce-ci | enforce`), re-read on every invocation — no restart needed.
+
+**Trust ramp.** It starts in `log` so it cannot block a real merge before you have seen it agree with the loop. After an increment or two:
+
+```bash
+cut -f2,5,6 .claude/hooks/merge-guard.log   # every merge the loop performed should show ALLOW
+echo enforce > .claude/hooks/merge-guard.mode
+```
+
+From then on "never force-merge" is enforced by the harness rather than trusted to the model.
+
+## When it escalates
+
+The loop prints a `⛔ ESCALATION` block and stops when it can't safely proceed: CI still red after 2 fix cycles, a gate BLOCK or twice-unresolved REVISE/CHANGES, a worker returning FAILED, an unmet `needs-human:` precondition, a merge-guard denial, or dirty git state. Read the block, make the one decision it asks for, then relaunch `/loop /kmp-forge-next-increment`.

@@ -53,10 +53,13 @@ Marketplace install: `/plugin marketplace add arthurnagy/kmp-forge` then `/plugi
 ```
 .claude-plugin/plugin.json   Plugin manifest (name, description, author, repo)
 commands/                    Slash commands (kmp-forge-*.md) — entry points for users
-agents/                      Subagents invoked by commands (kmp-feature-builder, kmp-reviewer)
+agents/                      Subagents invoked by commands (kmp-feature-builder, kmp-reviewer,
+                              kmp-migrator, kmp-spec-critic, kmp-loop-{proposer,implementer,
+                              code-reviewer,fixer} — the loop workers)
 skills/                      Workflow skills auto-triggered in scaffolded projects
                              (conventional-commits, git-cliff-changelog,
-                              github-release-artifacts, mvp-spec-authoring, adr-authoring)
+                              github-release-artifacts, mvp-spec-authoring, adr-authoring,
+                              driving-ci-green)
 scripts/                     Bash renderers/patchers invoked by commands
   apply-overlay.sh             render | render-module | patch-settings | patch-libs
   kmp-new-url.sh               prints kmp.jetbrains.com wizard instructions
@@ -69,9 +72,12 @@ overlay/                     Templated files copied into scaffolded projects
   modules/{ui,domain,data,feature}/   KMP module skeletons (`src/commonMain/kotlin/**/*.kt.tmpl`)
   build-logic/                 Gradle convention plugin (`kmp-forge.kmp.library` precompiled script)
   gradle/libs.versions.toml.additions.tmpl   Section-aware additions merged into existing catalog
+  autoloop/                    Autonomous-loop overlay installed by /kmp-forge-add-autoloop
+                               (merge-guard.sh 4-mode PreToolUse hook + settings.json wiring,
+                                AUTOLOOP.md.tmpl runbook, backlog.md.tmpl work queue)
 docs/                        Source-of-truth conventions linked from every scaffolded CLAUDE.md
                              (architecture, stack, testing, ci, git-conventions, release,
-                              observability, product-workflow, secrets, i18n-a11y,
+                              observability, product-workflow, autoloop, secrets, i18n-a11y,
                               ios-troubleshooting, upgrade-policy)
 ```
 
@@ -138,6 +144,7 @@ There is no build system here. Work is:
 - Conventional Commits (see `docs/git-conventions.md`). Releases tagged from `main`, changelog rendered by git-cliff (see `cliff.toml` analogue if added).
 - When adding a new overlay variable, update both: (a) the `.tmpl` that uses it and (b) the `commands/kmp-forge-init.md` step 4 `export` block. Unset envsubst vars silently become empty strings — easy footgun.
 - When changing a locked-stack rule, update **all four** in lockstep: `docs/<area>.md` (canonical), `agents/kmp-reviewer.md` (enforcement), `agents/kmp-feature-builder.md` (generation), `agents/kmp-migrator.md` (refactor recipe — detect/transform/verify for that rule), plus the relevant template under `overlay/modules/feature/` if shape changes. The v0.2 release in `CHANGELOG.md` is the example: state-only events touched 6 surfaces.
+- When changing autonomous-loop material, update in lockstep: `commands/kmp-forge-next-increment.md` (orchestrator), the worker agents (`agents/kmp-loop-*.md`, `agents/kmp-spec-critic.md`), `overlay/autoloop/` (merge-guard.sh + templates), and `docs/autoloop.md` (canonical). The `### 🤖` review-marker string is a contract: the orchestrator posts it, `merge-guard.sh` greps it — change both together or the guard denies every merge. Bump the `# version:` line in `merge-guard.sh` whenever the script changes so `/kmp-forge-add-autoloop` re-runs can detect stale project copies.
 - Plugin docs (`docs/*.md`) are the source of truth — scaffolded `CLAUDE.md.tmpl` links to them on GitHub `main`, so docs ship with the plugin via the repo, not via copy.
 - Paths in user-facing instructions must quote (`"$TARGET"`) — the user's Personal projects directory contains a space.
 - Do NOT push to GitHub or enable branch protection from inside any command — the user opts into both manually.

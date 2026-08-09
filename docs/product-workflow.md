@@ -143,18 +143,19 @@ Updated as scope shifts. Linked from `CLAUDE.md` if present.
 
 This is deliberately low-ceremony. Solo projects don't need sprints, story points, or velocity tracking.
 
-## OpenSpec — overkill for v0.1
+## OpenSpec — opt-in
 
 [OpenSpec](https://github.com/Fission-AI/OpenSpec) is a spec-driven development workflow with Claude Code support. It's a strong fit for teams where many people propose / implement specs in parallel — Claude reads structured spec files to drive implementation.
 
-For solo kmp-forge projects, **OpenSpec is overkill**: `docs/MVP_SPEC.md` + `docs/DECISIONS/*.md` already give Claude the context it needs in a single session. Adding OpenSpec means a second source of truth and a second tool to maintain.
+The default for solo kmp-forge projects stays `docs/MVP_SPEC.md` + `docs/DECISIONS/*.md`: they give Claude the context it needs in a single supervised session, and OpenSpec would add a second source of truth and a second tool to maintain.
 
-When to reconsider:
+Adopt OpenSpec when:
 - The project has 3+ contributors actively proposing specs
-- You want Claude to autonomously execute specs without per-session re-explanation
+- You want **spec-gated changes**: draft with `/opsx:propose`, then have the `kmp-spec-critic` agent adversarially review the proposal (PASS/REVISE/BLOCK) before implementing. Works fully supervised; `openspec init --tools claude` is the only prerequisite.
+- You want Claude to **autonomously execute specs** — the [autonomous build loop](autoloop.md). `/kmp-forge-add-autoloop` installs OpenSpec and everything around it.
 - You want explicit change requests as versioned spec diffs
 
-For v0.1 / v0.2 of the kmp-forge blueprint: skip OpenSpec. Revisit if any of the above triggers.
+**Once adopted, OpenSpec takes priority.** If a project has an `openspec/` directory, spec-driven is its primary change workflow — supervised sessions included: route behavior changes through `/opsx:propose` (optionally gated by `kmp-spec-critic`) and implement via `/opsx:apply`, so `openspec/specs/**` stays the accurate record the gates judge against. Direct edits remain right for non-behavioral work — docs, formatting, build chores, refactors with no spec-visible behavior change. Editing spec-covered behavior without a spec delta causes drift that the spec gate will later judge proposals against.
 
 ## .github/ISSUE_TEMPLATE/
 

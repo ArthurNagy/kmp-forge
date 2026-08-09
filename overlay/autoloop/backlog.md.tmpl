@@ -1,0 +1,33 @@
+# ${APP_NAME} — build backlog
+
+Ordered, machine-readable work queue for the autonomous build loop (`/kmp-forge-next-increment`, run via `/loop`).
+Each unchecked item becomes one OpenSpec change → one docs PR (propose) + one code PR (implement).
+The loop pops the **first unchecked item**, and **stops when every item is checked**.
+
+> Steering: reorder items freely, edit a description, or insert a new `- [ ]` line at any time.
+> The loop always takes the topmost unchecked item on its next iteration.
+> Emergency stop: create an empty file `openspec/STOP` — the loop halts before starting the next iteration.
+
+Item convention — the change name is the `slug:` value; the loop passes `slug` + `goal` + `boundaries` to the proposer:
+
+- `slug:` change name (kebab-case, verb-first: `add-…`, `wire-…`)
+- `goal:` what the slice must achieve, in enough detail that a proposal can be generated without asking questions
+- `boundaries:` binding exclusions — layers not to touch, features not to build, decisions not to make
+- `needs-human:` (optional) a precondition the loop must verify BEFORE starting the slice (credentials, a URL); if unmet it stops and escalates rather than stubbing past it
+- `carried-over:` (optional) deferred findings from earlier slices this slice should honor
+
+Keep slices small: one coherent capability per item, implementable in one PR. When an item is done the loop ticks it `- [x]` with a ` — PR #n, merged` note.
+
+---
+
+## Done (archived)
+
+_(none yet)_
+
+## Queue
+
+<!-- Example item — replace with real slices:
+- [ ] slug: `add-settings-store`
+  goal: Persist user settings (theme choice, notification opt-in) behind a SettingsRepository interface in :domain, with the DataStore-backed implementation internal to :data and commonTest coverage using a fake.
+  boundaries: No UI and no new feature module. Do not touch existing repositories. :domain stays dependency-free.
+-->

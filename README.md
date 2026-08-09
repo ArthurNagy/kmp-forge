@@ -24,6 +24,8 @@ A Claude Code plugin that scaffolds and guides Kotlin Multiplatform + Compose Mu
 - `/kmp-forge-bump-stack` — refresh `libs.versions.toml` against the latest stable versions
 - `/kmp-forge-spec` — author `MVP_SPEC.md` interactively or from a free-form dump
 - `/kmp-forge-doctor` — check JDK, Xcode, Android SDK, Gradle wrapper versions
+- `/kmp-forge-add-autoloop` — install the autonomous build loop (OpenSpec workflow, backlog, merge-guard hook) into a project
+- `/kmp-forge-next-increment` — run ONE autonomous increment (propose → gate → implement → gate → merge); wrap with `/loop` to run the backlog down
 
 ## Locked stack
 
@@ -63,6 +65,7 @@ The plugin's `docs/` directory holds the source-of-truth conventions every scaff
 - [Observability](docs/observability.md)
 - [Git conventions](docs/git-conventions.md)
 - [Product workflow](docs/product-workflow.md)
+- [Autonomous build loop](docs/autoloop.md)
 - [Secrets](docs/secrets.md)
 - [i18n & a11y](docs/i18n-a11y.md)
 - [iOS troubleshooting](docs/ios-troubleshooting.md)

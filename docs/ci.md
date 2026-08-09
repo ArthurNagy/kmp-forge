@@ -26,10 +26,14 @@ jobs:
       - uses: actions/setup-java@v4
         with: { distribution: 'temurin', java-version: '17' }
       - uses: gradle/actions/setup-gradle@v3
-      - run: ./gradlew spotlessCheck detekt build :shared:jvmTest koverVerify
+      - run: ./gradlew spotlessCheck
+      - run: ./gradlew detekt
+      - run: ./gradlew build -x test
+      - run: ./gradlew jvmTest
+      - run: ./gradlew koverVerify
 
   build-ios:
-    if: ${{ env.IOS_ENABLED == 'true' }}
+    if: ${{ vars.IOS_ENABLED == 'true' }}
     runs-on: macos-latest
     steps:
       - uses: actions/checkout@v4
@@ -39,10 +43,13 @@ jobs:
       - run: ./gradlew :shared:linkReleaseFrameworkIosSimulatorArm64
 ```
 
+(Abridged — the canonical template is `overlay/ci/pr.yml.tmpl`, which also uploads the Kover report as an artifact.)
+
 - **Ubuntu** for everything that doesn't need Xcode (cheap).
-- **macOS** only when iOS is enabled (expensive — gate on `IOS_ENABLED` env or `vars`).
+- **macOS** only when iOS is enabled (expensive — gate on the `IOS_ENABLED` repository variable).
 - Gradle build cache is enabled by `gradle/actions/setup-gradle@v3` automatically (writes to GitHub Actions cache).
 - `concurrency` cancels older PR runs when the user pushes new commits.
+- **Driving a PR to green from the CLI** — watching checks, reading failures without dumping logs, mirroring this gate locally — is the plugin's `driving-ci-green` skill.
 
 ### `.github/workflows/release.yml`
 

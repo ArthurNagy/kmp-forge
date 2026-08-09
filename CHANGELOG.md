@@ -7,6 +7,12 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+- **Autonomous build loop (opt-in), promoted from a battle-tested downstream project.** Three tiers: (1) `driving-ci-green` skill — the canonical watch-checks / read-failures / mirror-CI-locally recipe, active in every project; (2) `kmp-spec-critic` agent — adversarial PASS/REVISE/BLOCK review of an OpenSpec change proposal, usable fully supervised; (3) the full loop — `/kmp-forge-add-autoloop` installs OpenSpec (`openspec init --tools claude`), a backlog + `AUTOLOOP.md` runbook (with a machine-read `## Loop configuration` section), and a 4-mode (`off|log|enforce-ci|enforce`) `merge-guard.sh` PreToolUse hook; `/kmp-forge-next-increment` (wrapped by `/loop`) then runs pop-slice → docs PR → spec gate → code PR → code gate → auto-merge, merging only when CI is green AND the posted 🤖 gate verdict reads PASS. Worker agents `kmp-loop-proposer` / `kmp-loop-implementer` / `kmp-loop-code-reviewer` / `kmp-loop-fixer` keep all heavy context out of the orchestrator, making the loop compaction-proof and crash-resumable. Touched (lockstep): `commands/kmp-forge-add-autoloop.md`, `commands/kmp-forge-next-increment.md`, `agents/kmp-{spec-critic,loop-proposer,loop-implementer,loop-code-reviewer,loop-fixer}.md`, `skills/driving-ci-green/`, `overlay/autoloop/`, `docs/autoloop.md`, `docs/product-workflow.md` (OpenSpec: overkill → opt-in), `docs/ci.md`, `README.md`, `overlay/root/CLAUDE.md.tmpl`, `CLAUDE.md`.
+
+### Fixed
+- **`docs/ci.md` pr.yml drift** — the fenced sample now matches `overlay/ci/pr.yml.tmpl` (split steps, bare `jvmTest`, `vars.IOS_ENABLED`).
+
 ## [0.3.2] - 2026-06-22
 
 ### Changed (BREAKING)

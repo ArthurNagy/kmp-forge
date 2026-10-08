@@ -174,11 +174,11 @@ The non-negotiable CI gate is `spotlessCheck detekt build koverVerify` (ktlint v
 
 ### 6. Phase A — build-logic adoption (ask: how deep)
 
-The `kmp-forge.kmp.library` precompiled-script convention plugin is how the stack stays consistent, but adopting it rewrites every module's `build.gradle.kts`. (There is a single convention plugin — the old `ComposeApp` / `kmp-forge.compose.app` convention plugin was removed; modules apply Compose directly via `alias(libs.plugins.composeMultiplatform)` + `alias(libs.plugins.composeCompiler)`, and the Android target via `alias(libs.plugins.androidMultiplatformLibrary)` + an `androidLibrary {}` block.) Offer three levels via `AskUserQuestion`:
+The `kmp-forge.kmp.library` precompiled-script convention plugin is how the stack stays consistent, but adopting it rewrites every module's `build.gradle.kts`. (There is a single convention plugin — the old `ComposeApp` / `kmp-forge.compose.app` convention plugin was removed; modules apply Compose directly via `alias(libs.plugins.composeMultiplatform)` + `alias(libs.plugins.composeCompiler)`, and the Android target via `alias(libs.plugins.androidMultiplatformLibrary)` + a `kotlin { android { } }` block.) Offer three levels via `AskUserQuestion`:
 
 1. **Lint-only (lightest, default)** — skip the convention plugin; just ensure Spotless + detekt + Kover are applied (root or per-module) so the CI gate passes. Existing build setup untouched.
 2. **Add, don't rewire** — copy `build-logic/` + `includeBuild("build-logic")` into `pluginManagement { }`, but leave modules on their current build files. Plugin available, adopted later per-module.
-3. **Full adopt (heaviest)** — levels 2 + rewrite each module to `id("kmp-forge.kmp.library")`, then layer Compose/Android on the modules that need it (`alias(libs.plugins.composeMultiplatform)` + `alias(libs.plugins.composeCompiler)`; `alias(libs.plugins.androidMultiplatformLibrary)` + `androidLibrary {}`). Big change; do per-module and build after each.
+3. **Full adopt (heaviest)** — levels 2 + rewrite each module to `id("kmp-forge.kmp.library")`, then layer Compose/Android on the modules that need it (`alias(libs.plugins.composeMultiplatform)` + `alias(libs.plugins.composeCompiler)`; `alias(libs.plugins.androidMultiplatformLibrary)` + `kotlin { android {} }`). Big change; do per-module and build after each.
 
 For levels 2/3:
 
@@ -188,6 +188,10 @@ cp -R "$OVERLAY/build-logic/." "$TARGET/build-logic/"
 # Insert includeBuild("build-logic") as first line inside pluginManagement { } via the Edit tool.
 # Idempotent — skip if already present. If no pluginManagement block, prepend:
 #   pluginManagement { includeBuild("build-logic") }
+# Level 3 also: add `id("kmp-forge.kmp.library") apply false` to the root build.gradle.kts
+# plugins { } block — loads build-logic (and its Spotless/Detekt/Kover) once in the root
+# classloader; without it Spotless 8's shared build service fails configuration as soon as two
+# modules apply the convention.
 ```
 
 ### 7. Phase A — modules
@@ -201,6 +205,17 @@ for module in ui domain data; do   # only the missing ones
         /tmp/kmpf-mod-"$module" "$BASE_PACKAGE_PATH"
 done
 ```
+
+**Composition root.** `/kmp-forge-add-feature` wires features at `// kmp-forge:` markers in the app module's `AppModules.kt` (Koin module list) and `AppNavigation.kt` (route `SerializersModule` + `entryProvider { }`). Render the reference files to scratch — never over an existing `App.kt`:
+
+```bash
+export APP_NAME_LOWER="$(echo "<rootProject.name>" | tr '[:upper:]' '[:lower:]')"   # Res package of :shared
+bash "$SH" render-module "" "$OVERLAY/shared" /tmp/kmpf-shared "$BASE_PACKAGE_PATH"
+```
+
+If the project has no Koin bootstrap / `NavDisplay` yet, lift the files into the composition module (`:shared` or `:composeApp`) and make the platform entry points render its `App()`. If it already has them, merge the pattern by hand: a single module list, a `SavedStateConfiguration` registering every route, `entryProvider { addXEntries(...) }`, and the two marker comments. Add the matching dependencies (`koin-compose`, `koin-compose-viewmodel`, `androidx-navigation3-*`, `androidx-lifecycle-viewmodel-navigation3`, `kotlinx-serialization-json` + the serialization plugin).
+
+Module build scripts reference sibling modules as `project(":domain")` — no type-safe `projects.` accessors, so they work whether or not the project enables `TYPESAFE_PROJECT_ACCESSORS`.
 
 Then `patch-settings` only for **genuinely new** modules (idempotent — skips existing):
 
@@ -218,11 +233,11 @@ Turn the findings into a **dependency-ordered work-list** — foundations first 
 2. `result` — **`Result<T, DomainError>`** define sealed `DomainError`; convert use cases from throws → `Result`; remove `try/catch` from `intent {}`.
 3. `repos` — **One repo per domain type** split any `AppRepository`/`DataRepository` god object.
 4. `koin` — **Koin constructor injection** remove `GlobalContext.get()`/`KoinComponent`; `viewModelOf(::X)`, `koinViewModel<T>()`.
-5. `orbit` — **Orbit state-only events** `ContainerHost<State, Nothing>`; replace every `postSideEffect` with a consumable state slot (`pendingX: ...?` set in intent, cleared by paired `onXConsumed()` intent the UI calls after `LaunchedEffect`). Biggest surface; per-feature.
-6. `nav` — **Typed Nav 3** `@Serializable ... : NavKey` routes; migrate the app's `NavDisplay { when }` → per-feature `addXEntries(...)` contributions composed in `entryProvider { }`; remove string keys.
+5. `orbit` — **Orbit state-only events** `OrbitContainerHost<State, State, Nothing>` (+ `orbitContainer(...)`; Orbit 12 deprecates `ContainerHost`/`container(...)`); replace every `postSideEffect` with a consumable state slot (`pendingX: ...?` set in intent, cleared by paired `onXConsumed()` intent the UI calls after `LaunchedEffect`). Biggest surface; per-feature.
+6. `nav` — **Typed Nav 3** `@Serializable ... : NavKey` routes; migrate the app's `NavDisplay { when }` → per-feature `addXEntries(...)` contributions composed in `entryProvider { }`; register every route in the back stack's `SavedStateConfiguration` `SerializersModule`; remove string keys.
 7. `module-deps` — enforce `:domain` pure Kotlin / `:feature-*` → `:domain` + `:ui` only / no feature → feature / `:data` never imports `:ui`.
 8. `visibility` — **Restrictive visibility + explicit state** repo impls/data sources/DTOs/`RealDispatcherProvider` → `internal`; feature `State`/`ViewModel`/`Screen` → `internal` (`Content` → `private`); drop default values from domain entities + `State`; add `State.Initial` companion (use cases keep public ctors). Run after `nav` + `module-deps`.
-9. `tests` — move MockK out of `commonTest` → fakes + `ContainerHost.test()` harness (seed with `State.Initial`).
+9. `tests` — move MockK out of `commonTest` → fakes + Orbit's `test()` harness (seed with `State.Initial`).
 10. `a11y` (🟡) — `contentDescription`, `start/end` not `left/right`, user strings → `Res.string`, typography over hardcoded `.sp`.
 
 The layer keys above map 1:1 to the `layer` input of the **`kmp-migrator`** agent.
@@ -236,7 +251,7 @@ Canonical rules: read the matching `docs/<area>.md` before each layer —
 
 Present the plan first (counts per layer). Then refactor **one layer at a time** by delegating to the **`kmp-migrator`** agent — pass `project_root`, `base_package`, `claude_plugin_root`, and `layer` (the key from the list above). The migrator establishes `:domain` foundations, applies the codemod, builds, re-greps, and returns a structured report with any `TODO(kmp-forge)` decisions it refused to guess. Run the layers **top-down in order**, with the user confirming between layers — do NOT fire them all at once. The Orbit and repos layers are large; the migrator scopes them per-feature / per-type, so invoke it once per feature (pass `target`). After each layer, re-run `kmp-reviewer` on the touched files to confirm the violations are gone.
 
-> **`result` layer note:** the locked stack uses [kotlin-result](https://github.com/michaelbull/kotlin-result)'s two-param `Result<V, E>` (`com.github.michaelbull.result.*`), not stdlib `kotlin.Result`. The migrator wires `kotlin-result` + `kotlin-result-coroutines` into the catalog and `api(libs.kotlin.result)` into `:domain` before converting use cases. If the existing project already standardized on another result type (Arrow `Either`, a project-local sealed type), tell the migrator via `target`/notes so it adapts instead of introducing a second convention.
+> **`result` layer note:** the locked stack uses [kotlin-result](https://github.com/michaelbull/kotlin-result)'s two-param `Result<V, E>` (package `com.github.michaelbull.result`, explicit imports, `onOk`/`onErr`), not stdlib `kotlin.Result`. The migrator wires `kotlin-result` + `kotlin-result-coroutines` into the catalog and `api(libs.kotlin.result)` into `:domain` before converting use cases. If the existing project already standardized on another result type (Arrow `Either`, a project-local sealed type), tell the migrator via `target`/notes so it adapts instead of introducing a second convention.
 
 ### 9. Verify
 

@@ -1,0 +1,38 @@
+package ${BASE_PACKAGE}
+
+import ${APP_NAME_LOWER}.shared.generated.resources.Res
+import ${APP_NAME_LOWER}.shared.generated.resources.home_placeholder
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.safeContentPadding
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Text
+import androidx.compose.runtime.Composable
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.text.style.TextAlign
+import androidx.navigation3.runtime.NavKey
+import kotlinx.serialization.Serializable
+import org.jetbrains.compose.resources.stringResource
+
+/**
+ * Placeholder start destination until the first feature exists. Once a feature should
+ * own the launch screen, pass its Route to `rememberNavBackStack(...)` in AppNavigation.kt
+ * and delete this file plus its `HomeRoute` registrations there.
+ */
+@Serializable
+internal data object HomeRoute : NavKey
+
+@Composable
+internal fun HomeScreen() {
+    Box(
+        modifier = Modifier.fillMaxSize().safeContentPadding(),
+        contentAlignment = Alignment.Center,
+    ) {
+        Text(
+            text = stringResource(Res.string.home_placeholder),
+            style = MaterialTheme.typography.headlineSmall,
+            textAlign = TextAlign.Center,
+        )
+    }
+}

@@ -1,0 +1,7 @@
+package ${BASE_PACKAGE}.data
+
+import kotlinx.coroutines.CoroutineDispatcher
+import kotlinx.coroutines.Dispatchers
+
+// js/wasmJs are single-threaded and have no IO dispatcher.
+internal actual val platformIoDispatcher: CoroutineDispatcher get() = Dispatchers.Default

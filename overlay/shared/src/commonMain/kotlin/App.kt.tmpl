@@ -1,0 +1,24 @@
+package ${BASE_PACKAGE}
+
+import androidx.compose.runtime.Composable
+import ${BASE_PACKAGE}.ui.AppTheme
+import org.koin.compose.KoinApplication
+import org.koin.dsl.koinConfiguration
+
+/**
+ * Composition root — every platform entry point (MainActivity, MainViewController,
+ * desktop/web `main`) renders this. Owned by kmp-forge: starts Koin with [appModules]
+ * (AppModules.kt) and hosts the Nav 3 back stack ([AppNavigation], AppNavigation.kt).
+ *
+ * `KoinApplication` starts Koin on first composition and re-attaches to the running
+ * instance afterwards (e.g. Android Activity recreation), and sets up the Android
+ * context automatically — no per-platform `startKoin` call is needed.
+ */
+@Composable
+fun App() {
+    KoinApplication(configuration = koinConfiguration { modules(appModules) }) {
+        AppTheme {
+            AppNavigation()
+        }
+    }
+}

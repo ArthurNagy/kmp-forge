@@ -8,8 +8,10 @@
 #       copy non-.tmpl files as-is. Preserves directory structure.
 #
 #   apply-overlay.sh render-module <module-name> <src-dir> <dest-dir> <base-package-path>
-#       Same as render but src/commonMain/kotlin/X.kt → dest/src/commonMain/kotlin/<base-package-path>/<module-name>/X.kt
-#       (Same for commonTest/.) For module-style overlays.
+#       Same as render but src/<sourceSet>/kotlin/X.kt → dest/src/<sourceSet>/kotlin/<base-package-path>/<module-path>/X.kt
+#       for every source set (commonMain, commonTest, androidMain, nativeMain, ...). <module-name> is a
+#       package suffix: dots become directories (`feature.gallery` → feature/gallery/), and an empty
+#       string ("") puts files directly in <base-package-path>/ (used for :shared's composition root).
 #
 #   apply-overlay.sh patch-settings <project-dir> <module-list>
 #       Append `include(":x")` lines to project's settings.gradle.kts for each module
@@ -21,14 +23,25 @@
 #       (creates header if missing). Skips entries whose keys already exist.
 #
 # Required env vars when rendering .tmpl files:
-#   APP_NAME, BASE_PACKAGE, BASE_PACKAGE_PATH, APP_TAGLINE (optional), PLATFORM_LIST,
-#   BUILD_COMMANDS, MODULE_LIST, FEATURE_LIST, OPTIONAL_LIBS, FIGMA_URL, PROJECT_OVERRIDES,
-#   TIMELINE, SCAFFOLD_DATE. For feature templates: FEATURE_NAME, FEATURE_NAME_PASCAL.
+#   APP_NAME, APP_NAME_LOWER, BASE_PACKAGE, BASE_PACKAGE_PATH, APP_TAGLINE (optional),
+#   PLATFORM_LIST, BUILD_COMMANDS, MODULE_LIST, FEATURE_LIST, OPTIONAL_LIBS, FIGMA_URL,
+#   PROJECT_OVERRIDES, TIMELINE, SCAFFOLD_DATE. For feature templates: FEATURE_NAME (kebab),
+#   FEATURE_NAME_PKG, FEATURE_NAME_CAMEL, FEATURE_NAME_PASCAL. For autoloop: AUTOLOOP_HANDOFF.
 #   Unset variables substitute as empty strings (envsubst default).
 
 set -euo pipefail
 
 die() { echo "apply-overlay: $*" >&2; exit 1; }
+
+# Only these variables are substituted. A bare `envsubst` replaces EVERY $VAR / ${VAR} in
+# the file — including shell variables that templates must keep verbatim, e.g.
+# release.yml's `$ANDROID_KEYSTORE_BASE64` / `$RUNNER_TEMP`, which would render as "".
+# Adding an overlay variable? Add it here AND to the export block in commands/kmp-forge-init.md.
+OVERLAY_VARS='${APP_NAME} ${APP_NAME_LOWER} ${APP_TAGLINE} ${BASE_PACKAGE} ${BASE_PACKAGE_PATH}
+${PLATFORM_LIST} ${BUILD_COMMANDS} ${MODULE_LIST} ${FEATURE_LIST} ${OPTIONAL_LIBS} ${FIGMA_URL}
+${PROJECT_OVERRIDES} ${TIMELINE} ${SCAFFOLD_DATE}
+${FEATURE_NAME} ${FEATURE_NAME_PKG} ${FEATURE_NAME_CAMEL} ${FEATURE_NAME_PASCAL}
+${AUTOLOOP_HANDOFF}'
 
 require_envsubst() {
     if ! command -v envsubst >/dev/null; then
@@ -40,7 +53,7 @@ render_file() {
     local src="$1" dest="$2"
     mkdir -p "$(dirname "$dest")"
     if [[ "$src" == *.tmpl ]]; then
-        envsubst < "$src" > "$dest"
+        envsubst "$OVERLAY_VARS" < "$src" > "$dest"
     else
         cp "$src" "$dest"
     fi
@@ -66,14 +79,18 @@ cmd_render_module() {
     [[ -d "$src_dir" ]] || die "source dir not found: $src_dir"
     mkdir -p "$dest_dir"
 
+    # Package suffix → path: `feature.gallery` → `feature/gallery/`; "" → no extra segment.
+    local pkg_dir="$base_pkg_path"
+    [[ -n "$module_name" ]] && pkg_dir="$base_pkg_path/${module_name//.//}"
+
     find "$src_dir" -type f | while read -r src_file; do
         local rel="${src_file#$src_dir/}"
         local dest_rel
-        # Insert <base-package-path>/<module-name>/ after src/commonMain/kotlin/ and src/commonTest/kotlin/
-        if [[ "$rel" =~ ^src/(commonMain|commonTest)/kotlin/(.+)$ ]]; then
+        # Insert the package path after src/<sourceSet>/kotlin/ (any source set)
+        if [[ "$rel" =~ ^src/([A-Za-z0-9]+)/kotlin/(.+)$ ]]; then
             local sourceset="${BASH_REMATCH[1]}"
             local tail="${BASH_REMATCH[2]}"
-            dest_rel="src/$sourceset/kotlin/$base_pkg_path/$module_name/$tail"
+            dest_rel="src/$sourceset/kotlin/$pkg_dir/$tail"
         else
             dest_rel="$rel"
         fi
@@ -117,7 +134,7 @@ cmd_patch_libs() {
 
     local tmp_additions
     tmp_additions="$(mktemp)"
-    envsubst < "$additions" > "$tmp_additions"
+    envsubst "$OVERLAY_VARS" < "$additions" > "$tmp_additions"
 
     python3 - "$libs_file" "$tmp_additions" <<'PY'
 import re, sys, pathlib

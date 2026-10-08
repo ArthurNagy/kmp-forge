@@ -6,14 +6,14 @@
 :domain/src/commonTest/         use case tests
 :data/src/commonTest/           repository tests with FakeXxxDataSource
 :data/src/jvmTest/              optional: MockK for third-party platform deps
-:feature-*/src/commonTest/      ViewModel tests with ContainerHost.test()
+:feature-*/src/commonTest/      ViewModel tests with Orbit's test() harness
 :ui/src/commonTest/             optional: Composable behavior tests
 ```
 
 ## Frameworks
 
 - **Assertions**: `kotlin.test` stdlib in `commonTest`. No Kotest unless a specific feature needs DSL/property tests.
-- **MVI tests**: Orbit's `ContainerHost.test()` for happy-path state transitions.
+- **MVI tests**: Orbit's `test()` harness (`orbit-test`) for happy-path state transitions.
 - **Flow / edge cases**: Turbine on `stateFlow`/`container.stateFlow`.
 - **UI behavior**: `runComposeUiTest {}` in `commonTest`.
 - **No screenshot tests in v1**. Add Roborazzi/Paparazzi per-project when visual regressions matter.
@@ -40,7 +40,7 @@ class FakeUserRepository : UserRepository {
 }
 ```
 
-`Result`/`Ok`/`Err` are [kotlin-result](https://github.com/michaelbull/kotlin-result) (`com.github.michaelbull.result.*`), not `kotlin.Result`. `UserError.NotFound` is a `sealed interface UserError : DomainError` case.
+`Result`/`Ok`/`Err` are [kotlin-result](https://github.com/michaelbull/kotlin-result) (package `com.github.michaelbull.result`), not `kotlin.Result`. `UserError.NotFound` is a `sealed interface UserError : DomainError` case.
 
 ## When MockK is allowed
 
@@ -57,27 +57,28 @@ Rules:
 class GalleryViewModelTest {
 
     @Test
-    fun `load sets photos on success`() = runTest {
+    fun loadSetsPhotosOnSuccess() = runTest {
         val repo = FakeUserRepository().apply { seed(samplePhoto) }
         val vm = GalleryViewModel(GetPhotosUseCase(repo, TestDispatcherProvider()))
 
-        vm.test(this, GalleryState.Initial) {
-            expectInitialState()
+        // Orbit 12 (`org.orbitmvi.orbit.test.testWithInternalState`): the initial state is
+        // asserted automatically; then consume every emitted state in order.
+        vm.testWithInternalState(this, GalleryState.Initial) {
             containerHost.load()
-            expectState { copy(loading = true) }
-            expectState { copy(loading = false, photos = listOf(samplePhoto)) }
+            expectInternalState { copy(loading = true) }
+            expectInternalState { copy(loading = false, photos = listOf(samplePhoto)) }
         }
     }
 
     @Test
-    fun `load surfaces error on failure`() = runTest {
+    fun loadSurfacesErrorOnFailure() = runTest {
         val repo = FakeUserRepository().apply { nextError = DomainError.NetworkUnavailable }
         val vm = GalleryViewModel(GetPhotosUseCase(repo, TestDispatcherProvider()))
 
-        vm.test(this, GalleryState.Initial) {
+        vm.testWithInternalState(this, GalleryState.Initial) {
             containerHost.load()
-            expectState { copy(loading = true) }
-            expectState { copy(loading = false, error = DomainError.NetworkUnavailable) }
+            expectInternalState { copy(loading = true) }
+            expectInternalState { copy(loading = false, error = DomainError.NetworkUnavailable) }
         }
     }
 }

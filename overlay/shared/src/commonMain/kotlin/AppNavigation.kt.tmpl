@@ -1,0 +1,57 @@
+package ${BASE_PACKAGE}
+
+import androidx.compose.runtime.Composable
+import androidx.lifecycle.viewmodel.navigation3.rememberViewModelStoreNavEntryDecorator
+import androidx.navigation3.runtime.NavKey
+import androidx.navigation3.runtime.entryProvider
+import androidx.navigation3.runtime.rememberNavBackStack
+import androidx.navigation3.runtime.rememberSaveableStateHolderNavEntryDecorator
+import androidx.navigation3.ui.NavDisplay
+import androidx.savedstate.serialization.SavedStateConfiguration
+import kotlinx.serialization.modules.SerializersModule
+import kotlinx.serialization.modules.polymorphic
+
+/**
+ * Every [NavKey] the app can put on the back stack, registered for state saving.
+ * `rememberNavBackStack` has no reflection fallback outside Android: a route missing here
+ * throws `SerializationException` the first time the back stack is saved (backgrounding,
+ * rotation). /kmp-forge-add-feature and /kmp-forge-add-screen register each new Route above
+ * the `kmp-forge:nav-routes` marker — keep it.
+ */
+private val navSavedStateConfiguration = SavedStateConfiguration {
+    serializersModule = SerializersModule {
+        polymorphic(NavKey::class) {
+            subclass(HomeRoute::class, HomeRoute.serializer())
+            // kmp-forge:nav-routes
+        }
+    }
+}
+
+/**
+ * The app's single back stack. Features never reference each other's screens: each one
+ * contributes its entries via a public `add<Name>Entries(...)` extension (added above the
+ * `kmp-forge:nav-entries` marker) and takes outgoing navigation as callbacks that this
+ * host wires to [backStack].
+ */
+@Composable
+internal fun AppNavigation() {
+    val backStack = rememberNavBackStack(navSavedStateConfiguration, HomeRoute)
+    // Never pop the last entry — NavDisplay requires a non-empty back stack. System back
+    // on the root entry is left to the platform (e.g. Android finishes the Activity).
+    val navigateBack: () -> Unit = { if (backStack.size > 1) backStack.removeLastOrNull() }
+
+    NavDisplay(
+        backStack = backStack,
+        onBack = navigateBack,
+        // Saveable state + a ViewModelStore per entry: a feature's koinViewModel() is
+        // scoped to its entry and cleared when that entry is popped.
+        entryDecorators = listOf(
+            rememberSaveableStateHolderNavEntryDecorator(),
+            rememberViewModelStoreNavEntryDecorator(),
+        ),
+        entryProvider = entryProvider {
+            entry<HomeRoute> { HomeScreen() }
+            // kmp-forge:nav-entries
+        },
+    )
+}

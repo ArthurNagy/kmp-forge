@@ -44,7 +44,7 @@ A Claude Code plugin that scaffolds and guides Kotlin Multiplatform + Compose Mu
 | Resources / i18n | Compose Multiplatform Resources |
 | Crash reporting (default) | Platform out-of-box (Play Vitals, App Store Connect) |
 | Crash reporting (opt-in) | Sentry across all platforms |
-| Testing | kotlin.test + Orbit `ContainerHost.test()` + Turbine + Compose UI Test |
+| Testing | kotlin.test + Orbit `test()` + Turbine + Compose UI Test |
 | Mocking | Fakes preferred; MockK only on JVM |
 | CI | GitHub Actions |
 | Distribution | GitHub Release artifacts default; Firebase App Distribution + gradle-play-publisher opt-in |

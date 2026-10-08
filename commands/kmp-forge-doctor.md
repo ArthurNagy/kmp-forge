@@ -44,7 +44,7 @@ Expected: as declared in `gradle/wrapper/gradle-wrapper.properties`.
 
 ### 5. Check Kotlin version
 
-Read `gradle/libs.versions.toml` → `kotlinGradlePlugin`. Cross-reference with what's actually applied in `build-logic/build.gradle.kts`.
+Read `gradle/libs.versions.toml` → `[versions] kotlin` (the key kmp.new's catalog owns; build-logic's `kotlin-gradle-plugin` entry references it via `version.ref = "kotlin"`, so both always match).
 
 ### 6. Check signing config (if `signing.properties` exists)
 
@@ -60,7 +60,7 @@ Read `gradle/libs.versions.toml` → `kotlinGradlePlugin`. Cross-reference with 
 
 ### 8. Check Compose MP version
 
-Read `gradle/libs.versions.toml` → `composeGradlePlugin`. Cross-reference with what's compatible with declared Kotlin version (compose-multiplatform release notes).
+Read `gradle/libs.versions.toml` → `[versions] composeMultiplatform` (and `material3`, which kmp.new pins to a build matched to it). Cross-reference with what's compatible with the declared Kotlin version (compose-multiplatform release notes).
 
 ### 9. Optional: `./gradlew tasks` smoke test
 

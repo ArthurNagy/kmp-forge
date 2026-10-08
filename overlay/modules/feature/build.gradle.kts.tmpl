@@ -9,24 +9,31 @@ plugins {
 }
 
 kotlin {
-    androidLibrary {
-        namespace = "${BASE_PACKAGE}.feature.${FEATURE_NAME}"
+    android {
+        namespace = "${BASE_PACKAGE}.feature.${FEATURE_NAME_PKG}"
         compileSdk = libs.versions.android.compileSdk.get().toInt()
         minSdk = libs.versions.android.minSdk.get().toInt()
         compilerOptions {
             jvmTarget = JvmTarget.JVM_17
         }
+        // Required for Compose resources under the AGP KMP library plugin: without it the
+        // feature's composeResources are not packaged into the APK and every stringResource()
+        // call crashes on Android (kmp.new's :shared enables it for the same reason).
+        androidResources {
+            enable = true
+        }
     }
 
     sourceSets {
         commonMain.dependencies {
-            implementation(projects.domain)
-            implementation(projects.ui)
+            implementation(project(":domain"))
+            implementation(project(":ui"))
 
-            implementation(compose.runtime)
-            implementation(compose.foundation)
-            implementation(compose.material3)
-            implementation(compose.components.resources)
+            implementation(libs.compose.runtime)
+            implementation(libs.compose.foundation)
+            implementation(libs.compose.material3)
+            implementation(libs.compose.ui)
+            implementation(libs.compose.components.resources)
 
             implementation(libs.androidx.lifecycle.viewmodel)
             implementation(libs.androidx.lifecycle.viewmodelCompose)
@@ -47,7 +54,13 @@ kotlin {
             implementation(libs.kotlinx.coroutines.test)
             implementation(libs.orbit.test)
             implementation(libs.turbine)
-            implementation(projects.domain)
         }
     }
+}
+
+// Strings live in src/commonMain/composeResources/values/strings.xml (the unqualified
+// default table — see docs/i18n-a11y.md). Pin the generated Res class to the feature's own
+// package so templates can import it deterministically; it stays `internal` (the default).
+compose.resources {
+    packageOfResClass = "${BASE_PACKAGE}.feature.${FEATURE_NAME_PKG}.resources"
 }

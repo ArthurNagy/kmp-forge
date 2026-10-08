@@ -136,8 +136,9 @@ Local:
   ```
 
 CI:
-- Encode keystore once: `base64 -i release.keystore | pbcopy`, paste into `ANDROID_KEYSTORE_BASE64` secret
-- Workflow decodes to `$RUNNER_TEMP/release.keystore`, sets `KEYSTORE_PATH` env to that path; Gradle picks it up
+- Encode keystore once: `base64 -i release.keystore | pbcopy`, paste into `ANDROID_KEYSTORE_BASE64` secret; add `ANDROID_KEYSTORE_PASSWORD`, `ANDROID_KEY_ALIAS`, `ANDROID_KEY_PASSWORD`
+- Workflow decodes to `$RUNNER_TEMP/release.keystore` and passes AGP's injected signing properties (`-Pandroid.injected.signing.store.file=… .store.password=… .key.alias=… .key.password=…` — what Android Studio's "Generate Signed Bundle" uses), so CI signs the AAB/APK **without** any `signingConfig` in `androidApp/build.gradle.kts`. The `signing.properties` block above is only needed for local release builds.
+- The `changelog-and-release` job declares `permissions: contents: write` (new repos default `GITHUB_TOKEN` to read-only) and waits for the android, ios and desktop jobs — ios/desktop may be skipped, but a failed one blocks the Release instead of publishing it without those artifacts.
 
 ## Changelog (git-cliff)
 

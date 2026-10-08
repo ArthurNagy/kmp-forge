@@ -73,12 +73,18 @@ jobs:
       - name: Decode keystore
         run: echo "$ANDROID_KEYSTORE_BASE64" | base64 -d > $RUNNER_TEMP/release.keystore
         env: { ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }} }
-      - run: ./gradlew :androidApp:bundleRelease :androidApp:assembleRelease
+      - name: Build signed release AAB + APK   # AGP injected signing — see docs/release.md
         env:
           KEYSTORE_PATH: ${{ runner.temp }}/release.keystore
           KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
           KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
           KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        run: >-
+          ./gradlew :androidApp:bundleRelease :androidApp:assembleRelease
+          -Pandroid.injected.signing.store.file="$KEYSTORE_PATH"
+          -Pandroid.injected.signing.store.password="$KEYSTORE_PASSWORD"
+          -Pandroid.injected.signing.key.alias="$KEY_ALIAS"
+          -Pandroid.injected.signing.key.password="$KEY_PASSWORD"
       - uses: actions/upload-artifact@v4
         with:
           name: android
@@ -89,9 +95,16 @@ jobs:
     runs-on: macos-latest
     # … xcodebuild archive + export — see docs/release.md
 
-  changelog:
+  desktop:
+    if: ${{ vars.DESKTOP_ENABLED == 'true' }}
+    # … packageReleaseDistributionForCurrentOS on a macOS/Windows/Linux matrix
+
+  changelog-and-release:
+    needs: [android, ios, desktop]   # ios/desktop may be skipped; a failure blocks the Release
+    if: ${{ !cancelled() && needs.android.result == 'success' && !contains(needs.*.result, 'failure') }}
     runs-on: ubuntu-latest
-    needs: [android]
+    permissions:
+      contents: write                # new repos default GITHUB_TOKEN to read-only
     steps:
       - uses: actions/checkout@v4
         with: { fetch-depth: 0 }
@@ -139,10 +152,10 @@ plugins { alias(libs.plugins.kover) }
 
 dependencies {
     kover(projects.shared)
-    kover(projects.domain)
-    kover(projects.data)
-    kover(projects.ui)
-    // kover(projects.featureGallery)  // one per feature module
+    kover(project(":domain"))
+    kover(project(":data"))
+    kover(project(":ui"))
+    // kover(project(":feature-gallery"))  // one per feature module
 }
 
 kover {

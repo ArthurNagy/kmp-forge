@@ -8,17 +8,20 @@ End-to-end scaffold for a new KMP+Compose project on the kmp-forge locked stack.
 
 ## Layout (kmp.new output → kmp-forge overlay)
 
-kmp.jetbrains.com generates a **`:shared`** Kotlin Multiplatform library (Compose UI + the
-composition host — `App.kt`, `startKoin`, the Nav 3 back stack) plus thin per-platform app
-modules **`:androidApp`** / **`:desktopApp`**, and, when iOS is selected, an Xcode **`iosApp/`**
-project consuming the `Shared` framework. The overlay adds the locked-stack shared modules
-**`:ui` · `:domain` · `:data`** (and later `:feature-*`), wires `:shared` to depend on them,
-and installs `build-logic/`. `:shared` is the app's composition root; the app modules are just
-platform entry points.
+kmp.jetbrains.com generates a **`:shared`** Kotlin Multiplatform library (Compose UI with a
+sample `App()` composable) plus thin per-platform app modules **`:androidApp`** /
+**`:desktopApp`** / **`:webApp`**, and, when iOS is selected, an Xcode **`iosApp/`** project
+consuming the `Shared` framework. Every entry point just renders `App()`. The wizard does **not**
+generate any DI or navigation — the overlay supplies them: it adds the locked-stack shared modules
+**`:ui` · `:domain` · `:data`** (and later `:feature-*`), installs `build-logic/`, and replaces the
+sample `App.kt` with the kmp-forge **composition root** from `overlay/shared/` (`App.kt` starts
+Koin, `AppModules.kt` lists the Koin modules, `AppNavigation.kt` owns the Nav 3 back stack,
+`Home.kt` is a placeholder start destination). `:shared` is the app's composition root; the app
+modules are just platform entry points.
 
 > Earlier kmp.new revisions emitted a single `:composeApp`; the current wizard splits it into
 > `:shared` + per-platform app modules. The overlay + build-logic target the current shape:
-> Kotlin 2.4 / AGP 9 (`com.android.kotlin.multiplatform.library`) / Compose MP 1.11 / Gradle 9.1,
+> Kotlin 2.4 / AGP 9 (`com.android.kotlin.multiplatform.library`) / Compose MP 1.12 / Gradle 9.5,
 > with build-logic as a **precompiled script plugin** (a Kotlin class plugin can't compile against
 > KGP 2.4 under Gradle's embedded Kotlin 2.2).
 
@@ -89,6 +92,9 @@ Compute and export all env vars `apply-overlay.sh` needs:
 
 ```bash
 export APP_NAME="<PascalCase name>"
+# Compose resources generate :shared's Res class into "<lowercase root project name>.shared.generated.resources";
+# kmp.new sets rootProject.name = APP_NAME, so Home.kt imports it via this variable.
+export APP_NAME_LOWER="$(echo "$APP_NAME" | tr '[:upper:]' '[:lower:]')"
 export APP_TAGLINE="<one-liner or empty>"
 export BASE_PACKAGE="<reverse-domain>"
 export BASE_PACKAGE_PATH="$(echo "$BASE_PACKAGE" | tr . /)"
@@ -145,6 +151,13 @@ for module in ui domain data; do
         "$module" "$OVERLAY/modules/$module" "$TARGET/$module" "$BASE_PACKAGE_PATH"
 done
 
+# Composition root into :shared (App.kt, AppModules.kt, AppNavigation.kt, Home.kt +
+# composeResources/values/strings.xml). The empty module name puts the files directly in the
+# base package, next to kmp.new's App.kt — which this intentionally REPLACES (the wizard's
+# sample screen; every platform entry point keeps calling App()).
+bash "${CLAUDE_PLUGIN_ROOT}/scripts/apply-overlay.sh" render-module \
+    "" "$OVERLAY/shared" "$TARGET/shared" "$BASE_PACKAGE_PATH"
+
 # build-logic (always — per locked decision)
 mkdir -p "$TARGET/build-logic"
 cp -R "$OVERLAY/build-logic/." "$TARGET/build-logic/"
@@ -170,6 +183,13 @@ bash "${CLAUDE_PLUGIN_ROOT}/scripts/apply-overlay.sh" patch-settings "$TARGET" "
 # If pluginManagement block is absent (rare), prepend it at the top of the file:
 #   pluginManagement { includeBuild("build-logic") }
 
+# Root build.gradle.kts: use the Edit tool to add, as the first line inside kmp.new's
+# `plugins { … }` block (next to its other `apply false` lines):
+#   id("kmp-forge.kmp.library") apply false
+# This loads build-logic (and the Spotless/Detekt/Kover plugins it bundles) once, in the root
+# classloader. Without it each module loads its own copy and Spotless 8's shared build service
+# fails configuration ("Cannot set the value of task ':ui:spotlessKotlin' property 'taskService'").
+
 # Merge libs.versions.toml additions
 bash "${CLAUDE_PLUGIN_ROOT}/scripts/apply-overlay.sh" patch-libs \
     "$TARGET" "$OVERLAY/gradle/libs.versions.toml.additions.tmpl"
@@ -179,25 +199,39 @@ bash "${CLAUDE_PLUGIN_ROOT}/scripts/apply-overlay.sh" patch-libs \
 printf '\nkmpForge.targets=%s\n' "$KMP_TARGETS" >> "$TARGET/gradle.properties"
 ```
 
-Then wire **`:shared`** (the composition host) to the new modules. Use the Edit tool to add to
-`shared/build.gradle.kts` inside `kotlin { sourceSets { commonMain.dependencies { … } } }`:
+When iOS is selected, use the Edit tool to raise the `-Xmx` in `gradle.properties`'
+`org.gradle.jvmargs` line to at least `-Xmx6144M` (keep its other flags). Kotlin/Native links the
+iOS frameworks inside the Gradle daemon, and with the locked stack on the classpath kmp.new's
+default 4 GiB heap runs out on a clean `./gradlew build` (`OutOfMemoryError` in
+`:shared:linkReleaseFrameworkIosArm64`).
+
+Then wire **`:shared`** (the composition root) with the Edit tool, in `shared/build.gradle.kts`:
+
+1. `plugins { … }` — add `alias(libs.plugins.kotlinx.serialization)` (the Nav 3 routes are `@Serializable`).
+2. `kotlin { sourceSets { commonMain.dependencies { … } } }` — add:
 
 ```kotlin
-implementation(projects.ui)
-implementation(projects.domain)
-implementation(projects.data)
-// composition deps :shared needs to host App.kt + startKoin + the Nav 3 back stack:
+implementation(project(":ui"))
+implementation(project(":domain"))
+implementation(project(":data"))
+// composition root (App.kt / AppModules.kt / AppNavigation.kt):
 implementation(libs.koin.core)
 implementation(libs.koin.compose)
 implementation(libs.koin.compose.viewmodel)
 implementation(libs.androidx.navigation3.runtime)
 implementation(libs.androidx.navigation3.ui)
+implementation(libs.androidx.lifecycle.viewmodel.navigation3)
+implementation(libs.kotlinx.serialization.json)
 ```
 
-(`:feature-*` modules are added later by `/kmp-forge-add-feature`, which also wires each into
-`:shared`'s deps and the `NavDisplay` entry list.) `apply-overlay.sh patch-settings` already
-guarantees a trailing newline before appending `include(...)` lines, so the kmp.new
-`settings.gradle.kts` (which ships without one) won't get a concatenated `include`.
+Use `project(":x")`, not `projects.x`: type-safe project accessors need
+`enableFeaturePreview("TYPESAFE_PROJECT_ACCESSORS")`, which current kmp.new output no longer sets.
+
+(`:feature-*` modules are added later by `/kmp-forge-add-feature`, which wires each into
+`:shared`'s deps plus the `// kmp-forge:` markers in `AppModules.kt` and `AppNavigation.kt`.)
+`apply-overlay.sh patch-settings` already guarantees a trailing newline before appending
+`include(...)` lines, so the kmp.new `settings.gradle.kts` (which ships without one) won't get a
+concatenated `include`.
 
 ### 6. Optional-lib post-overlay tweaks
 
@@ -244,6 +278,7 @@ Print a checklist of what the user should do next:
 ```
 ✓ Project scaffolded at <path>
 ✓ Modules: :shared · :androidApp · :desktopApp · :ui · :domain · :data + build-logic/
+✓ Composition root: shared/…/App.kt (Koin) + AppNavigation.kt (Nav 3) + AppModules.kt
 ✓ CI workflows: .github/workflows/pr.yml + release.yml
 ✓ Product docs: docs/MVP_SPEC.md + docs/DECISIONS/{0001..0006}.md
 ✓ CLAUDE.md generated

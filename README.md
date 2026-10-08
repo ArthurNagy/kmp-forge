@@ -57,7 +57,7 @@ A Claude Code plugin that scaffolds and guides Kotlin Multiplatform + Compose Mu
 | Changelog | git-cliff on tag |
 | Architecture | Hybrid — features = presentation only; shared `:domain`, `:data`, `:ui` |
 | Modules at scaffold | `:shared` (composition root) `+ :androidApp + :desktopApp + :webApp + iosApp/ + :ui + :domain + :data + :testing + build-logic/` |
-| Device checks | Google's Android CLI (`android emulator` / `run` / `layout` / `screen`) — emulator first |
+| Device checks | Google's Android CLI (`android emulator` / `run` / `layout` / `screen`) — emulator first; the `kmp-qa` agent runs a change's acceptance scenarios as journeys on an emulator |
 
 ## Documentation
 

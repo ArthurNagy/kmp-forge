@@ -65,6 +65,7 @@ Marketplace install: `/plugin marketplace add arthurnagy/kmp-forge` then `/plugi
 commands/                    Slash commands (kmp-forge-*.md) — entry points for users
 agents/                      Subagents invoked by commands (kmp-feature-builder, kmp-reviewer,
                               kmp-migrator, kmp-spec-critic, kmp-product-owner (backlog drafts),
+                              kmp-qa (acceptance scenarios: tagged tests + emulator journeys),
                               kmp-loop-{proposer,implementer,code-reviewer,fixer} — the loop workers)
 skills/                      Workflow skills auto-triggered in scaffolded projects
                              (conventional-commits, git-cliff-changelog,

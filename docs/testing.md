@@ -188,8 +188,32 @@ android emulator stop <avd>
   and the feature's string resources being packaged.
 - Install the CLI if `android` is missing: see `/kmp-forge-doctor`.
 
+## Acceptance: scenarios → tagged tests → QA
+
+With OpenSpec, a change's acceptance criteria are its spec **scenarios** (`#### Scenario: <name>` with WHEN / THEN). Each one gets a test that names it — a `// Scenario: <exact scenario name>` comment on the test (rule in `openspec/config.yaml`; the spec critic checks `tasks.md` plans it):
+
+```kotlin
+// Scenario: Picked theme survives a restart
+@Test
+fun pickedThemeIsRestored() = runTest {
+    val repo = FakeSettingsRepository(stored = ThemeMode.DARK)
+    val vm = SettingsViewModel(GetThemeUseCase(repo, TestDispatcherProvider(testScheduler)))
+    vm.testWithInternalState(this, SettingsState.Initial) {
+        containerHost.load()
+        expectInternalState { copy(theme = ThemeMode.DARK) }
+    }
+}
+```
+
+The tag is how coverage is traced: the **`kmp-qa` agent** (QA engineer) maps every scenario of a change to its tagged test, flags missing or hollow ones, and — in emulator mode — runs each **user-visible** scenario as an Android CLI journey on an emulator (fresh app per journey, screenshots at every check, logcat for crashes, plus a rotation / process-death pass on changed screens), writing `build/qa/<change>/report.md`. It reports PASS / FAIL / ERROR and never edits code; it never touches a physical device, and it returns ERROR rather than PASS when it could not verify something.
+
+- **Supervised:** after `/opsx:apply`, ask for the `kmp-qa` agent ("QA the `<change>` change on the emulator").
+- **Autonomous loop:** a third reviewer in the code gate — `qa: emulator | tests-only | off` in `openspec/AUTOLOOP.md`. Its blocking findings block the merge like any other.
+- **Scope:** journeys run on Android; iOS / desktop / web behavior rests on the tagged tests. QA checks that the app *does* what the scenario says, not how it looks.
+
 ## What to test
 
+- **Always**: every OpenSpec scenario — a test tagged `// Scenario: <name>` (see above).
 - **Always**: every use case (happy path + each `DomainError` branch).
 - **Always**: every ViewModel intent's state transitions.
 - **Often**: data layer mappers (`Dto.toDomain()`) when transformation is non-trivial.

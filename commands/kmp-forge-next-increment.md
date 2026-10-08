@@ -37,7 +37,7 @@ When you "STOP + escalate": leave the repo in a safe state (no half-merged branc
 | 1 · Propose | `kmp-forge:kmp-loop-proposer` | `RESULT / PR / CI / CYCLES` |
 | 2 · Spec gate | `kmp-forge:kmp-spec-critic` | `VERDICT: PASS \| REVISE \| BLOCK` + findings |
 | 3 · Implement | `kmp-forge:kmp-loop-implementer` | `RESULT / PR / CI / FILES` |
-| 4 · Code gate | `kmp-forge:kmp-loop-code-reviewer` **and** `kmp-forge:kmp-reviewer` | `VERDICT: PASS \| CHANGES \| ERROR` + findings |
+| 4 · Code gate | `kmp-forge:kmp-loop-code-reviewer` **and** `kmp-forge:kmp-reviewer` (+ `kmp-forge:kmp-qa` unless `qa: off`) | `VERDICT: PASS \| CHANGES \| ERROR` (QA: `PASS \| FAIL \| ERROR`) + findings |
 | 2b / 4b · Fix | `kmp-forge:kmp-loop-fixer` | `RESULT / CI / APPLIED / UNADDRESSED` |
 | 0b · Queue empty | `kmp-forge:kmp-product-owner` | `RESULT` + drafted issues (filed by you, never `ready`) |
 
@@ -47,7 +47,7 @@ Pass each worker the `issue` number and the `slug`, plus `claude_plugin_root` = 
 
 ### 0. Precheck and resume
 
-1. **Read the loop configuration** from `openspec/AUTOLOOP.md`'s `## Loop configuration` section: `local-gate`, `spec-workflow`, `ready-approvers`, `queue-empty-groom`, `kill-switch`, and the `### Queue-empty handoff` block. Missing file or missing keys → fail-safe defaults: ready-approvers empty (only this account), queue-empty-groom `off`, kill-switch `openspec/STOP`, local-gate `./gradlew spotlessApply detekt build -x test jvmTest koverVerify`, handoff = "label more issues `ready`, or stop". (A legacy `backlog:` key means the project predates the issue queue — STOP + escalate: "re-run /kmp-forge-add-autoloop to migrate openspec/backlog.md to issues".)
+1. **Read the loop configuration** from `openspec/AUTOLOOP.md`'s `## Loop configuration` section: `local-gate`, `spec-workflow`, `ready-approvers`, `queue-empty-groom`, `qa`, `kill-switch`, and the `### Queue-empty handoff` block. Missing file or missing keys → fail-safe defaults: ready-approvers empty (only this account), queue-empty-groom `off`, qa `off`, kill-switch `openspec/STOP`, local-gate `./gradlew spotlessApply detekt build -x test jvmTest koverVerify`, handoff = "label more issues `ready`, or stop". (A legacy `backlog:` key means the project predates the issue queue — STOP + escalate: "re-run /kmp-forge-add-autoloop to migrate openspec/backlog.md to issues".)
 2. If the kill-switch file exists → kill-switch halt.
 3. **Working tree.** `git fetch origin --prune`, then `git status --porcelain`:
    - **Clean** → continue.
@@ -146,16 +146,17 @@ Check the kill switch. From a freshly-pulled `main`, spawn `kmp-forge:kmp-loop-i
 Runs only once CI is green — the two merge conditions are **CI green AND this review PASS on the current head**.
 
 1. Check the kill switch. Make sure the working tree is on `feat/<slug>` at the PR head and `origin/main` is fresh: `git switch feat/<slug> && git pull --ff-only && git fetch origin main`.
-2. Spawn **both reviewers in a single message** so they run concurrently, giving each the PR number, the branch, the round, and the exact diff range `origin/main...origin/feat/<slug>`:
+2. Spawn **the reviewers in a single message** so they run concurrently, giving each the PR number, the branch, the round, and the exact diff range `origin/main...origin/feat/<slug>`:
    - `kmp-forge:kmp-loop-code-reviewer` — correctness bugs; runs `/code-review high --comment <pr>` (the PR number is mandatory — without a target `/code-review` reviews the empty local diff), which posts each finding as an inline PR comment. Returns `VERDICT: PASS | CHANGES | ERROR`.
    - `kmp-forge:kmp-reviewer` — locked-stack convention violations. Prompt it with: "Review exactly `git diff origin/main...origin/feat/<slug>` (PR #<pr>) for locked-stack violations; if that diff is empty or cannot be produced, say so instead of reporting no findings."
-3. **Fail closed.** If the code reviewer returns `ERROR`, or `kmp-reviewer` reports it could not obtain the diff → STOP + escalate. An empty or unverifiable diff is never a PASS.
-4. Merge their findings. **Blocking** = any correctness bug, any locked-stack violation that changes behavior or architecture, any missing test for new behavior, any committed secret, any breach of a locked invariant declared in the project's CLAUDE.md. Non-blocking = style and nits.
+   - `kmp-forge:kmp-qa` (unless `qa: off`) — acceptance: with `slug`, `issue`, `pr`, `branch`, `round` and `qa` (`emulator` | `tests-only`). Checks every scenario has a `// Scenario: <name>`-tagged test and, in `emulator` mode, runs the user-visible scenarios as journeys on an emulator. Returns `VERDICT: PASS | FAIL | ERROR`.
+3. **Fail closed.** If the code reviewer returns `ERROR`, `kmp-reviewer` reports it could not obtain the diff, or QA returns `ERROR` (it could not verify — no emulator, the app would not build or launch) → STOP + escalate. An empty or unverifiable diff, or an unverified scenario, is never a PASS.
+4. Merge their findings. **Blocking** = any correctness bug, any locked-stack violation that changes behavior or architecture, any missing test for new behavior, any committed secret, any breach of a locked invariant declared in the project's CLAUDE.md, and every QA `BLOCKING` finding (a scenario without a tagged test, a failed journey, a crash). Non-blocking = style and nits.
 5. **Post a summary review to the PR:**
    ```bash
    gh pr review <pr> --comment --body "<body>"
    ```
-   `<body>` begins `### 🤖 Claude Code review — round <r>/3 — <PASS: no blocking findings | CHANGES: <k> blocking>`, then the `kmp-reviewer` findings (bulleted, `file:line`), the count of inline findings posted, and a one-line verdict.
+   `<body>` begins `### 🤖 Claude Code review — round <r>/3 — <PASS: no blocking findings | CHANGES: <k> blocking>`, then the `kmp-reviewer` findings (bulleted, `file:line`), the count of inline findings posted, a **QA** line (`<mode>: <verdict> — <its SCENARIOS line>`) with its blocking findings, and a one-line verdict. (Screenshots stay local in `build/qa/<slug>/`; the review carries the text evidence.)
 6. **Blocking findings** → round 3 → STOP + escalate. Otherwise spawn `kmp-forge:kmp-loop-fixer` with `target: code`, `branch: feat/<slug>`, the PR number, the cycle (= this round), `local-gate`, and the blocking findings verbatim. A non-empty `UNADDRESSED:` list → STOP + escalate. On its `RESULT: OK`, re-review from step 1 and post round *r*+1.
 7. **PASS** → check the kill switch → `gh pr merge <pr> --squash --delete-branch`; `git switch main && git pull --ff-only`.
 

@@ -31,7 +31,7 @@ So the orchestrator is a thin state machine: it asks the queue for the next issu
 | Propose | `kmp-loop-proposer` | proposal drafting, `openspec validate`, CI logs |
 | Spec gate | `kmp-spec-critic` | the whole proposal |
 | Implement | `kmp-loop-implementer` | all code, every gradle run, CI logs |
-| Code gate | `kmp-loop-code-reviewer` + `kmp-reviewer` | the full diff |
+| Code gate | `kmp-loop-code-reviewer` + `kmp-reviewer` + `kmp-qa` | the full diff; the app on an emulator — layout dumps, screenshots, logcat |
 | Fix | `kmp-loop-fixer` | edit/build/fix churn |
 
 The orchestrator keeps only each worker's structured result block — a few hundred tokens per phase, roughly 3–5k per increment.
@@ -43,7 +43,7 @@ This also makes the loop **crash-resumable**: no phase state is held in the conv
 | Gate | Who | Checks |
 |---|---|---|
 | Spec (docs PR) | `kmp-spec-critic` | scope vs the issue (every acceptance criterion → a scenario, Out of scope respected), layer placement per [architecture.md](architecture.md), locked project invariants (project CLAUDE.md), dependency safety, `openspec validate`, task executability |
-| Code (code PR) | `kmp-loop-code-reviewer` (correctness, via `/code-review high --comment <pr>`) + `kmp-reviewer` (locked-stack conventions, on `origin/main...origin/feat/<slug>`) | blocking = correctness bugs, locked-invariant violations, missing tests, layer violations, secrets |
+| Code (code PR) | `kmp-loop-code-reviewer` (correctness, via `/code-review high --comment <pr>`) + `kmp-reviewer` (locked-stack conventions, on `origin/main...origin/feat/<slug>`) + `kmp-qa` (acceptance, per `qa:` in the runbook) | blocking = correctness bugs, locked-invariant violations, missing tests, layer violations, secrets, a scenario without a `// Scenario:`-tagged test, a scenario journey that fails on the emulator, a crash |
 
 Both gates **post their verdict to the PR** (`### 🤖 <gate> — round r/3 — VERDICT`) — the audit trail, the resume mechanism, and what the merge guard checks.
 
@@ -118,7 +118,8 @@ Direct edits remain right for: docs, formatting and build chores, and refactors 
 ## Limitations
 
 - **The gates + CI are the only barrier** between a proposal and `main` — by design, and reversible via `git revert` of any squashed PR commit. Watch the first 1–2 increments live before leaving it unattended.
-- **UI/UX slices should not auto-merge**: CI can't verify look and feel, and review agents can't judge UX unattended. Keep the loop on logic/state/data slices; gate UI slices for human review (open the PR, stop).
+- **UI/UX slices should not auto-merge**: with `qa: emulator` the `kmp-qa` reviewer proves UI scenarios *work* on an emulator (journeys + screenshots), but nothing judges look and feel unattended. Keep the loop on logic/state/data slices plus functional UI; gate visual/UX slices for human review (open the PR, stop).
+- **QA covers Android only.** Journeys run on an Android emulator through Google's Android CLI; iOS, desktop and web behavior is covered by the tagged tests alone. `kmp-qa` never touches a physical device — and fails the gate (`ERROR`) rather than passing when no emulator is available.
 - **Branch protection:** "require approvals" blocks the loop (GitHub forbids self-approval; gates post comment-reviews). Supported: no protection + guard in `enforce`, or required status checks with zero required approvals.
 - `/loop` and `/code-review` are Claude Code features the loop depends on; `kmp-loop-code-reviewer` falls back to reviewing the diff itself if `/code-review` is unavailable.
 - The `### 🤖 <gate> — round r/3 — <VERDICT>` header is a contract shared by the orchestrator (posts it), its resume logic (parses it), and the merge guard (checks it) — change all three together. The guard only trusts reviews posted by the loop's own GitHub account, so another reviewer's `🤖` comment cannot pass (or block) a merge.

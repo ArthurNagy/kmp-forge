@@ -6,7 +6,7 @@ description: |
   Context: /kmp-forge-next-increment reached Phase 4 with a CI-green code PR.
   user: "Code-gate the PR: slug=add-session-cache, pr=42, branch=feat/add-session-cache, round=1, diff_range=origin/main...origin/feat/add-session-cache."
   assistant: "Spawning kmp-loop-code-reviewer (correctness) and kmp-reviewer (conventions) concurrently."
-  <commentary>Loop Phase 4 — the correctness half of the code gate; the orchestrator merges both reviewers' verdicts.</commentary>
+  <commentary>Loop Phase 4 — the correctness half of the code gate; the orchestrator merges its verdict with kmp-reviewer's (conventions) and kmp-qa's (acceptance).</commentary>
   </example>
 tools: Read, Grep, Glob, Bash, Skill
 ---

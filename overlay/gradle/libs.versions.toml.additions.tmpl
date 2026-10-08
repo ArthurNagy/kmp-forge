@@ -2,40 +2,63 @@
 # scripts/apply-overlay.sh. Sections are merged: existing [versions], [libraries],
 # [plugins], [bundles] entries are preserved; these get added (existing keys skipped).
 #
-# IMPORTANT: this overlay does NOT re-pin the toolchain (Kotlin, AGP, Compose,
-# AndroidX Lifecycle, Coroutines). kmp.new's generated catalog already owns those keys
-# (`kotlin`, `agp`, `composeMultiplatform`, `androidx-lifecycle`, `kotlinx-coroutines`),
-# and the build-logic plugin entries below reference THOSE keys — so build-logic and the
-# app modules share one toolchain version (no "plugin on classpath with different
-# version" failure) and the overlay stays drift-proof across future kmp.new bumps.
+# TOOLCHAIN FALLBACKS: kmp.new's generated catalog normally owns the toolchain keys
+# (`kotlin`, `agp`, `composeMultiplatform`, `material3`, `androidx-lifecycle`,
+# `kotlinx-coroutines`, `android-*`) plus the `compose-*` libraries and the
+# `androidMultiplatformLibrary` / `composeMultiplatform` / `composeCompiler` plugins — but
+# WHICH of them it emits depends on the wizard selection (e.g. `kotlinx-coroutines` only
+# appears when Desktop is selected), and an adopted project may name them differently.
+# Every key this overlay references is therefore declared below. patch-libs skips keys
+# that already exist, so a wizard-provided version always wins — build-logic and the app
+# modules still share ONE toolchain version (no "plugin on classpath with different
+# version" failure); these values only fill gaps.
 #
 # Use `/kmp-forge-bump-stack` to refresh versions.
 
 [versions]
+# --- toolchain fallbacks (skipped when the catalog already declares the key) ---
+kotlin = "2.4.20"
+agp = "9.4.1"
+composeMultiplatform = "1.12.1"
+material3 = "1.12.0-alpha03"
+androidx-lifecycle = "2.11.0"
+kotlinx-coroutines = "1.11.0"
+android-compileSdk = "37"
+android-minSdk = "24"
+
 # --- locked stack ---
-orbitMvi = "9.0.0"
-koin = "4.0.4"
-koinAndroidx = "4.0.4"
-coil = "3.1.0"
-ktor = "3.1.2"
-kermit = "2.0.5"
-kotlinxDatetime = "0.6.2"
-kotlinxSerialization = "1.8.1"
-androidxNavigation3 = "1.1.1"
-androidxDatastore = "1.1.7"
-sqldelight = "2.1.0"
+orbitMvi = "12.0.1"
+koin = "4.2.2"
+coil = "3.6.3"
+ktor = "3.6.0"
+kermit = "2.2.0"
+kotlinxDatetime = "0.8.0"
+kotlinxSerialization = "1.11.0"
+# Nav 3: ONE artifact — the JetBrains Compose Multiplatform port. It re-exports the matching
+# Google navigation3-runtime (NavKey, entryProvider, rememberNavBackStack…) as an `api`
+# dependency on every platform, so the runtime is never declared separately.
+androidxNavigation3 = "1.1.2"
+androidxDatastore = "1.2.1"
+sqldelight = "2.4.1"
 turbine = "1.2.1"
-detekt = "1.23.7"
-spotless = "7.0.2"
-ktlint = "1.5.0"
-kover = "0.9.8"
-store = "5.1.0-alpha05"
+store = "5.1.0-beta01"
 kotlinResult = "2.3.1"
 
-# NOTE: kotlin / agp / composeMultiplatform / androidx-lifecycle / kotlinx-coroutines
-# are intentionally NOT declared here — they come from kmp.new's catalog. See header.
+# --- quality gates ---
+detekt = "1.23.8"
+spotless = "8.10.3"
+ktlint = "1.8.0"
+kover = "0.9.11"
 
 [libraries]
+# Compose Multiplatform (fallbacks — kmp.new's catalog normally declares these)
+compose-runtime = { module = "org.jetbrains.compose.runtime:runtime", version.ref = "composeMultiplatform" }
+compose-foundation = { module = "org.jetbrains.compose.foundation:foundation", version.ref = "composeMultiplatform" }
+compose-material3 = { module = "org.jetbrains.compose.material3:material3", version.ref = "material3" }
+compose-ui = { module = "org.jetbrains.compose.ui:ui", version.ref = "composeMultiplatform" }
+compose-components-resources = { module = "org.jetbrains.compose.components:components-resources", version.ref = "composeMultiplatform" }
+compose-uiTest = { module = "org.jetbrains.compose.ui:ui-test", version.ref = "composeMultiplatform" }
+
 # Orbit MVI
 orbit-core = { module = "org.orbit-mvi:orbit-core", version.ref = "orbitMvi" }
 orbit-viewmodel = { module = "org.orbit-mvi:orbit-viewmodel", version.ref = "orbitMvi" }
@@ -66,7 +89,7 @@ kermit = { module = "co.touchlab:kermit", version.ref = "kermit" }
 
 # kotlin-result — two-param Result<V, E> for Result + DomainError error handling.
 # Maven Central coordinate is "com.michael-bull.kotlin-result"; the Kotlin import
-# package is "com.github.michaelbull.result.*" (Ok/Err/onSuccess/onFailure/fold/...).
+# package is "com.github.michaelbull.result" (Ok/Err/onOk/onErr/fold/...).
 kotlin-result = { module = "com.michael-bull.kotlin-result:kotlin-result", version.ref = "kotlinResult" }
 kotlin-result-coroutines = { module = "com.michael-bull.kotlin-result:kotlin-result-coroutines", version.ref = "kotlinResult" }
 
@@ -76,15 +99,13 @@ kotlinx-coroutines-test = { module = "org.jetbrains.kotlinx:kotlinx-coroutines-t
 kotlinx-datetime = { module = "org.jetbrains.kotlinx:kotlinx-datetime", version.ref = "kotlinxDatetime" }
 kotlinx-serialization-json = { module = "org.jetbrains.kotlinx:kotlinx-serialization-json", version.ref = "kotlinxSerialization" }
 
-# AndroidX
-# lifecycle-viewmodel-compose is already in kmp.new's catalog as `androidx-lifecycle-viewmodelCompose`
-# (same artifact) — referenced via libs.androidx.lifecycle.viewmodelCompose. Only the non-compose
-# viewmodel artifact is unique to this overlay.
+# AndroidX (JetBrains multiplatform ports where Google's artifact is Android/JVM-only)
 androidx-lifecycle-viewmodel = { module = "org.jetbrains.androidx.lifecycle:lifecycle-viewmodel", version.ref = "androidx-lifecycle" }
-# Nav 3: runtime stays on Google's androidx.navigation3 (a true KMP artifact — iOS/macOS/js/wasm);
-# the UI port lives under org.jetbrains.androidx.navigation3 because Google's navigation3-ui is
-# Android/JVM-only. The UI port depends on the matching Google runtime, so one version ref drives both.
-androidx-navigation3-runtime = { module = "androidx.navigation3:navigation3-runtime", version.ref = "androidxNavigation3" }
+androidx-lifecycle-viewmodelCompose = { module = "org.jetbrains.androidx.lifecycle:lifecycle-viewmodel-compose", version.ref = "androidx-lifecycle" }
+# Scopes each Nav 3 entry's ViewModels (koinViewModel()) to that entry: cleared when it's popped.
+androidx-lifecycle-viewmodel-navigation3 = { module = "org.jetbrains.androidx.lifecycle:lifecycle-viewmodel-navigation3", version.ref = "androidx-lifecycle" }
+# Nav 3: the JetBrains port is the only Nav 3 artifact the stack declares (Google's own
+# navigation3-ui is Android/JVM-only). It brings the matching navigation3-runtime transitively.
 androidx-navigation3-ui = { module = "org.jetbrains.androidx.navigation3:navigation3-ui", version.ref = "androidxNavigation3" }
 androidx-datastore-core = { module = "androidx.datastore:datastore-core", version.ref = "androidxDatastore" }
 androidx-datastore-preferences-core = { module = "androidx.datastore:datastore-preferences-core", version.ref = "androidxDatastore" }
@@ -97,14 +118,15 @@ sqldelight-native-driver = { module = "app.cash.sqldelight:native-driver", versi
 sqldelight-sqlite-driver = { module = "app.cash.sqldelight:sqlite-driver", version.ref = "sqldelight" }
 sqldelight-web-worker-driver = { module = "app.cash.sqldelight:web-worker-driver", version.ref = "sqldelight" }
 
-# Test — kotlin-test comes from kmp.new's catalog (version.ref = "kotlin").
+# Test
+kotlin-test = { module = "org.jetbrains.kotlin:kotlin-test", version.ref = "kotlin" }
 turbine = { module = "app.cash.turbine:turbine", version.ref = "turbine" }
 
 # Store (MobileNativeFoundation) — opt-in for offline-first multi-source repos
 store = { module = "org.mobilenativefoundation.store:store5", version.ref = "store" }
 
 # --- gradle plugins consumed by build-logic ---
-# Toolchain plugins reference kmp.new's catalog keys (kotlin / agp / composeMultiplatform)
+# Toolchain plugins reference the toolchain keys (kotlin / agp / composeMultiplatform)
 # so build-logic compiles against the SAME versions the app modules use — no classpath clash.
 kotlin-gradle-plugin = { module = "org.jetbrains.kotlin:kotlin-gradle-plugin", version.ref = "kotlin" }
 android-gradle-plugin = { module = "com.android.tools.build:gradle", version.ref = "agp" }
@@ -115,8 +137,10 @@ spotless-gradle-plugin = { module = "com.diffplug.spotless:spotless-plugin-gradl
 kover-gradle-plugin = { module = "org.jetbrains.kotlinx:kover-gradle-plugin", version.ref = "kover" }
 
 [plugins]
-# composeMultiplatform + composeCompiler come from kmp.new's catalog — only plugins
-# kmp.new does NOT define are added here.
+# Fallbacks — kmp.new's catalog normally declares these three.
+androidMultiplatformLibrary = { id = "com.android.kotlin.multiplatform.library", version.ref = "agp" }
+composeMultiplatform = { id = "org.jetbrains.compose", version.ref = "composeMultiplatform" }
+composeCompiler = { id = "org.jetbrains.kotlin.plugin.compose", version.ref = "kotlin" }
 kotlinx-serialization = { id = "org.jetbrains.kotlin.plugin.serialization", version.ref = "kotlin" }
 detekt = { id = "io.gitlab.arturbosch.detekt", version.ref = "detekt" }
 spotless = { id = "com.diffplug.spotless", version.ref = "spotless" }

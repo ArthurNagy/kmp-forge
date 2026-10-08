@@ -17,7 +17,7 @@ Alternatives considered:
 
 ## Decision
 
-Use [Orbit MVI](https://orbit-mvi.org/) on every ViewModel. ViewModels extend `androidx.lifecycle.ViewModel` and implement `ContainerHost<State, Nothing>`. State mutations go through `intent { reduce { ... } }`.
+Use [Orbit MVI](https://orbit-mvi.org/) on every ViewModel. ViewModels extend `androidx.lifecycle.ViewModel` and implement `OrbitContainerHost<State, State, Nothing>` (container via `orbitContainer(State.Initial)`). State mutations go through `intent { reduce { ... } }`.
 
 **State-only events** — we do NOT use `postSideEffect`. Effect type is always `Nothing`. One-shot events (navigation, toasts, snackbars) are modeled as consumable state slots (`pendingNavigation: Route?`, `pendingMessage: String?`) set inside `intent {}` and cleared by paired `onXxxConsumed()` intents the UI calls after rendering.
 
@@ -25,6 +25,6 @@ Use [Orbit MVI](https://orbit-mvi.org/) on every ViewModel. ViewModels extend `a
 
 ## Consequences
 
-- Easier: consistent MVI shape across features; built-in `ContainerHost.test()` harness for unit tests; every piece of UI behavior is observable state — robust across config changes / process death; testing one-shot events is trivial (just assert state slot transitions).
+- Easier: consistent MVI shape across features; built-in `test()` harness (`orbit-test`) for unit tests; every piece of UI behavior is observable state — robust across config changes / process death; testing one-shot events is trivial (just assert state slot transitions).
 - Harder: one more library dependency to maintain; new contributors learn the consumable-slot pattern; bookkeeping of `onXxxConsumed()` intent pairs.
-- Reviewer enforces: no state mutation outside `intent {}`; no `postSideEffect` anywhere; `ContainerHost<State, Nothing>` only; page-level boolean spaghetti gets promoted to a sealed interface.
+- Reviewer enforces: no state mutation outside `intent {}`; no `postSideEffect` anywhere; side-effect type `Nothing` only; page-level boolean spaghetti gets promoted to a sealed interface.

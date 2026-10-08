@@ -33,14 +33,15 @@ A complete `:feature-<feature_name>` Gradle module containing:
 
 | File | Visibility | Purpose |
 |---|---|---|
-| `<Name>State.kt` | `internal` | `data class <Name>State(...)` — state only, **no Effect type** (the stack uses `ContainerHost<State, Nothing>`); **no constructor defaults**; carries `companion object { val Initial = ... }` |
-| `<Name>ViewModel.kt` | `internal` | `ViewModel + ContainerHost<State, Nothing>` (state-only events); `container(<Name>State.Initial)` |
-| `<Name>Screen.kt` | `internal` | Stateless Composable + `private <Name>Content` extraction; resolves `koinViewModel<<Name>ViewModel>()` in the body |
+| `<Name>State.kt` | `internal` | `data class <Name>State(...)` — state only, **no Effect type** (the stack uses `OrbitContainerHost<State, State, Nothing>`); **no constructor defaults**; carries `companion object { val Initial = ... }` |
+| `<Name>ViewModel.kt` | `internal` | `ViewModel + OrbitContainerHost<State, State, Nothing>` (state-only events); `orbitContainer<State, Nothing>(<Name>State.Initial)` |
+| `<Name>Screen.kt` | `internal` | Composable entry point + stateless `private <Name>Content` (inside a `Scaffold` that hosts the `SnackbarHost`); resolves `koinViewModel<<Name>ViewModel>()` in the body; all text via `stringResource(Res.string.…)` |
 | `<Name>Route.kt` | **public** | `@Serializable data object/class <Name>Route : NavKey` |
-| `<Name>NavEntry.kt` | **public** | `fun EntryProviderBuilder<NavKey>.add<Name>Entries(onNavigateBack: () -> Unit, ...) { entry<<Name>Route> { <Name>Screen(...) } }` — the feature's only screen-facing public API; the `:shared` host composes it into `NavDisplay` |
-| `<feature_pkg>Module.kt` | **public** | Koin module with `viewModelOf(::<Name>ViewModel)` |
-| `<Name>ViewModelTest.kt` | — | `ContainerHost.test()` happy-path test, seeded with `<Name>State.Initial` |
-| `build.gradle.kts` | — | Standard feature module Gradle config |
+| `<Name>NavEntry.kt` | **public** | `fun EntryProviderScope<NavKey>.add<Name>Entries(onNavigateBack: () -> Unit, ...) { entry<<Name>Route> { <Name>Screen(...) } }` — the feature's only screen-facing public API; the `:shared` host composes it into `NavDisplay` |
+| `<camelName>Module.kt` | **public** | Koin module `val <camelName>Module` with `viewModelOf(::<Name>ViewModel)` |
+| `<Name>ViewModelTest.kt` | — | Orbit `test()` happy-path test, seeded with `<Name>State.Initial` |
+| `composeResources/values/strings.xml` | — | The feature's default (unqualified) string table; `Res` is generated into `<base_package>.feature.<pkg>.resources` and stays `internal` |
+| `build.gradle.kts` | — | Standard feature module Gradle config — `kotlin { android { androidResources { enable = true } } }` (without it the feature's strings aren't packaged into the APK) and `compose.resources { packageOfResClass }` |
 
 A feature's public surface is exactly its `Route`, its Koin `Module`, and `add<Name>Entries(...)`. Everything else is `internal`/`private`. See docs/architecture.md § Visibility.
 
@@ -48,16 +49,16 @@ A feature's public surface is exactly its `Route`, its Koin `Module`, and `add<N
 
 These are non-negotiable. Surface a clear error and stop if any conflict with the user's request:
 
-1. ViewModel **must** extend `androidx.lifecycle.ViewModel` and implement `ContainerHost<State, Nothing>`, and **must** be `internal`. Never plain `ViewModel`, never custom base classes. **Effect type is always `Nothing`** — the locked stack uses state-only events.
-2. State **must** be a single `internal data class` with **no constructor defaults** and a `companion object { val Initial = <Name>State(...) }` (the single starting-state source used by `container(...)` and tests) — or an `internal sealed interface` with `data object`/`data class` children when mutually-exclusive page-level sub-states warrant it (Loading/Loaded/Error; its initial is an explicit object like `Loading`, not a no-arg ctor). Mutations only via `intent { reduce { ... } }`.
+1. ViewModel **must** extend `androidx.lifecycle.ViewModel` and implement `OrbitContainerHost<State, State, Nothing>` (Orbit 12 — the old `ContainerHost<State, Nothing>` alias and `container(...)` factory are deprecated; use `orbitContainer(...)`), and **must** be `internal`. Never plain `ViewModel`, never custom base classes. **Effect type is always `Nothing`** — the locked stack uses state-only events.
+2. State **must** be a single `internal data class` with **no constructor defaults** and a `companion object { val Initial = <Name>State(...) }` (the single starting-state source used by `orbitContainer(...)` and tests) — or an `internal sealed interface` with `data object`/`data class` children when mutually-exclusive page-level sub-states warrant it (Loading/Loaded/Error; its initial is an explicit object like `Loading`, not a no-arg ctor). Mutations only via `intent { reduce { ... } }`.
 3. One-shot events **must** be modeled as consumable state slots, declared **without defaults** (`val pendingNavigation: Route?`, `val pendingMessage: String?`) and initialized to `null` in `Initial`. UI consumes via `LaunchedEffect(state.pendingX) { ...; viewModel.onXConsumed() }`. **Never `postSideEffect`** — that's the previous Orbit idiom; the locked stack rejects it.
 4. Composables **must** be stateless. The top-level `<Name>Screen` is `internal` and resolves `val viewModel = koinViewModel<<Name>ViewModel>()` in its body (no `viewModel =` parameter — a public param would leak the internal type, and the `:shared` host never calls `<Name>Screen` directly), then hoists `state` to a `private <Name>Content`. The `:shared` host composes the feature via `add<Name>Entries(...)`, never by referencing the screen.
-5. Nav 3 route **must** be `@Serializable` and implement `NavKey` (public). The feature **must** expose a public `fun EntryProviderBuilder<NavKey>.add<Name>Entries(onNavigateBack: () -> Unit, ...)` that contributes `entry<<Name>Route> { <Name>Screen(...) }`; outgoing navigation to other features is taken as `onOpenX` callbacks — never import another feature's Route.
+5. Nav 3 route **must** be `@Serializable` and implement `NavKey` (public). The feature **must** expose a public `fun EntryProviderScope<NavKey>.add<Name>Entries(onNavigateBack: () -> Unit, ...)` that contributes `entry<<Name>Route> { <Name>Screen(...) }` (`entry` is a member of `EntryProviderScope` — no import); outgoing navigation to other features is taken as `onOpenX` callbacks — never import another feature's Route. Every Route must also be registered in `:shared`'s navigation `SerializersModule` (step 7).
 6. Koin module **must** declare `viewModelOf(::<Name>ViewModel)`.
-7. Test **must** use `vm.test(this, <Name>State.Initial) { ... }` Orbit harness — never raw Turbine for the happy path; never a no-arg `<Name>State()`.
+7. Test **must** use the Orbit 12 harness `vm.testWithInternalState(this, <Name>State.Initial) { containerHost.x(); expectInternalState { copy(...) } }` (initial state is auto-asserted; the old `test()` / `expectInitialState()` / `expectState` are deprecated) — never raw Turbine for the happy path; never a no-arg `<Name>State()`. Name tests in camelCase (backticked names with spaces don't compile for every Kotlin/Native and JS target).
 8. No `Dispatchers.IO`/`Default`/`Main` references — use injected `DispatcherProvider` via use cases.
 9. No hardcoded `.sp` in the Composable. Use `MaterialTheme.typography`.
-10. Strings on user-facing `Text(...)` should be `stringResource(Res.string.foo)` once the project has resources — if no string table exists yet, use a placeholder literal with a `TODO: extract to Res.string` comment.
+10. Every user-facing string (`Text(...)`, `contentDescription`) is `stringResource(Res.string.foo)` from the feature's own `composeResources/values/strings.xml` (the unqualified default table — never only `values-en/`, see docs/i18n-a11y.md). A `DomainError` is mapped to a string resource in the Composable, never rendered directly.
 
 ## Process
 
@@ -71,15 +72,18 @@ These are non-negotiable. Surface a clear error and stop if any conflict with th
    ```
    grep -r "interface .* : UseCase\|class .*UseCase\(" "${project_root}/domain/src/commonMain/kotlin/" 2>/dev/null
    ```
-   If a use case named like `Get<Name>UseCase`, `Load<Name>UseCase`, or matching the feature's intent exists, wire it into the ViewModel's constructor + `load()` body. Otherwise leave the TODO.
+   If a use case named like `Get<Name>UseCase`, `Load<Name>UseCase`, or matching the feature's intent exists, wire it into the ViewModel's constructor + `load()` body. Otherwise leave the template's placeholder comment.
 
 3. **Render the overlay templates**:
    ```bash
-   FEATURE_NAME_PKG="${feature_name//-/_}"
-   FEATURE_NAME_PASCAL="<PascalCase from feature_name>"
+   FEATURE_NAME_PKG="${feature_name//-/}"            # photo-detail → photodetail (no underscores: ktlint/detekt)
+   FEATURE_NAME_PASCAL="$(echo "${feature_name}" | awk -F- '{for(i=1;i<=NF;i++) printf "%s%s",toupper(substr($i,1,1)),substr($i,2)}')"
+   FEATURE_NAME_CAMEL="$(echo "$FEATURE_NAME_PASCAL" | awk '{print tolower(substr($0,1,1)) substr($0,2)}')"
    BASE_PACKAGE_PATH="$(echo "${base_package}" | tr . /)"
 
-   export FEATURE_NAME="${FEATURE_NAME_PKG}" \
+   export FEATURE_NAME="${feature_name}" \
+          FEATURE_NAME_PKG="${FEATURE_NAME_PKG}" \
+          FEATURE_NAME_CAMEL="${FEATURE_NAME_CAMEL}" \
           FEATURE_NAME_PASCAL="${FEATURE_NAME_PASCAL}" \
           BASE_PACKAGE="${base_package}" \
           BASE_PACKAGE_PATH="${BASE_PACKAGE_PATH}"
@@ -91,19 +95,25 @@ These are non-negotiable. Surface a clear error and stop if any conflict with th
        "${BASE_PACKAGE_PATH}"
    ```
 
-4. **Rename `Feature*` → `<Name>*`** within the rendered output:
+4. **Rename basenames** `Feature*` → `<Name>*` and `featureModule.kt` → `<camelName>Module.kt` (basename only — the directory path contains `feature/`):
    ```bash
    cd "${project_root}/feature-${feature_name}/src"
-   find . -name "Feature*.kt" -exec bash -c 'mv "$0" "${0/Feature/'"${FEATURE_NAME_PASCAL}"'}"' {} \;
-   find . -name "feature*.kt" -exec bash -c 'mv "$0" "${0/feature/'"${FEATURE_NAME_PKG}"'}"' {} \;
+   find . -type f \( -name 'Feature*.kt' -o -name 'feature*.kt' \) | while read -r f; do
+       base="$(basename "$f")"
+       case "$base" in
+           Feature*) new="${FEATURE_NAME_PASCAL}${base#Feature}" ;;
+           feature*) new="${FEATURE_NAME_CAMEL}${base#feature}" ;;
+       esac
+       mv "$f" "$(dirname "$f")/$new"
+   done
    ```
 
 5. **Inject use-case wiring** (if you found one in step 2). Use `Edit` to:
    - Add the use case to `<Name>ViewModel`'s constructor: `internal class <Name>ViewModel(private val getX: GetXUseCase) : ViewModel(), ContainerHost<...>`
-   - Replace the `TODO: invoke use case from :domain` line with a real call (kotlin-result — add `import com.github.michaelbull.result.*`; `state.error` is a `DomainError?`, carried as-is and mapped to a string at the UI layer):
+   - Replace the "Replace with a use case from :domain" comment block in `load()` with a real call (kotlin-result — add explicit imports `com.github.michaelbull.result.onOk` + `com.github.michaelbull.result.onErr`; no wildcard imports, ktlint rejects them; `onSuccess`/`onFailure` are deprecated in kotlin-result 2.x; `state.error` is a `DomainError?`, carried as-is and mapped to a string resource in the Composable):
      ```kotlin
-     getX().onSuccess { data -> reduce { state.copy(loading = false, items = data) } }
-           .onFailure { err -> reduce { state.copy(loading = false, error = err) } }
+     getX().onOk { data -> reduce { state.copy(loading = false, items = data) } }
+           .onErr { err -> reduce { state.copy(loading = false, error = err) } }
      ```
    - Add the use case parameter to the Koin module: `viewModelOf(::<Name>ViewModel)` already auto-resolves; no change needed.
 
@@ -113,13 +123,11 @@ These are non-negotiable. Surface a clear error and stop if any conflict with th
        "${project_root}" "feature-${feature_name}"
    ```
 
-7. **Wire into `:shared`** (the composition host — App.kt / DI bootstrap live here, not in any per-platform app module):
-   - Add `:feature-${feature_name}` to `:shared`'s `build.gradle.kts` dependencies (the `:shared` library aggregates every feature module).
-   - Find `App.kt` (or main `@Composable` entrypoint) under `${project_root}/shared/src/commonMain/kotlin/`
-   - Use `Edit` to add `<feature_pkg>Module` to the `:shared` Koin bootstrap's `startKoin { modules(...) }`
-   - Use `Edit` to add `add<Name>Entries(onNavigateBack = { backStack.removeLastOrNull() })` inside `NavDisplay`'s `entryProvider { ... }` block (import the `add<Name>Entries` extension from the feature package). Do **not** add a `when` branch or reference `<Name>Screen` directly — the screen is `internal`.
-   - If the host still renders nav with a `NavDisplay(backStack) { key -> when (key) { ... } }`, surface the migration to the `entryProvider { }` DSL for the user to apply rather than guessing.
-   - If `App.kt` doesn't have `startKoin` or `NavDisplay`, surface the diff for the user to apply manually rather than guessing.
+7. **Wire into `:shared`** (the composition root rendered by `/kmp-forge-init` from `overlay/shared/` — `App.kt` starts Koin with `AppModules.kt`'s list, `AppNavigation.kt` owns the Nav 3 back stack; never a per-platform app module). Insert each line **directly above** its `// kmp-forge:` marker and keep the marker:
+   - `shared/build.gradle.kts` → `commonMain.dependencies`: `implementation(project(":feature-${feature_name}"))`.
+   - `AppModules.kt`: import `<base_package>.feature.<pkg>.<camelName>Module`; add `<camelName>Module,` above `// kmp-forge:feature-modules`.
+   - `AppNavigation.kt`: import `<Name>Route` + `add<Name>Entries` from the feature package; add `subclass(<Name>Route::class, <Name>Route.serializer())` above `// kmp-forge:nav-routes` (**required** — off Android an unregistered route throws `SerializationException` when the back stack is saved); add `add<Name>Entries(onNavigateBack = navigateBack)` above `// kmp-forge:nav-entries`. Do **not** add a `when` branch or reference `<Name>Screen` directly — the screen is `internal`.
+   - If the markers are missing (older scaffold / restructured host), find the equivalent `modules(...)` list, `polymorphic(NavKey::class) { }` block and `entryProvider { }` block. If the host still renders nav with a `NavDisplay(backStack) { key -> when (key) { ... } }`, or has no Koin bootstrap / `NavDisplay` at all, surface the exact lines for the user to apply rather than guessing.
 
 8. **Update CLAUDE.md**:
    - Read `${project_root}/CLAUDE.md`, find the `Features:` line, append the new feature name. If the line reads `_(none yet ...)`, replace entirely with `Features: <name>`.
@@ -127,7 +135,8 @@ These are non-negotiable. Surface a clear error and stop if any conflict with th
 9. **Build to verify**:
    ```bash
    cd "${project_root}"
-   ./gradlew :feature-${feature_name}:build :feature-${feature_name}:commonTest 2>&1 | tail -30
+   ./gradlew :feature-${feature_name}:spotlessApply 2>&1 | tail -5   # import order depends on the base package
+   ./gradlew :feature-${feature_name}:build :shared:build 2>&1 | tail -30
    ```
 
 10. **Report** — return a structured summary (terse, caveman-OK since this is internal output):

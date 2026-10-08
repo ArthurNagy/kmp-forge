@@ -44,7 +44,7 @@ firebase-android:
   needs: android
   runs-on: ubuntu-latest
   steps:
-    - uses: actions/download-artifact@v4
+    - uses: actions/download-artifact@v8
       with: { name: android }
     - uses: wzieba/Firebase-Distribution-Github-Action@v1
       with:
@@ -136,29 +136,23 @@ Local:
   ```
 
 CI:
-- Encode keystore once: `base64 -i release.keystore | pbcopy`, paste into `ANDROID_KEYSTORE_BASE64` secret
-- Workflow decodes to `$RUNNER_TEMP/release.keystore`, sets `KEYSTORE_PATH` env to that path; Gradle picks it up
+- Encode keystore once: `base64 -i release.keystore | pbcopy`, paste into `ANDROID_KEYSTORE_BASE64` secret; add `ANDROID_KEYSTORE_PASSWORD`, `ANDROID_KEY_ALIAS`, `ANDROID_KEY_PASSWORD`
+- Workflow decodes to `$RUNNER_TEMP/release.keystore` and passes AGP's injected signing properties (`-Pandroid.injected.signing.store.file=… .store.password=… .key.alias=… .key.password=…` — what Android Studio's "Generate Signed Bundle" uses), so CI signs the AAB/APK **without** any `signingConfig` in `androidApp/build.gradle.kts`. The `signing.properties` block above is only needed for local release builds.
+- The `changelog-and-release` job declares `permissions: contents: write` (new repos default `GITHUB_TOKEN` to read-only) and waits for the android, ios and desktop jobs — ios/desktop may be skipped, but a failed one blocks the Release instead of publishing it without those artifacts.
 
 ## Changelog (git-cliff)
 
-`cliff.toml` at repo root:
+`cliff.toml` at repo root (shipped by the overlay — `overlay/root/cliff.toml` is the full file). The part that decides what reaches the notes:
 
 ```toml
-[changelog]
-header = "# Changelog\n\n"
-body = """
-{% for group, commits in commits | group_by(attribute="group") %}
-### {{ group | upper_first }}
-{% for commit in commits %}
-- {{ commit.message | upper_first }} ({{ commit.id | truncate(length=7, end="") }})
-{% endfor %}
-{% endfor %}
-"""
-
 [git]
 conventional_commits = true
-filter_unconventional = false
+filter_unconventional = false   # keep non-conventional commits…
+filter_commits = false
 commit_parsers = [
+    # …except merge commits, skipped on purpose: they only restate a PR whose commits
+    # (merge workflow) or squash commit (squash workflow) are already listed.
+    { message = "^Merge (pull request|branch|remote-tracking branch) ", skip = true },
     { message = "^feat", group = "Features" },
     { message = "^fix", group = "Fixes" },
     { message = "^perf", group = "Performance" },
@@ -168,8 +162,13 @@ commit_parsers = [
     { message = "^build", group = "Build" },
     { message = "^ci", group = "CI" },
     { message = "^test", group = "Tests" },
+    { message = "^style", group = "Style" },
+    { message = "^[Rr]evert", group = "Reverts" },   # `revert: …` and git's `Revert "…"`
+    { message = ".*", group = "Other" },             # catch-all: nothing disappears silently
 ]
 ```
+
+Every commit since the last tag lands in exactly one group except GitHub/GitLab merge commits. A non-conventional subject still shows up (under **Other**) so a sloppy message is visible in review rather than silently missing from the release.
 
 Release workflow runs `git-cliff --latest --strip header` to populate the GitHub Release body. Full `CHANGELOG.md` regenerated on each release via `git-cliff -o CHANGELOG.md` and committed back to `main` via a follow-up PR (optional — manual is fine for solo work).
 

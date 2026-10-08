@@ -51,20 +51,32 @@ export BASE_PACKAGE="$base_package"
 for f in DispatcherProvider DomainError UseCase; do
   [[ -f "$DOM/$f.kt" ]] || envsubst < "$claude_plugin_root/overlay/modules/domain/src/commonMain/kotlin/$f.kt.tmpl" > "$DOM/$f.kt"
 done
-# :data production dispatcher provider + Koin binding
-DAT="$project_root/data/src/commonMain/kotlin/$(echo "$base_package" | tr . /)/data"
-[[ -f "$DAT/RealDispatcherProvider.kt" ]] || envsubst < "$claude_plugin_root/overlay/modules/data/src/commonMain/kotlin/RealDispatcherProvider.kt.tmpl" > "$DAT/RealDispatcherProvider.kt"
+# :data production dispatcher provider (common class + per-platform IO actuals) + Koin binding.
+# Dispatchers.IO isn't common API (JVM member / Native extension / absent on js+wasm), so the
+# template ships RealDispatcherProvider.kt plus RealDispatcherProvider.<platform>.kt actuals.
+DATA_PKG="$(echo "$base_package" | tr . /)/data"
+for ss in commonMain androidMain jvmMain nativeMain webMain; do
+  for t in "$claude_plugin_root/overlay/modules/data/src/$ss/kotlin/"RealDispatcherProvider*.kt.tmpl; do
+    dst="$project_root/data/src/$ss/kotlin/$DATA_PKG/$(basename "${t%.tmpl}")"
+    [[ -f "$dst" ]] || { mkdir -p "$(dirname "$dst")"; envsubst '${BASE_PACKAGE}' < "$t" > "$dst"; }
+  done
+done
 # commonTest helper
-DOMT="$project_root/domain/src/commonTest/kotlin/$(echo "$base_package" | tr . /)/domain"
-[[ -f "$DOMT/TestDispatcherProvider.kt" ]] || envsubst < "$claude_plugin_root/overlay/modules/domain/src/commonTest/kotlin/TestDispatcherProvider.kt.tmpl" > "$DOMT/TestDispatcherProvider.kt"
+# :testing module — TestDispatcherProvider(testScheduler) + shared fakes, a commonTest-only dependency.
+# (Older scaffolds kept a TestDispatcherProvider in :domain's commonTest, invisible to feature
+# tests and on its own scheduler — delete it once :testing exists.)
+[[ -e "$project_root/testing" ]] || bash "$claude_plugin_root/scripts/apply-overlay.sh" render-module \
+    testing "$claude_plugin_root/overlay/modules/testing" "$project_root/testing" "$(echo "$base_package" | tr . /)"
+bash "$claude_plugin_root/scripts/apply-overlay.sh" patch-settings "$project_root" testing
+# then add `implementation(project(":testing"))` to the commonTest deps of :domain, :data, :feature-*
 ```
 
-Adapt module paths to the project's real layout (detected by `/kmp-forge-adopt` step 1). Ensure `dataModule` binds the provider: `singleOf(::RealDispatcherProvider) bind DispatcherProvider::class`.
+Adapt module paths to the project's real layout (detected by `/kmp-forge-adopt` step 1). Ensure `dataModule` binds the provider: `singleOf(::RealDispatcherProvider) bind DispatcherProvider::class`. If an existing `RealDispatcherProvider.kt` in `commonMain` references `Dispatchers.IO` directly (pre-0.4 kmp-forge template), replace it with the template set above — that line doesn't compile for iOS/shared metadata and can't for web.
 
-**The Result type.** The locked patterns use **kotlin-result**'s two-parameter `Result<V, E>` (`Ok`/`Err`, `.onSuccess`/`.onFailure`/`.fold`) — **not** stdlib `kotlin.Result` (single-param, `Throwable`-only, can't carry a typed `DomainError`). Before the `result` layer, ensure it's wired:
+**The Result type.** The locked patterns use **kotlin-result**'s two-parameter `Result<V, E>` (`Ok`/`Err`, `.onOk`/`.onErr`/`.fold`) — **not** stdlib `kotlin.Result` (single-param, `Throwable`-only, can't carry a typed `DomainError`). Before the `result` layer, ensure it's wired:
 - Catalog: run `patch-libs` so `gradle/libs.versions.toml` has `kotlin-result` + `kotlin-result-coroutines` (Gradle coordinate `com.michael-bull.kotlin-result:kotlin-result`).
 - `:domain` build.gradle.kts: `api(libs.kotlin.result)` (the `Result` type is in public use-case signatures, so it must be `api` to reach `:data`/`:feature-*`) and `implementation(libs.kotlin.result.coroutines)`.
-- Imports in code use the package `com.github.michaelbull.result.*` (note: differs from the Gradle coordinate).
+- Imports in code use the package `com.github.michaelbull.result` (note: differs from the Gradle coordinate). Import members explicitly (`…result.Ok`, `…result.Err`, `…result.onOk`, …) — ktlint rejects wildcard imports. `onSuccess`/`onFailure` are deprecated in 2.x.
 
 ## Layer recipes
 
@@ -72,15 +84,15 @@ For each: read the doc, run **detect**, apply **transform**, run **verify** (res
 
 ### `dispatchers` — inject DispatcherProvider
 - Doc: `architecture.md`, `DECISIONS/0006-dispatcher-provider.md`.
-- **Detect:** `grep -rnE "Dispatchers\.(IO|Default|Main)" "$project_root"/{domain,data}/src "$project_root"/feature-*/src` (exclude `RealDispatcherProvider.kt` and the `:shared` host — those may name dispatchers).
+- **Detect:** `grep -rnE "Dispatchers\.(IO|Default|Main)" "$project_root"/{domain,data}/src "$project_root"/feature-*/src` (exclude `RealDispatcherProvider.kt` + its `RealDispatcherProvider.<platform>.kt` actuals and the `:shared` host — those may name dispatchers).
 - **Transform:** add `private val dispatchers: DispatcherProvider` to the constructor of each offending use case / repo / data source; replace `Dispatchers.IO→dispatchers.io`, `.Default→dispatchers.default`, `.Main→dispatchers.main`. Koin `*Of(::X)` definitions auto-resolve once the provider is bound. ViewModels should **not** take `DispatcherProvider` directly (ADR 0006) — dispatcher switching belongs in use cases; if a ViewModel switches dispatchers, leave a TODO to move that work into a use case rather than injecting the provider into the VM.
 - **Verify:** residual grep empty in those modules; `./gradlew :domain:build :data:build` + affected features.
 
 ### `result` — Result<T, DomainError> (kotlin-result), no throws
 - Doc: `architecture.md` § ViewModel, `DECISIONS/0005-result-domain-error.md`. Wire kotlin-result per the Foundations note above **first**.
 - **Detect:** use cases that `throw` or return non-`Result` types; `import kotlin.Result` / `runCatching` (stdlib, wrong type); `grep -rnE "try \{|catch \(" "$project_root"/feature-*/src` for `try/catch` inside `intent {`; careless `.get()!!` / `unwrap()` / `getOrThrow()` on results.
-- **Transform:** add `import com.github.michaelbull.result.*`. Use-case signatures → `Result<T, DomainError>`; replace `throw X` with `Err(<Area>Error.Case)` carrying a per-area `sealed interface <Area>Error : DomainError`, and wrap success values in `Ok(...)`. Remove `try/catch` from `intent {}` — call the use case and use `.onSuccess { reduce { ... } }.onFailure { reduce { state.copy(error = it) } }`. Replace stdlib `Result.success/failure` with `Ok`/`Err`; replace `.get()!!`/`getOrThrow()` with `.fold`/`onSuccess`/`onFailure`/`getOrElse`. For multi-step compositions, prefer `coroutineBinding { stepA().bind(); ... }` over nested folds. Preserve any existing exception→error mapping; if unclear, `// TODO(kmp-forge): map <exception> to a DomainError case`.
-- **Verify:** no `throw` in `:domain` business paths, no `try/catch` in any `intent {`, no `kotlin.Result`/`runCatching`; build + `:domain:commonTest`.
+- **Transform:** add explicit `com.github.michaelbull.result.*` member imports (`Result`, `Ok`, `Err`, `onOk`, `onErr`, … — no wildcard). Use-case signatures → `Result<T, DomainError>`; replace `throw X` with `Err(<Area>Error.Case)` carrying a per-area `sealed interface <Area>Error : DomainError`, and wrap success values in `Ok(...)`. Remove `try/catch` from `intent {}` — call the use case and use `.onOk { reduce { ... } }.onErr { reduce { state.copy(error = it) } }`. Replace stdlib `Result.success/failure` with `Ok`/`Err`; replace `.get()!!`/`getOrThrow()` with `.fold`/`onOk`/`onErr`/`getOrElse`; rename existing `onSuccess`/`onFailure` to `onOk`/`onErr`. For multi-step compositions, prefer `coroutineBinding { stepA().bind(); ... }` over nested folds. Preserve any existing exception→error mapping; if unclear, `// TODO(kmp-forge): map <exception> to a DomainError case`.
+- **Verify:** no `throw` in `:domain` business paths, no `try/catch` in any `intent {`, no `kotlin.Result`/`runCatching`; build + `:domain:jvmTest` (common tests run inside each target's test task; there is no `commonTest` task).
 
 ### `repos` — one repository per domain type (structural — confirm per object)
 - Doc: `architecture.md` § Single-type rule.
@@ -96,14 +108,14 @@ For each: read the doc, run **detect**, apply **transform**, run **verify** (res
 
 ### `orbit` — state-only events (largest; per-feature)
 - Doc: `architecture.md` § ViewModel + Orbit pattern.
-- **Detect (per feature):** `grep -rnE "ContainerHost<[^,]+,\s*(?!Nothing)" feature-X/src` (effect type ≠ `Nothing`); `postSideEffect`; `collectSideEffect`; `grep -rnE "sealed interface \w+Effect" feature-X/src` (dead Effect types — appear even in freshly-generated features, must be removed); state mutations outside `reduce {`.
-- **Transform:** change `ContainerHost<State, XEffect>` → `ContainerHost<State, Nothing>` and `container<State, XEffect>(...)` → `container<State, Nothing>(...)`. For each `postSideEffect(XEffect.Foo(arg))`: add a consumable slot to State — declared **without a default** (`val pendingFoo: ArgType?`) and initialized to `null` in the State's `companion object { val Initial }` (the `visibility` layer establishes `Initial`; if it hasn't run yet, keep the slot non-default and seed it in whatever initial-state construction exists). Replace the post with `reduce { state.copy(pendingFoo = arg) }`, add `fun onFooConsumed() = intent { reduce { state.copy(pendingFoo = null) } }`. In the Composable, replace `viewModel.collectSideEffect { ... }` with `LaunchedEffect(state.pendingFoo) { state.pendingFoo?.let { ...; viewModel.onFooConsumed() } }`. Delete the now-dead `sealed interface XEffect`. Move stray mutations into `intent { reduce { } }`.
-- **Verify:** no `postSideEffect`/`collectSideEffect`, no non-`Nothing` ContainerHost in the feature; `./gradlew :feature-X:build :feature-X:commonTest`.
+- **Detect (per feature):** Orbit hosts whose side-effect type isn't `Nothing` — `grep -rnE "ContainerHost<" feature-X/src` and inspect the last type argument (`OrbitContainerHost<S, S, E>` / deprecated `ContainerHost<S, E>`); deprecated `ContainerHost<` / `= container(` usages; `postSideEffect`; `collectSideEffect`; `grep -rnE "sealed interface \w+Effect" feature-X/src` (dead Effect types — appear even in freshly-generated features, must be removed); state mutations outside `reduce {`.
+- **Transform:** change `ContainerHost<State, XEffect>` / `OrbitContainerHost<State, State, XEffect>` → `OrbitContainerHost<State, State, Nothing>` and `container<State, XEffect>(...)` → `orbitContainer<State, Nothing>(...)` (Orbit 12 deprecates the `ContainerHost` alias and `container(...)` factory). For each `postSideEffect(XEffect.Foo(arg))`: add a consumable slot to State — declared **without a default** (`val pendingFoo: ArgType?`) and initialized to `null` in the State's `companion object { val Initial }` (the `visibility` layer establishes `Initial`; if it hasn't run yet, keep the slot non-default and seed it in whatever initial-state construction exists). Replace the post with `reduce { state.copy(pendingFoo = arg) }`, add `fun onFooConsumed() = intent { reduce { state.copy(pendingFoo = null) } }`. In the Composable, replace `viewModel.collectSideEffect { ... }` with `LaunchedEffect(state.pendingFoo) { state.pendingFoo?.let { ...; viewModel.onFooConsumed() } }`. Delete the now-dead `sealed interface XEffect`. Move stray mutations into `intent { reduce { } }`.
+- **Verify:** no `postSideEffect`/`collectSideEffect`, no non-`Nothing` Orbit host in the feature; `./gradlew :feature-X:build` (runs every target's tests + detekt + spotless).
 
 ### `nav` — typed Nav 3 routes + entry contributions
 - Doc: `architecture.md` § feature + § Navigation wiring, reviewer Navigation section.
 - **Detect:** string route keys, `Bundle` args, routes missing `@Serializable` or not implementing `NavKey`; a host-side `NavDisplay(backStack) { key -> when (key) { ... XScreen(...) } }` (the host is `:shared`, where `App.kt` and the back stack live) that references feature screens directly.
-- **Transform:** define `@Serializable data class/object XRoute(...) : NavKey` (public); replace string-key navigation with typed routes. Migrate the `:shared` host's `when` to the `entryProvider { }` DSL: for each feature add a public `fun EntryProviderBuilder<NavKey>.addXEntries(onNavigateBack: () -> Unit, /* onOpenY callbacks */) { entry<XRoute> { XScreen(...) } }` in the feature module, and call `addXEntries(...)` inside `:shared`'s `NavDisplay(entryProvider = entryProvider { ... })`. Pass cross-feature navigation as callbacks (the `:shared` host owns target routes) so no feature imports another feature's Route. This is what lets the `visibility` layer make `XScreen`/`XViewModel`/`XState` `internal`.
+- **Transform:** define `@Serializable data class/object XRoute(...) : NavKey` (public); replace string-key navigation with typed routes. Migrate the `:shared` host's `when` to the `entryProvider { }` DSL: for each feature add a public `fun EntryProviderScope<NavKey>.addXEntries(onNavigateBack: () -> Unit, /* onOpenY callbacks */) { entry<XRoute> { XScreen(...) } }` in the feature module, and call `addXEntries(...)` inside `:shared`'s `NavDisplay(entryProvider = entryProvider { ... })`. Construct the back stack with `rememberNavBackStack(savedStateConfiguration, StartRoute)` whose `SerializersModule` registers **every** route (`polymorphic(NavKey::class) { subclass(XRoute::class, XRoute.serializer()) }`) — the no-config overload is Android-only. If `:shared` has no composition root yet, render `overlay/shared/` into scratch (as `/kmp-forge-adopt` does) and merge it. Pass cross-feature navigation as callbacks (the `:shared` host owns target routes) so no feature imports another feature's Route. This is what lets the `visibility` layer make `XScreen`/`XViewModel`/`XState` `internal`.
 - **Verify:** build; no host-side `when (key)` referencing feature screens remains.
 
 ### `module-deps` — dependency direction (structural — surface, apply mechanical)
@@ -117,11 +129,11 @@ For each: read the doc, run **detect**, apply **transform**, run **verify** (res
 - **Detect:**
   - `grep -rnE "^(public )?(data )?class \w+(RepositoryImpl|DataSource|Dto)\b|RealDispatcherProvider" "$project_root"/data/src` — repo impls / data sources / DTOs / dispatcher provider that aren't `internal`.
   - In `:feature-*`: `State`/`ViewModel`/`Screen` declarations that are `public` (no `internal`/`private` modifier); `Content` Composables that are `public`.
-  - Default values on domain entities + presentation `State` (`grep -rnE "val \w+: [^=]+= " domain/src feature-*/src` — filter to entity/State data classes by hand); `State` lacking a `companion object { val Initial }`; any residual no-arg `XState()` construction (`container(XState())`, `vm.test(this, XState())`).
+  - Default values on domain entities + presentation `State` (`grep -rnE "val \w+: [^=]+= " domain/src feature-*/src` — filter to entity/State data classes by hand); `State` lacking a `companion object { val Initial }`; any residual no-arg `XState()` construction (`container(XState())` / `orbitContainer(XState())`, `vm.test(this, XState())` / `vm.testWithInternalState(this, XState())`).
 - **Transform:**
   - `:data` — prefix repo impls, data sources, DTOs, and `RealDispatcherProvider` with `internal`. Koin bindings (`singleOf(::XImpl) bind X::class`) keep working because the module is in the same module.
   - `:feature-*` — make `State`/`ViewModel`/`Screen` `internal`, `Content` `private`. Drop the `viewModel =` default param from `XScreen` (would leak the internal type) and resolve `koinViewModel<XViewModel>()` in the body. Keep `Route`, the Koin `Module`, and `addXEntries(...)` public.
-  - **State without defaults** — remove constructor defaults from each `State`; add a `companion object { val Initial = XState(... all fields ...) }`; replace `container(XState())` → `container(XState.Initial)` and `vm.test(this, XState())` → `vm.test(this, XState.Initial)` (slot-seeded tests → `XState.Initial.copy(...)`).
+  - **State without defaults** — remove constructor defaults from each `State`; add a `companion object { val Initial = XState(... all fields ...) }`; replace `container(XState())` → `orbitContainer<XState, Nothing>(XState.Initial)` and `vm.test(this, XState())` → `vm.testWithInternalState(this, XState.Initial)` (slot-seeded tests → `XState.Initial.copy(...)`).
   - **Domain entities without defaults** — remove constructor defaults from domain entities/data classes; fix the now-broken call sites to pass every field. Leave DTO defaults alone (wire-format concern). Where a removed default encodes product behavior you can't derive, leave `// TODO(kmp-forge): <field> had a default — confirm the intended value at each call site`.
   - **Do not** make use-case constructors `internal` — feature tests build them with fakes.
 - **Verify:** detection greps empty (no `public` impls/screens, no defaults on entities/State, no no-arg `XState()`); `./gradlew <data + feature modules>:build`.
@@ -129,8 +141,8 @@ For each: read the doc, run **detect**, apply **transform**, run **verify** (res
 ### `tests` — fakes over mocks
 - Doc: `testing.md`.
 - **Detect:** `grep -rn "io.mockk" "$project_root"/**/src/commonTest`; ViewModel tests not using `.test()`.
-- **Transform:** replace `commonTest` MockK with hand-written `Fake<Name>` implementing the interface (in-memory state, a `nextError: DomainError? = null` slot — a mutable test knob, defaults are fine here, returning `Result`). Convert VM tests to `vm.test(this, XState.Initial) { expectInitialState(); ...; expectState { copy(...) } }` (never a no-arg `XState()`). Genuinely-needed platform mocks move to `jvmTest`/`androidTest` with a `// mocked: <reason>` comment.
-- **Verify:** `./gradlew <module>:commonTest` (and `jvmTest` if used).
+- **Transform:** replace `commonTest` MockK with hand-written `Fake<Name>` implementing the interface (in-memory state, a `nextError: DomainError? = null` slot — a mutable test knob, defaults are fine here, returning `Result`). Convert VM tests to Orbit 12's `vm.testWithInternalState(this, XState.Initial) { containerHost.x(); expectInternalState { copy(...) } }` — the initial state is auto-asserted; migrate deprecated `test()` / `expectInitialState()` / `expectState` (never a no-arg `XState()`). Genuinely-needed platform mocks move to `jvmTest`/`androidTest` with a `// mocked: <reason>` comment.
+- **Verify:** `./gradlew <module>:jvmTest` for a fast host loop, then `./gradlew <module>:build` (all targets' tests).
 
 ### `a11y` — accessibility / i18n (warn-level)
 - Doc: `i18n-a11y.md`.
@@ -143,8 +155,9 @@ For each: read the doc, run **detect**, apply **transform**, run **verify** (res
 ```bash
 cd "$project_root"
 ./gradlew <affected modules>:build 2>&1 | tail -30
-# result/orbit/tests layers also:
-./gradlew <module>:commonTest 2>&1 | tail -30
+# `build` already runs every target's tests (common tests run inside each target's test task —
+# there is no `commonTest` task); for a fast host-only loop on result/orbit/tests layers:
+./gradlew <module>:jvmTest 2>&1 | tail -30
 ```
 
 If red: stop, return the failing tail verbatim, mark the layer **incomplete**. Do not proceed.

@@ -5,6 +5,7 @@ All notable changes to this project will be documented in this file.
 
 Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+
 """
 body = """
 {% if version %}\
@@ -14,9 +15,10 @@ body = """
 {% endif %}\
 {% for group, commits in commits | group_by(attribute="group") %}
 ### {{ group | upper_first }}
-{% for commit in commits %}
-- {{ commit.message | upper_first }} ({{ commit.id | truncate(length=7, end="") }}){% if commit.breaking %} **BREAKING**{% endif %}
-{% endfor %}
+{% for commit in commits -%}
+{% if commit.group == "Reverts" %}{% set subject = commit.raw_message %}{% else %}{% set subject = commit.message %}{% endif -%}
+- {{ subject | split(pat="\n") | first | trim | upper_first }} ({{ commit.id | truncate(length=7, end="") }}){% if commit.breaking %} **BREAKING**{% endif %}
+{% endfor -%}
 {% endfor %}\n
 """
 trim = true
@@ -27,6 +29,10 @@ conventional_commits = true
 filter_unconventional = false
 split_commits = false
 commit_parsers = [
+    # Merge commits are skipped ON PURPOSE, not silently: in a merge-commit workflow the PR's own
+    # commits are already listed, and in a squash workflow the squash commit (PR title) is the
+    # entry. "Merge pull request #12 from …" would only duplicate them.
+    { message = "^Merge (pull request|branch|remote-tracking branch) ", skip = true },
     { message = "^feat", group = "Features" },
     { message = "^fix", group = "Fixes" },
     { message = "^perf", group = "Performance" },
@@ -37,6 +43,11 @@ commit_parsers = [
     { message = "^ci", group = "CI" },
     { message = "^test", group = "Tests" },
     { message = "^style", group = "Style" },
+    # Both `revert: …` and git's default `Revert "feat: …"` message.
+    { message = "^[Rr]evert", group = "Reverts" },
+    # Catch-all: a commit that isn't a Conventional Commit still reaches the release notes
+    # (under "Other") instead of disappearing. Fix the habit, not the history.
+    { message = ".*", group = "Other" },
 ]
 filter_commits = false
 tag_pattern = "v[0-9]+.[0-9]+.[0-9]+"

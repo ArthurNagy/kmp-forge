@@ -1,33 +1,29 @@
-package ${BASE_PACKAGE}.feature.${FEATURE_NAME}
+package ${BASE_PACKAGE}.feature.${FEATURE_NAME_PKG}
 
-import kotlin.test.Test
-import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.test.runTest
-import org.orbitmvi.orbit.test.test
+import org.orbitmvi.orbit.test.testWithInternalState
+import kotlin.test.Test
 
-@OptIn(ExperimentalCoroutinesApi::class)
 class ${FEATURE_NAME_PASCAL}ViewModelTest {
-
     @Test
-    fun `load toggles loading flag`() = runTest {
+    fun loadTogglesLoadingFlag() = runTest {
         val vm = ${FEATURE_NAME_PASCAL}ViewModel()
 
-        vm.test(this, ${FEATURE_NAME_PASCAL}State.Initial) {
-            expectInitialState()
+        // Orbit 12: the initial state is asserted automatically before this block runs.
+        vm.testWithInternalState(this, ${FEATURE_NAME_PASCAL}State.Initial) {
             containerHost.load()
-            expectState { copy(loading = true, error = null) }
-            expectState { copy(loading = false) }
+            expectInternalState { copy(loading = true, error = null) }
+            expectInternalState { copy(loading = false) }
         }
     }
 
     @Test
-    fun `pending message clears after consumed`() = runTest {
+    fun pendingMessageClearsAfterConsumed() = runTest {
         val vm = ${FEATURE_NAME_PASCAL}ViewModel()
 
-        vm.test(this, ${FEATURE_NAME_PASCAL}State.Initial.copy(pendingMessage = "Hi")) {
-            expectInitialState()
+        vm.testWithInternalState(this, ${FEATURE_NAME_PASCAL}State.Initial.copy(pendingMessage = "Hi")) {
             containerHost.onPendingMessageConsumed()
-            expectState { copy(pendingMessage = null) }
+            expectInternalState { copy(pendingMessage = null) }
         }
     }
 }

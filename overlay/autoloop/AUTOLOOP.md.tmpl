@@ -10,7 +10,7 @@ Installed by `/kmp-forge-add-autoloop` on ${SCAFFOLD_DATE}.
 /loop /kmp-forge-next-increment
 ```
 
-One invocation = one full increment: pop the top backlog slice → docs PR → spec gate → code PR → code gate → auto-merge both → tick the backlog. `/loop` provides the repetition; the loop stops when the queue is empty, on `openspec/STOP`, or on escalation.
+One invocation = one full increment: pop the top backlog slice → docs PR → spec gate → code PR → code gate → auto-merge both → tick the backlog. `/loop` provides the repetition; the loop stops when the queue is empty, when the kill-switch file exists, or on escalation.
 
 ## Loop configuration
 <!-- Read by /kmp-forge-next-increment at Phase 0. Keep the keys verbatim; edit the values. -->
@@ -19,6 +19,7 @@ One invocation = one full increment: pop the top backlog slice → docs PR → s
 - spec-workflow: opsx
 - backlog: openspec/backlog.md
 - kill-switch: openspec/STOP
+<!-- If you change kill-switch, add the new path to .gitignore too (a worker's commit must never pick it up). -->
 
 ### Queue-empty handoff
 <!-- Printed verbatim by the loop when the queue empties. Edit freely — this is where you tell the loop (and yourself) what the checkpoint decision is. -->
@@ -27,23 +28,26 @@ ${AUTOLOOP_HANDOFF}
 
 ## Steering (no need to interrupt)
 
-- **Reorder / edit / insert work:** edit `openspec/backlog.md`. The loop always takes the topmost unchecked `- [ ]` on its next iteration.
-- **Emergency stop:** `touch openspec/STOP`. The loop halts before starting the next increment. Delete the file to resume.
+- **Reorder / edit / insert work:** edit the backlog (`backlog:` above). The loop always takes the topmost unchecked `- [ ]` on its next iteration, and commits your uncommitted backlog / runbook / guard-mode edits to `main` at its next Phase 0 — you don't need to commit them yourself.
+- **Emergency stop:** create the kill-switch file (`kill-switch:` above — by default `touch openspec/STOP`). The loop checks it before every phase and every merge, and halts leaving any open PRs as they are. Delete the file to resume.
 - **Hard stop now:** interrupt the running `/loop` (Esc), or tell it to stop.
 
 ## Merge guard
 
-`.claude/hooks/merge-guard.sh` runs as a `PreToolUse` hook on every Bash call and independently re-checks every `gh pr merge`: all checks green, newest `### 🤖` gate review reads PASS. Mode lives in `.claude/hooks/merge-guard.mode` (`off | log | enforce-ci | enforce`), re-read on every invocation — no restart needed.
+`.claude/hooks/merge-guard.sh` runs as a `PreToolUse` hook on every Bash, Write/Edit and `mcp__*` call. It independently re-checks every merge (`gh pr merge` in any form, `gh api` merge endpoints, MCP merge tools): all checks on the head commit green, and the newest `### 🤖` gate review **posted by the loop's GitHub account** reads PASS **on the current head commit**. In `enforce` it also denies subagent merges and pushes to `main`, any push to `main` beyond loop bookkeeping (`openspec/**`, the backlog, the mode file), force-pushes, and a subagent editing the guard itself — and it fails closed when it can't reach GitHub. Mode lives in `.claude/hooks/merge-guard.mode` (`off | log | enforce-ci | enforce`), re-read on every invocation — no restart needed. Every decision is logged to `.claude/hooks/merge-guard.log`.
 
 **Trust ramp.** It starts in `log` so it cannot block a real merge before you have seen it agree with the loop. After an increment or two:
 
 ```bash
 cut -f2,5,6 .claude/hooks/merge-guard.log   # every merge the loop performed should show ALLOW
 echo enforce > .claude/hooks/merge-guard.mode
+git commit -m "chore(autoloop): enforce merge guard" -- .claude/hooks/merge-guard.mode && git push
 ```
+
+The mode file is tracked — it's project policy, so a fresh clone keeps it. (If you skip the commit, the loop commits it for you at its next Phase 0 as a steering edit.)
 
 From then on "never force-merge" is enforced by the harness rather than trusted to the model.
 
 ## When it escalates
 
-The loop prints a `⛔ ESCALATION` block and stops when it can't safely proceed: CI still red after 2 fix cycles, a gate BLOCK or twice-unresolved REVISE/CHANGES, a worker returning FAILED, an unmet `needs-human:` precondition, a merge-guard denial, or dirty git state. Read the block, make the one decision it asks for, then relaunch `/loop /kmp-forge-next-increment`.
+The loop prints a `⛔ ESCALATION` block and stops when it can't safely proceed: CI still red after 2 fix cycles, a gate BLOCK, a gate still not PASS in round 3 (after two fix cycles), a code-review ERROR (the diff couldn't be established), a worker returning FAILED, an unmet `needs-human:` precondition, a merge-guard denial, a PR a human closed, or uncommitted changes other than your steering edits. Read the block, make the one decision it asks for, then relaunch `/loop /kmp-forge-next-increment`.

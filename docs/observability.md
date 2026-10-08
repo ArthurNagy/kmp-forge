@@ -98,15 +98,16 @@ Crashes get the last ~50 log entries as breadcrumb context. Game-changing for de
 CI uploads dSYMs (iOS) and mapping files (Android R8/Proguard) via Sentry CLI:
 
 ```yaml
-- uses: getsentry/action-release@v1
+- uses: getsentry/action-release@v3
   env:
     SENTRY_AUTH_TOKEN: ${{ secrets.SENTRY_AUTH_TOKEN }}
     SENTRY_ORG: <your-org>
     SENTRY_PROJECT: <your-project>
   with:
     environment: production
-    sourcemaps: androidApp/build/outputs/mapping/release/
 ```
+
+The action creates the release and associates commits. Its `sourcemaps` input is for JavaScript bundles (v3 injects debug IDs into them by default) — don't point it at R8 output. Upload the Android R8/ProGuard mapping with the Sentry Android Gradle plugin (`io.sentry.android.gradle`, `autoUploadProguardMapping`) during `:androidApp:bundleRelease`, using the same `SENTRY_AUTH_TOKEN`.
 
 For iOS dSYMs: `sentry-cli upload-dif <path-to-dsyms>` in release workflow.
 

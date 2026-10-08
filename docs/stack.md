@@ -8,51 +8,66 @@ Every locked library, why it was chosen, when it's used, and idiomatic usage.
 The foundation. Compose Multiplatform 1.10+ for Material 3 + multi-platform UI.
 
 ### Orbit MVI
-- **Why**: explicit MVI shape (intent → reduce → state), built-in `ContainerHost.test()` harness, KMP-ready.
+- **Why**: explicit MVI shape (intent → reduce → state), built-in `test()` harness (`orbit-test`), KMP-ready.
 - **Where**: every ViewModel in every `:feature-*` module.
-- **Idiom**: `internal class FooViewModel : ViewModel(), ContainerHost<FooState, Nothing> { override val container = container(FooState.Initial); fun load() = intent { reduce { state.copy(...) } } }`. State is `internal`, has no constructor defaults, and exposes its starting value as `FooState.Initial` (see [architecture.md § Visibility](architecture.md#visibility)).
+- **Idiom**: `internal class FooViewModel : ViewModel(), OrbitContainerHost<FooState, FooState, Nothing> { override val container = orbitContainer<FooState, Nothing>(FooState.Initial); fun load() = intent { reduce { state.copy(...) } } }` (Orbit 12: `OrbitContainerHost` + `orbitContainer(...)`; the older `ContainerHost<S, E>` alias and `container(...)` factory are deprecated). State is `internal`, has no constructor defaults, and exposes its starting value as `FooState.Initial` (see [architecture.md § Visibility](architecture.md#visibility)).
 - **State-only events** (no `postSideEffect`): one-shot events live as consumable state slots (`pendingNavigation: Route?`, `pendingMessage: String?`). UI observes via `LaunchedEffect`, consumes, calls paired `onXxxConsumed()` intent to clear. Rationale: everything is state — easier to test, easier to inspect, robust across config changes / process death.
 - **Sub-states via sealed interface** when a flat data class overcomplicates state management (mutually-exclusive page-level transitions like `Loading | Loaded | Error`). See [architecture.md](architecture.md#sub-states-via-sealed-interface).
 - **Anti-patterns**: mutating state outside `intent {}`; using `postSideEffect` (effect type is `Nothing`); throwing exceptions inside `intent {}` blocks (let use cases return `Result`); page-level sub-states modeled as booleans on a flat data class (promote to sealed interface).
 
 ### Koin
 - **Why**: pure-Kotlin DI, KMP-native, runtime registration, low ceremony, easy to test.
-- **Where**: each module exposes a `<moduleName>Module: Module`. `:shared` owns the `startKoin { modules(domainModule, dataModule, uiModule, featureGalleryModule, ...) }` bootstrap, invoked from each platform entry point (`:androidApp`, `:desktopApp`, `iosApp/`).
+- **Where**: each module exposes a `<moduleName>Module: Module`. `:shared`'s `App()` owns the bootstrap — `KoinApplication(configuration = koinConfiguration { modules(appModules) })`, with `appModules` (AppModules.kt) listing `uiModule, domainModule, dataModule, galleryModule, ...`. It starts Koin on first composition (wiring the Android context automatically) and re-attaches on Activity recreation, so the platform entry points (`:androidApp`, `:desktopApp`, `iosApp/`) only render `App()`.
 - **Idiom**: `val galleryModule = module { viewModelOf(::GalleryViewModel) }`; in Composables, `val vm = koinViewModel<GalleryViewModel>()`.
 - **Anti-patterns**: global service locator calls (`GlobalContext.get()`); constructing classes directly inside ViewModels instead of injecting.
 - **Note**: Hilt is Android-only and cannot live in `commonMain` — Koin is the right call for any KMP project.
 
 ### Navigation 3 (Compose Multiplatform)
 - **Why**: official Compose Navigation library with first-class KMP support since Compose MP 1.10. User-owned back stack as `SnapshotStateList<NavKey>`.
-- **Where**: every screen defines a `@Serializable data class FooRoute(...) : NavKey` (public). The app-level back stack is constructed with `rememberNavBackStack(RootRoute)` and rendered via `NavDisplay`. Each feature contributes its screens through a public `addFooEntries(...)` entry-provider extension — the app never references `FooScreen` directly, which keeps screens/VMs/state `internal` (see [architecture.md § Navigation wiring](architecture.md#navigation-wiring-nav-3-entry-contributions)).
+- **Where**: every screen defines a `@Serializable data class FooRoute(...) : NavKey` (public). The app-level back stack is constructed with `rememberNavBackStack(savedStateConfiguration, RootRoute)` — in common code the configuration's `SerializersModule` must register every `NavKey` subtype (the no-config overload is Android-only) — and rendered via `NavDisplay`. Each feature contributes its screens through a public `addFooEntries(...)` entry-provider extension — the app never references `FooScreen` directly, which keeps screens/VMs/state `internal` (see [architecture.md § Navigation wiring](architecture.md#navigation-wiring-nav-3-entry-contributions)).
 - **Idiom**:
   ```kotlin
   @Serializable data object GalleryRoute : NavKey
   @Serializable data class PhotoDetailRoute(val id: String) : NavKey
 
   // :feature-gallery — the feature's only screen-facing public symbol
-  fun EntryProviderBuilder<NavKey>.addGalleryEntries(
+  fun EntryProviderScope<NavKey>.addGalleryEntries(
       onOpenPhoto: (String) -> Unit,
       onNavigateBack: () -> Unit,
   ) {
       entry<GalleryRoute> { GalleryScreen(onOpenPhoto = onOpenPhoto, onNavigateBack = onNavigateBack) }
   }
 
-  // :shared (App.kt) — owns the back stack and every target route
-  val backStack = rememberNavBackStack(GalleryRoute)
+  // :shared (AppNavigation.kt) — owns the back stack and every target route
+  private val navConfig = SavedStateConfiguration {
+      serializersModule = SerializersModule {
+          polymorphic(NavKey::class) {
+              subclass(GalleryRoute::class, GalleryRoute.serializer())
+              subclass(PhotoDetailRoute::class, PhotoDetailRoute.serializer())
+          }
+      }
+  }
+
+  val backStack = rememberNavBackStack(navConfig, GalleryRoute)
+  val navigateBack: () -> Unit = { if (backStack.size > 1) backStack.removeLastOrNull() }
   NavDisplay(
       backStack = backStack,
+      onBack = navigateBack,
+      entryDecorators = listOf(
+          rememberSaveableStateHolderNavEntryDecorator(),
+          rememberViewModelStoreNavEntryDecorator(),   // koinViewModel() scoped per entry
+      ),
       entryProvider = entryProvider {
           addGalleryEntries(
               onOpenPhoto = { backStack.add(PhotoDetailRoute(it)) },
-              onNavigateBack = { backStack.removeLastOrNull() },
+              onNavigateBack = navigateBack,
           )
-          addPhotoDetailEntries(onNavigateBack = { backStack.removeLastOrNull() })
+          addPhotoDetailEntries(onNavigateBack = navigateBack)
       },
   )
   ```
-- **Anti-patterns**: untyped routes (string keys); the app referencing a feature's `Screen`/`ViewModel` directly instead of its `addFooEntries(...)` contribution; a feature importing another feature's Route (pass outgoing nav as a callback instead); mutating the back stack from outside Composition; using `postSideEffect` for navigation (effect type is `Nothing`) — instead set a consumable `pendingNavigation: Route?` slot inside `intent {}` and mutate the back stack in a `LaunchedEffect` observing it.
-- **Artifact**: `org.jetbrains.androidx.navigation3:navigation3-ui:1.1.1` (the JetBrains Compose Multiplatform port — Google's `androidx.navigation3:navigation3-ui` is Android/JVM-only and won't resolve in `commonMain` on iOS/web) plus `androidx.navigation3:navigation3-runtime:1.1.1` (Google's runtime *is* a true KMP artifact and is exactly what the UI port depends on, so both share the one `androidxNavigation3` version ref).
+- **Anti-patterns**: untyped routes (string keys); a route missing from the `SerializersModule` (crashes on iOS/desktop/web when the back stack is saved); the app referencing a feature's `Screen`/`ViewModel` directly instead of its `addFooEntries(...)` contribution; a feature importing another feature's Route (pass outgoing nav as a callback instead); mutating the back stack from outside Composition; using `postSideEffect` for navigation (effect type is `Nothing`) — instead set a consumable `pendingNavigation: Route?` slot inside `intent {}` and mutate the back stack in a `LaunchedEffect` observing it.
+- **Artifact**: `org.jetbrains.androidx.navigation3:navigation3-ui:1.1.2` (the JetBrains Compose Multiplatform port — Google's `androidx.navigation3:navigation3-ui` is Android/JVM-only and won't resolve in `commonMain` on iOS/web) — the **only** Nav 3 artifact the stack declares. It re-exports the matching Google `androidx.navigation3:navigation3-runtime` (`NavKey`, `entryProvider`, `rememberNavBackStack`, …) as an `api` dependency on every platform, so never add Google's runtime or UI artifacts next to it. Per-entry ViewModel scoping comes from `org.jetbrains.androidx.lifecycle:lifecycle-viewmodel-navigation3` (`rememberViewModelStoreNavEntryDecorator()`).
 
 ### Coil 3
 - **Why**: KMP-native image loader, Compose integration, pluggable fetchers (Ktor when HTTP is on), shared memory + disk cache.
@@ -72,13 +87,13 @@ The foundation. Compose Multiplatform 1.10+ for Material 3 + multi-platform UI.
 
 ### kotlin-result (Result + DomainError)
 - **Why**: a two-parameter `Result<V, E>` makes each use case's failure modes explicit in its signature, without Arrow's weight. Kotlin's stdlib `Result<T>` is single-param with a `Throwable`-only failure and can't carry a typed `DomainError`.
-- **Where**: every use case returns `Result<T, DomainError>`; ViewModels consume it with `onSuccess`/`onFailure`; repositories return it from `:data`.
-- **Coordinates**: Gradle `com.michael-bull.kotlin-result:kotlin-result` (+ `kotlin-result-coroutines` for `coroutineBinding`). Kotlin import package is `com.github.michaelbull.result.*` — **note the coordinate and package differ**. Declared `api` in `:domain` so it flows transitively to `:data`/`:feature-*`.
-- **Idiom**: `repo.find(id)?.let { Ok(it) } ?: Err(UserError.NotFound)`; consume with `result.onSuccess { ... }.onFailure { ... }` or `result.fold(success = { ... }, failure = { ... })`. Multi-step: `coroutineBinding { val a = stepA().bind(); val b = stepB(a).bind(); b }`.
-- **Anti-patterns**: importing `kotlin.Result` / using `runCatching` (returns the stdlib type — shadows this one); making `DomainError` extend `Throwable`; careless `.get()!!` / `unwrap()` instead of `fold`/`onSuccess`/`onFailure`/`getOrElse`.
+- **Where**: every use case returns `Result<T, DomainError>`; ViewModels consume it with `onOk`/`onErr`; repositories return it from `:data`.
+- **Coordinates**: Gradle `com.michael-bull.kotlin-result:kotlin-result` (+ `kotlin-result-coroutines` for `coroutineBinding`). Kotlin import package is `com.github.michaelbull.result` (import members explicitly — ktlint rejects wildcard imports) — **note the coordinate and package differ**. Declared `api` in `:domain` so it flows transitively to `:data`/`:feature-*`.
+- **Idiom**: `repo.find(id)?.let { Ok(it) } ?: Err(UserError.NotFound)`; consume with `result.onOk { ... }.onErr { ... }` or `result.fold(success = { ... }, failure = { ... })` (2.x deprecates `onSuccess`/`onFailure`). Multi-step: `coroutineBinding { val a = stepA().bind(); val b = stepB(a).bind(); b }`.
+- **Anti-patterns**: importing `kotlin.Result` / using `runCatching` (returns the stdlib type — shadows this one); making `DomainError` extend `Throwable`; careless `.get()!!` / `unwrap()` instead of `fold`/`onOk`/`onErr`/`getOrElse`.
 
 ### kotlinx-datetime
-- **Why**: KMP-native date/time primitives (`Instant`, `LocalDate`, `Clock`).
+- **Why**: KMP-native calendar types (`LocalDate`, `LocalDateTime`, `TimeZone`, formatting). Since 0.7, `Instant` and `Clock` are the stdlib's `kotlin.time.Instant` / `kotlin.time.Clock` — kotlinx-datetime's own copies are gone.
 - **Where**: any timestamp-aware code.
 - **Anti-pattern**: `java.time` in `commonMain` (JVM-only).
 
@@ -90,7 +105,7 @@ The foundation. Compose Multiplatform 1.10+ for Material 3 + multi-platform UI.
 
 ### Compose Multiplatform Resources
 - **Why**: type-safe, KMP-native string/drawable/font handling.
-- **Where**: `commonMain/composeResources/values-<locale>/strings.xml`; accessed via `stringResource(Res.string.foo)`.
+- **Where**: default table in `commonMain/composeResources/values/strings.xml`, translations in `values-<locale>/strings.xml` (see [i18n-a11y.md](i18n-a11y.md#setup) — `values/` is the only fallback); accessed via `stringResource(Res.string.foo)`.
 - **Anti-pattern**: hardcoded strings in `Text(...)` — every user-facing string goes through `Res.string`.
 
 ### DataStore (KMP)
@@ -101,18 +116,31 @@ The foundation. Compose Multiplatform 1.10+ for Material 3 + multi-platform UI.
   val themeMode: Flow<ThemeMode> = dataStore.data.map { it[KEY_THEME]?.let(ThemeMode::valueOf) ?: ThemeMode.SYSTEM }
   suspend fun setThemeMode(mode: ThemeMode) { dataStore.edit { it[KEY_THEME] = mode.name } }
   ```
+- **Web**: DataStore 1.2.x has no `js` target (wasmJs only; js arrives in 1.3), so `/kmp-forge-init` drops it from `:data`'s `commonMain` when web is selected. Put preferences behind a `:domain` interface and implement it per platform (DataStore on android/iOS/jvm, `localStorage` in `webMain`).
 
 ## Opt-in libraries
 
+(kmp.new no longer has a library picker — `/kmp-forge-init` step 6 wires Ktor / SQLDelight into `:data` itself when selected.)
+
 ### Ktor Client
 - **When**: project needs HTTP.
-- **Engines**: Darwin (iOS), OkHttp (Android), Java (desktop), JS (web).
-- **Idiom**: provide `HttpClient` via Koin with `install(ContentNegotiation) { json() }`, `install(Logging) { logger = KermitKtorLogger }`.
+- **Engines**: OkHttp (Android + desktop JVM), Darwin (iOS), Js (js + wasmJs) — one per source set in `:data`'s build script; `HttpClient { }` without an engine argument picks the one on the target's classpath.
+- **Wiring** (init, when selected): `overlay/optional/ktor/` renders `HttpClientFactory.kt` (`internal fun createHttpClient()` with `ContentNegotiation` + kotlinx-json) into `:data`, bound once in `dataModule` as `single { createHttpClient() }`. Add `install(Logging) { … }` with a Kermit-backed logger when you need request logs.
 
 ### SQLDelight
 - **When**: project needs relational storage. Choose over Exposed for mobile-first KMP work (mobile-proven, lightweight drivers, type-safe SQL from `.sq` files).
-- **Where**: `:data` module. Drivers per platform via `expect/actual`.
-- **Idiom**: SQL in `.sq` files; generated `Database` class accessed via Koin singleton.
+- **Where**: `:data` module — init applies the `app.cash.sqldelight` plugin, declares `sqldelight { databases { create("AppDatabase") { packageName.set("<base>.data.db") } } }` and adds the runtime + per-platform drivers (android / sqlite (JVM) / native (iOS)).
+- **Idiom**: SQL in `data/src/commonMain/sqldelight/<base-path>/data/db/*.sq`; the generated `AppDatabase` is a Koin singleton built from a platform `SqlDriver`:
+  ```kotlin
+  // commonMain
+  internal expect class DriverFactory { fun create(): SqlDriver }
+  // androidMain — needs a Context: Koin's androidContext() is set by KoinApplication on Android
+  internal actual class DriverFactory(private val context: Context) {
+      actual fun create(): SqlDriver = AndroidSqliteDriver(AppDatabase.Schema, context, "app.db")
+  }
+  // iosMain: NativeSqliteDriver(AppDatabase.Schema, "app.db"); jvmMain: JdbcSqliteDriver("jdbc:sqlite:app.db") + Schema.create
+  ```
+- **Web**: needs `web-worker-driver` + the `sql.js` worker npm packages — not wired by init.
 
 ### Store (MobileNativeFoundation/Store)
 - **When**: offline-first repository with multiple backing sources (remote + cache + db). Common in feeds, lists, profile data — anywhere you want SWR-style staleness behavior with fallback to local.

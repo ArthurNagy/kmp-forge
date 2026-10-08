@@ -1,4 +1,4 @@
-package ${BASE_PACKAGE}.feature.${FEATURE_NAME}
+package ${BASE_PACKAGE}.feature.${FEATURE_NAME_PKG}
 
 import ${BASE_PACKAGE}.domain.DomainError
 
@@ -9,7 +9,7 @@ import ${BASE_PACKAGE}.domain.DomainError
  * **No default values.** Every property is explicit so the call site states its
  * full intent and adding a field forces every constructor to be revisited. The
  * starting state lives in [Companion.Initial] (the single source of truth used by
- * the ViewModel's `container(...)` and by tests) — not as constructor defaults.
+ * the ViewModel's `orbitContainer(...)` and by tests) — not as constructor defaults.
  *
  * **`internal`.** State never leaves the feature module. The feature's only public
  * surface is [${FEATURE_NAME_PASCAL}Route], its Koin module, and `add${FEATURE_NAME_PASCAL}Entries`
@@ -30,12 +30,11 @@ internal data class ${FEATURE_NAME_PASCAL}State(
     // DomainError carried as-is; the UI maps it to a string resource at render time
     // (domain stays free of presentation strings — see docs/i18n-a11y.md).
     val error: DomainError?,
-
     // Consumable event slots — set inside intent {}, cleared by paired onXxxConsumed().
     val pendingMessage: String?,
 ) {
     companion object {
-        /** Starting state. Used by the ViewModel's `container(...)` and by tests. */
+        /** Starting state. Used by the ViewModel's `orbitContainer(...)` and by tests. */
         val Initial = ${FEATURE_NAME_PASCAL}State(
             loading = false,
             error = null,
@@ -52,4 +51,4 @@ internal data class ${FEATURE_NAME_PASCAL}State(
 //       data class Loaded(val items: List<Item>, val pendingMessage: String?) : ${FEATURE_NAME_PASCAL}State
 //       data class Error(val cause: DomainError) : ${FEATURE_NAME_PASCAL}State
 //   }
-//   // container(${FEATURE_NAME_PASCAL}State.Loading)
+//   // orbitContainer<${FEATURE_NAME_PASCAL}State, Nothing>(${FEATURE_NAME_PASCAL}State.Loading)

@@ -1,0 +1,30 @@
+package ${BASE_PACKAGE}.testing
+
+import ${BASE_PACKAGE}.domain.DispatcherProvider
+import kotlinx.coroutines.CoroutineDispatcher
+import kotlinx.coroutines.test.StandardTestDispatcher
+import kotlinx.coroutines.test.TestCoroutineScheduler
+
+/**
+ * Test double for [DispatcherProvider]: main/io/default are ONE `StandardTestDispatcher` on the
+ * scheduler you pass in. Always pass the `runTest` scheduler, so virtual time (delays,
+ * `advanceUntilIdle()`) covers everything the code under test launches:
+ *
+ *     @Test
+ *     fun loadsPhotos() = runTest {
+ *         val useCase = GetPhotosUseCase(FakePhotoRepository(), TestDispatcherProvider(testScheduler))
+ *         ...
+ *     }
+ *
+ * A dispatcher with its own scheduler would fail with "Detected use of different schedulers"
+ * (or hang), because `runTest` can't advance it.
+ */
+class TestDispatcherProvider(
+    scheduler: TestCoroutineScheduler,
+) : DispatcherProvider {
+    private val dispatcher = StandardTestDispatcher(scheduler)
+
+    override val main: CoroutineDispatcher get() = dispatcher
+    override val io: CoroutineDispatcher get() = dispatcher
+    override val default: CoroutineDispatcher get() = dispatcher
+}

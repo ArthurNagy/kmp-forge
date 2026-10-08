@@ -1,15 +1,24 @@
 package ${BASE_PACKAGE}.data
 
 import ${BASE_PACKAGE}.domain.DispatcherProvider
+import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
 
 /**
  * Production dispatcher provider. The ONLY place in :data that may reference
- * Dispatchers.* directly. `internal` — only [dataModule] binds it to the public
- * DispatcherProvider interface; nothing outside :data references the impl.
+ * Dispatchers.* directly (this file + its RealDispatcherProvider.<platform>.kt actuals).
+ * `internal` — only [dataModule] binds it to the public DispatcherProvider interface;
+ * nothing outside :data references the impl.
  */
 internal class RealDispatcherProvider : DispatcherProvider {
-    override val main get() = Dispatchers.Main
-    override val io get() = Dispatchers.IO
-    override val default get() = Dispatchers.Default
+    override val main: CoroutineDispatcher get() = Dispatchers.Main
+    override val io: CoroutineDispatcher get() = platformIoDispatcher
+    override val default: CoroutineDispatcher get() = Dispatchers.Default
 }
+
+/**
+ * `Dispatchers.IO` is not common API: JVM/Android expose it as a member, Kotlin/Native as
+ * the `kotlinx.coroutines.IO` extension, and js/wasmJs have no IO dispatcher at all (they
+ * fall back to Default). Each target supplies its own actual.
+ */
+internal expect val platformIoDispatcher: CoroutineDispatcher

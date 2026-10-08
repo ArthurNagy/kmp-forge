@@ -34,6 +34,9 @@ No praise. No "overall good job." No restating what the code does. No scope cree
 
 - "Review this diff" / "Review this PR" / "Review this branch" — review unstaged + staged changes (`git diff` + `git diff --cached`), or `git diff origin/main...HEAD` for branch review.
 - "Review file X" — review the file at HEAD.
+- "Review PR #N" / an explicit range (`origin/main...origin/feat/<slug>`) — review exactly that: `gh pr diff <N>` or `git diff <range>`. When a caller hands you a PR or range, never fall back to the local working tree.
+
+**Empty scope is not a clean review.** If the diff/range you were asked to review is empty or can't be resolved (unknown PR, missing branch, `git diff` error), say so on the first line — `EMPTY: nothing to review in <scope>` or `ERROR: <why>` — instead of returning zero findings. Callers (e.g. the autoloop code gate) treat "no findings" as a pass.
 
 Find what to review:
 
@@ -64,38 +67,40 @@ cat <path>
 
 - 🔴 State mutation outside `intent { reduce { ... } }`. Move into an intent.
 - 🔴 `postSideEffect(...)` used anywhere. The locked stack uses state-only events (effect type is `Nothing`). Convert to a consumable state slot (`pendingX: ...?` set inside intent, cleared by paired `onXConsumed()` intent).
-- 🔴 ContainerHost typed with anything other than `Nothing` as effect (`ContainerHost<State, SomeEffect>`). Change to `ContainerHost<State, Nothing>`.
-- 🟡 Dead `sealed interface <Name>Effect` declared but the ViewModel already uses `ContainerHost<State, Nothing>`. The locked stack is state-only — delete the unused Effect type.
-- 🔴 ViewModel doesn't extend `androidx.lifecycle.ViewModel` + implement `ContainerHost`. No custom base classes.
+- 🔴 Orbit host typed with anything other than `Nothing` as side effect (`OrbitContainerHost<State, State, SomeEffect>`, or the deprecated `ContainerHost<State, SomeEffect>`). Change to `OrbitContainerHost<State, State, Nothing>`.
+- 🟡 Deprecated Orbit API: `ContainerHost<S, E>` alias or `container(...)` factory (Orbit 12). Use `OrbitContainerHost<S, S, Nothing>` + `orbitContainer<S, Nothing>(S.Initial)`.
+- 🟡 Dead `sealed interface <Name>Effect` declared but the ViewModel's side-effect type is already `Nothing`. The locked stack is state-only — delete the unused Effect type.
+- 🔴 ViewModel doesn't extend `androidx.lifecycle.ViewModel` + implement `OrbitContainerHost`. No custom base classes.
 - 🟡 Boolean spaghetti at page level (`if (loading && !error && items.isEmpty()) ...`). Promote to `sealed interface XState` with mutually-exclusive data object/class children.
 - 🟡 Stateful Composable (Composable holds `var` / `mutableStateOf` instead of taking hoisted state). Make stateless; hoist state.
 
 ### Dispatchers (blocking)
 
-- 🔴 `Dispatchers.IO` / `Dispatchers.Default` / `Dispatchers.Main` referenced in `:domain`, `:data`, or `:feature-*`. Inject `DispatcherProvider`; use `dispatchers.io/default/main`.
+- 🔴 `Dispatchers.IO` / `Dispatchers.Default` / `Dispatchers.Main` referenced in `:domain`, `:data`, or `:feature-*`. Inject `DispatcherProvider`; use `dispatchers.io/default/main`. (Exempt: `:data`'s `RealDispatcherProvider.kt` and its `RealDispatcherProvider.<platform>.kt` actuals — `Dispatchers.IO` isn't common API, so the IO dispatcher is an `expect`/`actual`.)
 - 🟡 New use case doesn't take `DispatcherProvider` in its constructor when it needs one. Inject it.
 
 ### Error handling (blocking)
 
-- 🔴 Use case throws an exception. Use cases return `Result<T, DomainError>` (kotlin-result's two-param `Result<V, E>`, `com.github.michaelbull.result.*`).
-- 🔴 `try/catch` inside `intent { ... }` block. Let the use case return `Result`; use `onSuccess` / `onFailure`.
-- 🔴 `kotlin.Result` (stdlib) or `runCatching` used where a domain `Result<T, DomainError>` is expected. Stdlib `Result` is single-param / `Throwable`-only — import `com.github.michaelbull.result.*` instead.
+- 🔴 Use case throws an exception. Use cases return `Result<T, DomainError>` (kotlin-result's two-param `Result<V, E>`, package `com.github.michaelbull.result`).
+- 🔴 `try/catch` inside `intent { ... }` block. Let the use case return `Result`; use `onOk` / `onErr`.
+- 🔴 `kotlin.Result` (stdlib) or `runCatching` used where a domain `Result<T, DomainError>` is expected. Stdlib `Result` is single-param / `Throwable`-only — import `com.github.michaelbull.result.Result` (and `Ok`/`Err`/`onOk`/… explicitly) instead.
 - 🟡 `DomainError` declared as a `Throwable`/`Exception` subtype. `DomainError` is a plain `sealed interface` — it's a value, not an exception.
-- 🟡 Careless `.get()!!` / `unwrap()` / `getOrThrow()` on a `Result`. Use `.fold` or `.onSuccess { ... }.onFailure { ... }` / `getOrElse { ... }` for exhaustive handling.
+- 🟡 Careless `.get()!!` / `unwrap()` / `getOrThrow()` on a `Result`. Use `.fold` or `.onOk { ... }.onErr { ... }` / `getOrElse { ... }` for exhaustive handling. (`onSuccess`/`onFailure` are deprecated in kotlin-result 2.x — 🟢 nit to rename.)
 
 ### Navigation (blocking)
 
 - 🔴 Nav 3 route not annotated with `@Serializable`. Add `@Serializable` and ensure it implements `NavKey`.
 - 🔴 Untyped nav (string keys, `Bundle`, etc). Use typed `@Serializable` route classes.
-- 🟡 The composition host (`:shared`, which owns `App.kt` + the `NavDisplay` back stack) references a feature's `Screen`/`ViewModel` directly (e.g. a `NavDisplay { when }` calling `FooScreen(...)`). Features should expose `EntryProviderBuilder<NavKey>.addFooEntries(...)`; `:shared` composes them in `entryProvider { addFooEntries(...) }` so screens stay `internal`.
+- 🟡 The composition host (`:shared`, which owns `App.kt` + the `NavDisplay` back stack) references a feature's `Screen`/`ViewModel` directly (e.g. a `NavDisplay { when }` calling `FooScreen(...)`). Features should expose `EntryProviderScope<NavKey>.addFooEntries(...)`; `:shared` composes them in `entryProvider { addFooEntries(...) }` so screens stay `internal`.
 - 🟡 Feature imports another feature's `Route`. Pass outgoing navigation as a callback (`onOpenX: (Arg) -> Unit`); the app owns target routes.
+- 🔴 A `NavKey` route not registered in `:shared`'s `SavedStateConfiguration` `SerializersModule` (`subclass(FooRoute::class, FooRoute.serializer())` in AppNavigation.kt), or `rememberNavBackStack(...)` called without a configuration in common code. Off Android the back stack can't be saved — `SerializationException` at runtime (the no-config overload doesn't even compile in `commonMain`).
 
 ### Visibility (warn)
 
 - 🟡 Domain entity / data class declares default values (`val x: T = ...`). Remove the defaults; construct explicitly. (DTOs in `:data` may keep defaults where the wire format needs them.)
 - 🟡 Repository implementation, data source, DTO, or `RealDispatcherProvider` is `public`. Make it `internal` to `:data` — only the Koin module references it; the rest of the app uses the `:domain` interface.
 - 🟡 Feature `State`, `ViewModel`, or `Screen` is `public`. Make it `internal`. A feature's only public API is its `Route`, its Koin `Module`, and `addFooEntries(...)`. (`Content` Composables should be `private`.)
-- 🟡 Presentation `State` declares default values, or lacks a `companion object { val Initial = ... }`. Drop the defaults; add `Initial` as the single starting-state source used by `container(...)` and tests.
+- 🟡 Presentation `State` declares default values, or lacks a `companion object { val Initial = ... }`. Drop the defaults; add `Initial` as the single starting-state source used by `orbitContainer(...)` and tests.
 - 🟢 A `public` declaration has no consumer outside its module. Tighten to `internal` (or `private` if file-local).
 
 Note: use-case **constructors stay public** — feature tests build them with fakes. Do not flag a public use-case constructor.
@@ -109,7 +114,7 @@ Note: use-case **constructors stay public** — feature tests build them with fa
 
 - 🔴 MockK import in `commonTest`. Move to `jvmTest`/`androidTest`, or replace with a hand-written `Fake<Name>`.
 - 🟡 Test uses mocks where a fake would do. Prefer fakes.
-- 🟡 ViewModel test doesn't use `ContainerHost.test()` harness. Convert to `vm.test(this, XState.Initial) { ... }`.
+- 🟡 ViewModel test doesn't use Orbit's test harness. Convert to `vm.testWithInternalState(this, XState.Initial) { ... expectInternalState { copy(...) } }` (Orbit 12 — `test()` / `expectInitialState()` / `expectState` are deprecated; 🟢 nit when only those are used).
 
 ### a11y / i18n (warn)
 
@@ -119,7 +124,8 @@ Note: use-case **constructors stay public** — feature tests build them with fa
 - 🟡 Clickable Composable smaller than `AppDimens.touchTargetMin`. Apply `.minimumInteractiveComponentSize()` or sized constraint.
 - 🟡 `Modifier.padding(left = ..., right = ...)`. Use `start = ..., end = ...`.
 - 🟡 `Alignment.Left` / `Alignment.Right`. Use `Alignment.Start` / `Alignment.End`.
-- 🟡 Hardcoded user-facing string in `Text(...)`. Move to `Res.string`.
+- 🟡 Hardcoded user-facing string in `Text(...)`, or a `DomainError` rendered directly. Move to `Res.string` (map errors to resources in the Composable).
+- 🔴 A string resource that exists only in a qualified table (`values-en/`, `values-xx/`) and not in the unqualified `composeResources/values/strings.xml`. Compose MP falls back only to `values/` — the app crashes ("Resource with ID='string:x' not found") on any device whose language has no table.
 
 ### Secrets (blocking)
 
@@ -132,8 +138,8 @@ Note: use-case **constructors stay public** — feature tests build them with fa
 
 ### Module / build (warn)
 
-- 🟡 New `:feature-*` module not declared as a `:shared` dependency, or not added to the `:shared` Koin bootstrap's `startKoin { modules(...) }` block.
-- 🟡 New feature's `addFooEntries(...)` not added to `:shared`'s `NavDisplay(entryProvider = entryProvider { ... })`, or a new route not contributed via `entry<FooRoute> { ... }`.
+- 🟡 New `:feature-*` module not declared as a `:shared` dependency, or its Koin module not added to `appModules` in `:shared`'s AppModules.kt (the list `App()` passes to `KoinApplication`).
+- 🟡 New feature's `addFooEntries(...)` not added to `:shared`'s `NavDisplay(entryProvider = entryProvider { ... })` (AppNavigation.kt), or a new route not contributed via `entry<FooRoute> { ... }`.
 - 🟡 New library added to module's `build.gradle.kts` without matching entry in `gradle/libs.versions.toml`.
 
 ## What you don't do

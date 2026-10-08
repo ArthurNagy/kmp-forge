@@ -1,0 +1,17 @@
+package ${BASE_PACKAGE}
+
+import ${BASE_PACKAGE}.data.dataModule
+import ${BASE_PACKAGE}.domain.domainModule
+import ${BASE_PACKAGE}.ui.uiModule
+import org.koin.core.module.Module
+
+/**
+ * Every Koin module the app starts with ([App] passes this list to `KoinApplication`).
+ * /kmp-forge-add-feature appends each feature's module above the marker line — keep it.
+ */
+internal val appModules: List<Module> = listOf(
+    uiModule,
+    domainModule,
+    dataModule,
+    // kmp-forge:feature-modules
+)

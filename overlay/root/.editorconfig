@@ -20,6 +20,9 @@ ktlint_standard_filename = disabled
 # idiom kmp.new generates) across lines even when it fits. Disabled; all other rules stay on.
 ktlint_standard_multiline-expression-wrapping = disabled
 ktlint_standard_chain-method-continuation = disabled
+# Same idiom for functions: keep Orbit's `fun load() = intent { … }` and `fun x() = runTest { … }`
+# on one line (ktlint_official's default `multiline` would push the body onto the next line).
+ktlint_function_signature_body_expression_wrapping = default
 # @Composable functions are PascalCase by convention — exempt them from function-naming
 # (keeps the rule active for ordinary functions).
 ktlint_function_naming_ignore_when_annotated_with = Composable

@@ -1,0 +1,33 @@
+import org.jetbrains.kotlin.gradle.dsl.JvmTarget
+
+/*
+ * :testing — shared test doubles (TestDispatcherProvider, fakes of :domain interfaces used by
+ * more than one module). Its code is production-shaped (commonMain) so every module's
+ * commonTest can depend on it — KMP has no testFixtures. Only ever a `commonTest` dependency;
+ * never from commonMain. Excluded from the aggregated Kover report (kmp-forge.root).
+ */
+plugins {
+    id("kmp-forge.kmp.library")
+    alias(libs.plugins.androidMultiplatformLibrary)
+}
+
+kotlin {
+    android {
+        namespace = "${BASE_PACKAGE}.testing"
+        compileSdk = libs.versions.android.compileSdk.get().toInt()
+        minSdk = libs.versions.android.minSdk.get().toInt()
+        compilerOptions {
+            jvmTarget = JvmTarget.JVM_17
+        }
+    }
+
+    sourceSets {
+        commonMain.dependencies {
+            api(project(":domain"))
+            api(libs.kotlinx.coroutines.test)
+        }
+        commonTest.dependencies {
+            implementation(libs.kotlin.test)
+        }
+    }
+}

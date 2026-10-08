@@ -124,7 +124,7 @@ Gradle reads `KEYSTORE_PATH=$RUNNER_TEMP/release.keystore` and signs the AAB/APK
 [allowlist]
 description = "Common false-positive locations"
 paths = [
-    '''shared/src/.*/composeResources/.*''',  # Compose resources
+    '''[^/]+/src/[^/]+/composeResources/.*''',  # Compose resources (:shared, :feature-*, …)
     '''.*\.gradle\.kts''',                     # Gradle files (passwords come from props)
 ]
 ```

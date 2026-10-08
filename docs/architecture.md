@@ -5,7 +5,7 @@
 ## Module map
 
 ```
-:shared                  composition host — App.kt, startKoin bootstrap, Nav 3 back stack; emits the iOS `Shared` framework. Depends on :ui/:domain/:data/:feature-*
+:shared                  composition root — App.kt (KoinApplication), AppModules.kt, AppNavigation.kt (Nav 3 back stack); emits the iOS `Shared` framework. Depends on :ui/:domain/:data/:feature-*
 :androidApp              thin Android application — MainActivity, manifest, signing, AAB/APK; depends on :shared
 :desktopApp              thin desktop JVM app — main(), native packaging (dmg/msi/deb); depends on :shared
 iosApp/                  Xcode project consuming the Shared framework
@@ -13,7 +13,8 @@ iosApp/                  Xcode project consuming the Shared framework
 :domain                  use cases, domain entities, repository interfaces, DispatcherProvider, DomainError sealed base
 :data                    repository implementations, data sources (network, db, prefs), DTOs, mappers
 :feature-<name>          Compose UI + ViewModel + state + nav destination for one feature
-build-logic/             the `kmp-forge.kmp.library` precompiled-script convention plugin
+:testing                 shared test doubles (TestDispatcherProvider, cross-module fakes) — commonTest-only dependency
+build-logic/             precompiled-script conventions: `kmp-forge.kmp.library` (every shared module) + `kmp-forge.root` (root: Kover gate)
 ```
 
 > kmp.new generates `:shared` + the thin `:androidApp`/`:desktopApp` (+ `iosApp/`) instead of
@@ -30,6 +31,7 @@ build-logic/             the `kmp-forge.kmp.library` precompiled-script conventi
             └─▶ :domain
 :data       ──▶ :domain         (implements interfaces declared in :domain)
 :domain     ──▶ (nothing internal — pure Kotlin + Coroutines + kotlinx-datetime + kotlinx-serialization + kotlin-result)
+:testing    ──▶ :domain         (commonMain; consumed ONLY as a commonTest dependency by :domain/:data/:feature-*)
 ```
 
 Rules:
@@ -37,6 +39,7 @@ Rules:
 - `:data` depends only on `:domain` (interfaces) + KMP libs it needs (Ktor, SQLDelight, DataStore).
 - `:feature-*` depends on `:domain` (use cases) and `:ui` (theme + primitives). Never depends on `:data` directly — repos are injected via Koin against `:domain` interfaces.
 - Features never depend on other features.
+- `:testing` is never a `commonMain` dependency of anything.
 
 ## What goes where
 
@@ -48,7 +51,7 @@ Rules:
 - `DispatcherProvider` interface
 - Pure Kotlin only.
 
-`Result<T, DomainError>` is [kotlin-result](https://github.com/michaelbull/kotlin-result)'s two-param `Result<V, E>` — Gradle coordinate `com.michael-bull.kotlin-result:kotlin-result`, Kotlin import package `com.github.michaelbull.result.*` (`Ok`/`Err`/`onSuccess`/`onFailure`/`fold`/`andThen`/…). It's declared `api` in `:domain` so the type flows transitively to `:data` and `:feature-*`. **Not** `kotlin.Result` (stdlib, single-param, `Throwable`-only). See ADR `0005-result-domain-error` in your project's `docs/DECISIONS/`.
+`Result<T, DomainError>` is [kotlin-result](https://github.com/michaelbull/kotlin-result)'s two-param `Result<V, E>` — Gradle coordinate `com.michael-bull.kotlin-result:kotlin-result`, Kotlin import package `com.github.michaelbull.result` (`Ok`/`Err`/`onOk`/`onErr`/`fold`/`andThen`/… — import members explicitly; ktlint rejects wildcard imports, and 2.x deprecates `onSuccess`/`onFailure`). It's declared `api` in `:domain` so the type flows transitively to `:data` and `:feature-*`. **Not** `kotlin.Result` (stdlib, single-param, `Throwable`-only). See ADR `0005-result-domain-error` in your project's `docs/DECISIONS/`.
 
 ### `:data`
 - Repository **implementations** (`internal class UserRepositoryImpl`) — `internal`. Only `dataModule` (same module) references them; the rest of the app depends on the `:domain` interface, never the impl.
@@ -71,18 +74,19 @@ For offline-first multi-source data (remote + cache + db) consider Store ([stack
 The feature's **public surface is exactly three things**: its `Route`, its Koin `Module`, and its `addFooEntries(...)` nav contribution. Everything else (`Screen`, `ViewModel`, `State`, `Content`) is `internal` to the module — the app composes the feature through the entry contribution, never by referencing the screen.
 
 - One `*Screen.kt` per screen — `internal`, stateless, takes lambdas; resolves its ViewModel via `koinViewModel<FooViewModel>()` and hoists state to a `private *Content`.
-- One `*ViewModel.kt` per screen — `internal class FooViewModel(private val useCase: ...) : ViewModel(), ContainerHost<FooState, Nothing>`
-- One `*State.kt` — `internal data class FooState(...)` with **no default values** and a `companion object { val Initial = FooState(...) }` (the single starting-state source used by `container(...)` and tests). Or a `sealed interface FooState` for mutually-exclusive page-level sub-states (its initial state is an explicit object, e.g. `Loading`).
+- One `*ViewModel.kt` per screen — `internal class FooViewModel(private val useCase: ...) : ViewModel(), OrbitContainerHost<FooState, FooState, Nothing>` with `override val container = orbitContainer<FooState, Nothing>(FooState.Initial)`
+- One `*State.kt` — `internal data class FooState(...)` with **no default values** and a `companion object { val Initial = FooState(...) }` (the single starting-state source used by `orbitContainer(...)` and tests). Or a `sealed interface FooState` for mutually-exclusive page-level sub-states (its initial state is an explicit object, e.g. `Loading`).
 - One `*Route.kt` — `@Serializable data class FooRoute(...) : NavKey` — **public** (the app/back stack pushes it).
-- One `*NavEntry.kt` — **public** `fun EntryProviderBuilder<NavKey>.addFooEntries(onNavigateBack: () -> Unit, ...)` containing `entry<FooRoute> { FooScreen(...) }`. The feature's only screen-facing public API.
+- One `*NavEntry.kt` — **public** `fun EntryProviderScope<NavKey>.addFooEntries(onNavigateBack: () -> Unit, ...)` containing `entry<FooRoute> { FooScreen(...) }`. The feature's only screen-facing public API.
 - One `*Module.kt` — **public** Koin module exposing the ViewModel via `viewModelOf(::FooViewModel)` (resolves the `internal` VM; legal because it's the same module).
-- `commonTest/FooViewModelTest.kt` with `ContainerHost.test()` and `FooState.Initial`.
+- `commonTest/FooViewModelTest.kt` with Orbit's `test()` harness and `FooState.Initial`.
+- `composeResources/values/strings.xml` — the feature's default string table (`Res` generated into `<base>.feature.<pkg>.resources`, `internal`).
 - Feature-owned analytics: any analytics events specific to this feature live in the feature module (e.g. `FooAnalytics.kt` with named event constants + a thin wrapper around an injected analytics client). Cross-feature analytics interfaces live in `:domain` or a shared `:analytics` module if it grows. Don't centralize all events in `:shared`.
 - Feature-owned navigation contribution: the feature exposes `addFooEntries(...)` (and its `FooRoute`) for the app to compose into `NavDisplay`'s `entryProvider { }`. Outgoing navigation is passed in as callbacks so the feature stays decoupled — the app owns the back stack and any target routes; a feature never imports another feature's Route.
 
 ### `:shared` (composition host) + `:androidApp` / `:desktopApp` / `iosApp`
-- `App.kt` in `:shared/commonMain` — composes `AppTheme {}`, owns the back stack, and builds the nav graph by calling each feature's `addFooEntries(...)` inside `NavDisplay(entryProvider = entryProvider { ... })`. The app supplies cross-feature navigation as callbacks (e.g. `onOpenPhoto = { backStack.add(PhotoDetailRoute(it)) }`) — this is the one place that knows about more than one feature's routes.
-- `startKoin` bootstrap in `:shared` pulling in `domainModule + dataModule + uiModule + every featureModule`; each platform entry point invokes it.
+- The composition root in `:shared/commonMain` is rendered by `/kmp-forge-init` from `overlay/shared/`: `App.kt` wraps everything in `KoinApplication` + `AppTheme {}`; `AppNavigation.kt` owns the back stack, registers every route for state saving, and builds the nav graph by calling each feature's `addFooEntries(...)` inside `NavDisplay(entryProvider = entryProvider { ... })`. The app supplies cross-feature navigation as callbacks (e.g. `onOpenPhoto = { backStack.add(PhotoDetailRoute(it)) }`) — this is the one place that knows about more than one feature's routes.
+- Koin bootstrap in `:shared`: `App()` calls `KoinApplication(configuration = koinConfiguration { modules(appModules) })`, where `AppModules.kt` lists `uiModule + domainModule + dataModule + every featureModule`. It starts Koin on first composition and re-attaches on Android Activity recreation, so platform entry points need no `startKoin` call. `/kmp-forge-add-feature` appends at the `// kmp-forge:` markers in `AppModules.kt` / `AppNavigation.kt`.
 - `AppBuildConfig` (generated build config) + crash-reporter / Sentry init (when opted in, before `App()`) live in `:shared`.
 - The per-platform **entry points are thin and live in the app modules**: `MainActivity` in `:androidApp`, `main()` in `:desktopApp`, `MainViewController` + the Xcode project in `iosApp/` — each just renders `:shared`'s `App()`.
 
@@ -100,8 +104,8 @@ Per-layer rules the agents and templates enforce:
 
 Two companion rules that go hand-in-hand with visibility:
 
-- **No default values on domain entities or presentation `State`.** Construct them explicitly. Defaults hide intent at call sites and silently swallow newly-added fields. Presentation `State` carries its starting value in a `companion object { val Initial = ... }` (one source of truth for `container(...)` and tests), not in constructor defaults. (DTOs in `:data` may keep defaults where the wire format needs them.)
-- **Use-case constructors stay public** even though everything around them tightens — a `:feature-*` test must be able to build a real use case with a fake repository (`GetX(FakeRepo(), TestDispatcherProvider())`), which a cross-module `internal` constructor would forbid. In production a use case is still only constructed by `domainModule` via Koin.
+- **No default values on domain entities or presentation `State`.** Construct them explicitly. Defaults hide intent at call sites and silently swallow newly-added fields. Presentation `State` carries its starting value in a `companion object { val Initial = ... }` (one source of truth for `orbitContainer(...)` and tests), not in constructor defaults. (DTOs in `:data` may keep defaults where the wire format needs them.)
+- **Use-case constructors stay public** even though everything around them tightens — a `:feature-*` test must be able to build a real use case with a fake repository (`GetX(FakeRepo(), TestDispatcherProvider(testScheduler))`), which a cross-module `internal` constructor would forbid. In production a use case is still only constructed by `domainModule` via Koin.
 
 ## When to extract a new shared module
 
@@ -127,7 +131,7 @@ internal data class GalleryState(
     val pendingMessage: String?,
 ) {
     companion object {
-        // Single starting-state source — used by container(...) and by tests.
+        // Single starting-state source — used by orbitContainer(...) and by tests.
         // No constructor defaults: every field is explicit here.
         val Initial = GalleryState(
             loading = false,
@@ -141,15 +145,15 @@ internal data class GalleryState(
 
 internal class GalleryViewModel(
     private val getPhotos: GetPhotosUseCase,
-) : ViewModel(), ContainerHost<GalleryState, Nothing> {
+) : ViewModel(), OrbitContainerHost<GalleryState, GalleryState, Nothing> {
 
-    override val container = container<GalleryState, Nothing>(GalleryState.Initial)
+    override val container = orbitContainer<GalleryState, Nothing>(GalleryState.Initial)
 
     fun load() = intent {
         reduce { state.copy(loading = true) }
         getPhotos()
-            .onSuccess { photos -> reduce { state.copy(loading = false, photos = photos) } }
-            .onFailure { error -> reduce { state.copy(loading = false, error = error) } }
+            .onOk { photos -> reduce { state.copy(loading = false, photos = photos) } }
+            .onErr { error -> reduce { state.copy(loading = false, error = error) } }
     }
 
     fun openPhoto(id: PhotoId) = intent {
@@ -174,8 +178,8 @@ LaunchedEffect(state.pendingNavigation) {
 
 Rules:
 - ViewModel never references `Dispatchers.IO` directly — use `dispatchers.io` from `DispatcherProvider` (injected into use cases, not ViewModels directly).
-- Use case returns `Result<T, DomainError>`. ViewModel uses `onSuccess` / `onFailure` and updates state.
-- **No `postSideEffect`**. ContainerHost's effect type is `Nothing`. One-shot events (navigation, toasts, snackbars) live as **consumable state slots** (`pendingNavigation: Route?`, `pendingMessage: String?`). UI observes them with `LaunchedEffect(...)`, consumes, then calls a paired `onXxxConsumed()` intent to clear them. Reason: everything is state — easier to test, easier to inspect, easier to reason about restoration across config changes / process death.
+- Use case returns `Result<T, DomainError>`. ViewModel uses `onOk` / `onErr` and updates state; the Composable maps `state.error` to a string resource.
+- **No `postSideEffect`**. The Orbit host's side-effect type is `Nothing` (`OrbitContainerHost<State, State, Nothing>`). One-shot events (navigation, toasts, snackbars) live as **consumable state slots** (`pendingNavigation: Route?`, `pendingMessage: String?`). UI observes them with `LaunchedEffect(...)`, consumes, then calls a paired `onXxxConsumed()` intent to clear them. Reason: everything is state — easier to test, easier to inspect, easier to reason about restoration across config changes / process death.
 
 ### Sub-states via sealed interface
 
@@ -187,7 +191,7 @@ internal sealed interface GalleryState {
     data class Loaded(val photos: List<Photo>, val pendingNavigation: Route?) : GalleryState
     data class Error(val cause: DomainError) : GalleryState
 }
-// container(GalleryState.Loading)  — the initial state is an explicit object, not a no-arg ctor.
+// orbitContainer(GalleryState.Loading)  — the initial state is an explicit object, not a no-arg ctor.
 ```
 
 No constructor defaults here either — the starting state is an explicit object (`GalleryState.Loading`). UI matches on the sealed branch with a `when`. Default to flat data class — only promote when the flat shape grows boolean spaghetti (`if (loading && !error && photos.isEmpty()) ...`).
@@ -195,7 +199,7 @@ No constructor defaults here either — the starting state is an explicit object
 ## Navigation wiring (Nav 3 entry contributions)
 
 The app does **not** reference feature screens. Each feature exposes a public
-`EntryProviderBuilder<NavKey>.addFooEntries(...)` extension (in `FooNavEntry.kt`)
+`EntryProviderScope<NavKey>.addFooEntries(...)` extension (in `FooNavEntry.kt`)
 that contributes its `entry<FooRoute> { FooScreen(...) }`; the app composes those
 into `NavDisplay`'s `entryProvider { }`. This is what lets `FooScreen`/`FooViewModel`/`FooState`
 stay `internal` — the only screen-facing public symbol a feature exports is the
@@ -203,31 +207,53 @@ entry contribution.
 
 ```kotlin
 // :feature-gallery — the feature's only screen-facing public API
-fun EntryProviderBuilder<NavKey>.addGalleryEntries(
+fun EntryProviderScope<NavKey>.addGalleryEntries(
     onNavigateBack: () -> Unit,
     onOpenPhoto: (PhotoId) -> Unit,   // outgoing nav as a callback — no cross-feature import
 ) {
     entry<GalleryRoute> { GalleryScreen(onNavigateBack = onNavigateBack, onOpenPhoto = onOpenPhoto) }
 }
 
-// :shared (App.kt) — owns the back stack and every target route
-val backStack = rememberNavBackStack(GalleryRoute)
-NavDisplay(
-    backStack = backStack,
-    entryProvider = entryProvider {
-        addGalleryEntries(
-            onNavigateBack = { backStack.removeLastOrNull() },
-            onOpenPhoto = { backStack.add(PhotoDetailRoute(it)) },
-        )
-        addPhotoDetailEntries(onNavigateBack = { backStack.removeLastOrNull() })
-    },
-)
+// :shared (AppNavigation.kt) — owns the back stack and every target route.
+// Off Android, rememberNavBackStack needs every NavKey registered for state saving —
+// an unregistered route throws SerializationException when the back stack is saved.
+private val navSavedStateConfiguration = SavedStateConfiguration {
+    serializersModule = SerializersModule {
+        polymorphic(NavKey::class) {
+            subclass(GalleryRoute::class, GalleryRoute.serializer())
+            subclass(PhotoDetailRoute::class, PhotoDetailRoute.serializer())
+            // kmp-forge:nav-routes
+        }
+    }
+}
+
+@Composable
+internal fun AppNavigation() {
+    val backStack = rememberNavBackStack(navSavedStateConfiguration, GalleryRoute)
+    val navigateBack: () -> Unit = { if (backStack.size > 1) backStack.removeLastOrNull() }
+    NavDisplay(
+        backStack = backStack,
+        onBack = navigateBack,
+        entryDecorators = listOf(
+            rememberSaveableStateHolderNavEntryDecorator(),
+            rememberViewModelStoreNavEntryDecorator(),   // koinViewModel() scoped per entry
+        ),
+        entryProvider = entryProvider {
+            addGalleryEntries(
+                onNavigateBack = navigateBack,
+                onOpenPhoto = { backStack.add(PhotoDetailRoute(it)) },
+            )
+            addPhotoDetailEntries(onNavigateBack = navigateBack)
+            // kmp-forge:nav-entries
+        },
+    )
+}
 ```
 
 Cross-feature navigation flows through these callbacks, so a feature never depends
 on another feature: `:feature-gallery` knows nothing about `PhotoDetailRoute` — the
 app wires `onOpenPhoto`. Adding a screen to an existing feature means adding another
-`entry<...> { ... }` line inside that feature's `addFooEntries`.
+`entry<...> { ... }` line inside that feature's `addFooEntries` **and** registering its route in `AppNavigation.kt`'s `SerializersModule`.
 
 ## Hybrid architecture rationale
 

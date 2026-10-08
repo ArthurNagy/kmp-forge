@@ -1,24 +1,30 @@
-package ${BASE_PACKAGE}.feature.${FEATURE_NAME}
+package ${BASE_PACKAGE}.feature.${FEATURE_NAME_PKG}
 
 import androidx.lifecycle.ViewModel
-import org.orbitmvi.orbit.ContainerHost
-import org.orbitmvi.orbit.viewmodel.container
+import org.orbitmvi.orbit.OrbitContainerHost
+import org.orbitmvi.orbit.viewmodel.orbitContainer
 
-internal class ${FEATURE_NAME_PASCAL}ViewModel : ViewModel(), ContainerHost<${FEATURE_NAME_PASCAL}State, Nothing> {
-
-    override val container = container<${FEATURE_NAME_PASCAL}State, Nothing>(${FEATURE_NAME_PASCAL}State.Initial)
+/**
+ * State-only Orbit host: the side-effect type is always `Nothing` (one-shot events are
+ * consumable slots on [${FEATURE_NAME_PASCAL}State], never `postSideEffect`).
+ */
+internal class ${FEATURE_NAME_PASCAL}ViewModel :
+    ViewModel(),
+    OrbitContainerHost<${FEATURE_NAME_PASCAL}State, ${FEATURE_NAME_PASCAL}State, Nothing> {
+    override val container = orbitContainer<${FEATURE_NAME_PASCAL}State, Nothing>(${FEATURE_NAME_PASCAL}State.Initial)
 
     fun load() = intent {
         reduce { state.copy(loading = true, error = null) }
-        // TODO: inject a use case from :domain via the constructor and consume its
-        //   Result<T, DomainError> with kotlin-result (import com.github.michaelbull.result.*):
+        // Replace with a use case from :domain, injected via the constructor, and consume its
+        // Result<T, DomainError> with kotlin-result (import com.github.michaelbull.result.onOk
+        // and com.github.michaelbull.result.onErr):
         //     getX()
-        //         .onSuccess { data -> reduce { state.copy(loading = false, /* ... = data */) } }
-        //         .onFailure { error -> reduce { state.copy(loading = false, error = error) } }
+        //         .onOk { data -> reduce { state.copy(loading = false, /* ... = data */) } }
+        //         .onErr { error -> reduce { state.copy(loading = false, error = error) } }
         reduce { state.copy(loading = false) }
     }
 
-    /** Paired with `state.pendingMessage` — UI calls this after rendering the toast/snackbar. */
+    /** Paired with `state.pendingMessage` — UI calls this after rendering the snackbar. */
     fun onPendingMessageConsumed() = intent {
         reduce { state.copy(pendingMessage = null) }
     }

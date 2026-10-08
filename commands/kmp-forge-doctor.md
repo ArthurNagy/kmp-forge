@@ -15,7 +15,7 @@ java -version 2>&1
 javac -version 2>&1
 ```
 
-Expected: 17 (or whatever CLAUDE.md / `gradle.properties` / `build-logic/build.gradle.kts` declares).
+Expected: a JDK able to run Gradle (17+). The Gradle **daemon** JDK is pinned separately by kmp.new's `gradle/gradle-daemon-jvm.properties` (Zulu 21 by default; Gradle provisions it via foojay if missing) — report it, and note that CI's `setup-java` must match it (`.github/workflows/*.yml`).
 
 ### 2. Check Xcode (if iOS is enabled)
 
@@ -32,19 +32,29 @@ Expected: 16.0+ (or per CLAUDE.md / Compose MP requirements).
 ls "$ANDROID_HOME/platforms/" 2>/dev/null
 ```
 
-Expected: `android-36` (or per `compileSdk` declared in `androidApp/build.gradle.kts`, the thin Android application module; the shared Android library target's `compileSdk` lives in `shared/build.gradle.kts`).
+Expected: the `android-compileSdk` platform from `gradle/libs.versions.toml` (kmp.new: `37`). Remediation: `android sdk install platforms/android-<N>` (Android CLI) or `sdkmanager "platforms;android-<N>"`.
 
-### 4. Check Gradle wrapper version
+### 3b. Android CLI (optional, recommended)
+
+```bash
+command -v android && android --version && android info
+```
+
+`android` is Google's Android CLI: emulator management (`android emulator list/start/stop`), install + launch (`android run --apks … --device <serial>`), UI inspection (`android layout`, `android screen capture`) and SDK management (`android sdk install …`). kmp-forge's device-verification steps (docs/testing.md § Running on a device or emulator) use it. If missing, report ⚠ and print the installer for the host (macOS arm64: `curl -fsSL https://dl.google.com/android/cli/latest/darwin_arm64/install.sh | bash`; macOS Intel: `…/darwin_x86_64/install.sh`; Linux: `…/linux_x86_64/install.sh`). Also list attached devices — a **physical** device is the user's phone: never install to it without asking.
+
+### 4. Check Gradle wrapper version + toolchain floor
 
 ```bash
 ./gradlew --version
+grep distributionUrl gradle/wrapper/gradle-wrapper.properties
+grep -E '^agp *=' gradle/libs.versions.toml
 ```
 
-Expected: as declared in `gradle/wrapper/gradle-wrapper.properties`.
+Expected: Gradle **≥ 9.8.1** and AGP (`agp`) **≥ 9.4.1** — kmp-forge's floor (`MIN_GRADLE` / `MIN_AGP` in `scripts/apply-overlay.sh`). Below it: ⚠, remediation `bash "${CLAUDE_PLUGIN_ROOT}/scripts/apply-overlay.sh" pin-toolchain .` (raises both, never downgrades; `--ios` / `--web` also raise the Gradle / Kotlin daemon heaps those targets need).
 
 ### 5. Check Kotlin version
 
-Read `gradle/libs.versions.toml` → `kotlinGradlePlugin`. Cross-reference with what's actually applied in `build-logic/build.gradle.kts`.
+Read `gradle/libs.versions.toml` → `[versions] kotlin` (the key kmp.new's catalog owns; build-logic's `kotlin-gradle-plugin` entry references it via `version.ref = "kotlin"`, so both always match).
 
 ### 6. Check signing config (if `signing.properties` exists)
 
@@ -60,7 +70,7 @@ Read `gradle/libs.versions.toml` → `kotlinGradlePlugin`. Cross-reference with 
 
 ### 8. Check Compose MP version
 
-Read `gradle/libs.versions.toml` → `composeGradlePlugin`. Cross-reference with what's compatible with declared Kotlin version (compose-multiplatform release notes).
+Read `gradle/libs.versions.toml` → `[versions] composeMultiplatform` (and `material3`, which kmp.new pins to a build matched to it). Cross-reference with what's compatible with the declared Kotlin version (compose-multiplatform release notes).
 
 ### 9. Optional: `./gradlew tasks` smoke test
 
@@ -77,14 +87,15 @@ Report per-section: ✓ OK / ⚠ Drift (expected vs actual) / ✗ Missing.
 
 Example:
 ```
-✓ JDK: Temurin 17.0.11 (matches expected 17)
-✓ Xcode: 16.2 (matches expected 16+)
-⚠ Android SDK: api-36 expected, found api-35. Install with: sdkmanager "platforms;android-36"
-✓ Gradle wrapper: 8.13
-✓ Kotlin: 2.2.20
+✓ JDK: Zulu 21.0.8 (Gradle daemon toolchain: Zulu 21)
+✓ Xcode: 27.0 (matches expected 16+)
+⚠ Android SDK: api-37 expected, found api-36. Install with: android sdk install platforms/android-37
+✓ Android CLI: 1.0 (devices: emulator-5554)
+✓ Gradle wrapper: 9.8.1 (floor 9.8.1) · AGP 9.4.1 (floor 9.4.1)
+✓ Kotlin: 2.4.20
 ✗ signing.properties: not present. Required for release builds — see docs/secrets.md
 ✓ git hooks: pre-commit installed, gitleaks on PATH
-✓ Compose MP: 1.10.0 (compatible with Kotlin 2.2.20)
+✓ Compose MP: 1.12.1 (compatible with Kotlin 2.4.20)
 ```
 
 Exit with a summary count of OK / Drift / Missing.

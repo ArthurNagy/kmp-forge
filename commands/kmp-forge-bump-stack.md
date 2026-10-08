@@ -14,7 +14,9 @@ Queries Maven Central + Google Maven for the latest stable versions of every loc
 bash ${CLAUDE_PLUGIN_ROOT}/scripts/fetch-latest-versions.sh toml > /tmp/kmp-forge-latest.toml
 ```
 
-This emits a `[versions]` block with the latest stable version for every key in the locked stack (orbit, koin, coil, ktor, kermit, kotlinx-*, androidx-*, sqldelight, turbine, detekt, kotlin, agp, compose-*).
+This emits a `[versions]` block keyed exactly like the project's catalog: the toolchain keys kmp.new owns (`kotlin`, `agp`, `composeMultiplatform`, `androidx-lifecycle`, `kotlinx-coroutines`) plus the overlay's keys (`orbitMvi`, `koin`, `coil`, `ktor`, `kermit`, `kotlinxDatetime`, `kotlinxSerialization`, `androidxNavigation3`, `androidxDatastore`, `sqldelight`, `turbine`, `kotlinResult`, `store`, `detekt`, `spotless`, `ktlint`, `kover`). "Latest" means the highest purely numeric release in version order — `-alpha`/`-beta`/`-RC`/`-compat` builds are skipped, except for keys whose pin already tracks a pre-release line (`store`). `material3` is not reported — bump it by hand together with `composeMultiplatform`.
+
+It also emits a `[wrapper]` section with the latest stable Gradle release (`gradle = "…"`) — the wrapper isn't a catalog key.
 
 ### 2. Read the current project catalog
 
@@ -37,9 +39,9 @@ Use `AskUserQuestion` to confirm the bump, showing the full list of changes:
 
 ```
 Libraries to bump:
-  - orbitMvi: 9.0.0 → 9.1.0
-  - coil: 3.1.0 → 3.2.0
-  - ktor: 3.1.2 → 3.2.0
+  - orbitMvi: 12.0.1 → 12.1.0
+  - coil: 3.6.3 → 3.7.0
+  - ktor: 3.6.0 → 3.7.0
 
 Continue?
 ```
@@ -47,6 +49,15 @@ Continue?
 ### 5. Apply the bump
 
 Use the `Edit` tool with `replace_all = false` to update each `[versions]` entry in `PROJECT_LIBS`. Use unique anchor text (the full `key = "old_version"` line) for safety.
+
+If `[wrapper] gradle` is newer than the version in `gradle/wrapper/gradle-wrapper.properties`'s `distributionUrl`, include it in the confirmation and update it the supported way — run the wrapper task **twice** (the second run regenerates the wrapper jar/scripts with the new version):
+
+```bash
+./gradlew wrapper --gradle-version <latest> --distribution-type bin
+./gradlew wrapper --gradle-version <latest> --distribution-type bin
+```
+
+Never go below kmp-forge's floor (Gradle 9.8.1 / AGP 9.4.1 — `pin-toolchain` in `scripts/apply-overlay.sh`).
 
 ### 6. Build to verify
 
@@ -68,9 +79,9 @@ Print a Conventional Commit message ready to use:
 ```
 chore(deps): bump locked stack to latest stable
 
-- orbitMvi 9.0.0 → 9.1.0
-- coil 3.1.0 → 3.2.0
-- ktor 3.1.2 → 3.2.0
+- orbitMvi 12.0.1 → 12.1.0
+- coil 3.6.3 → 3.7.0
+- ktor 3.6.0 → 3.7.0
 ```
 
 User commits when they're ready (don't auto-commit — give them a chance to amend after manual review).
@@ -79,4 +90,4 @@ User commits when they're ready (don't auto-commit — give them a chance to ame
 
 - This is the **only** automated dependency-update path in kmp-forge. No Renovate/Dependabot.
 - Versions are bumped one project at a time. If you have multiple kmp-forge projects, run this in each.
-- For `kotlinGradlePlugin` / `androidGradlePlugin` major bumps, the build will frequently break — these often require breaking-change handling in convention plugins. Surface the change clearly.
+- For `kotlin` / `agp` major bumps, the build will frequently break — these often require breaking-change handling in convention plugins. Surface the change clearly. An `agp` bump can also require a newer Gradle wrapper (`gradle/wrapper/gradle-wrapper.properties`).

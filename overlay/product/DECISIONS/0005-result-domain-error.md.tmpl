@@ -26,7 +26,7 @@ suspend operator fun invoke(...): Result<Data, DomainError>
 where `DomainError` is a sealed type local to that use case (or scoped to the domain area). UI exhaustively maps the error in state.
 
 - **Gradle coordinate**: `com.michael-bull.kotlin-result:kotlin-result` (Maven Central). `kotlin-result-coroutines` adds `coroutineBinding { }` for multi-step compositions.
-- **Kotlin import package**: `com.github.michaelbull.result.*` (`Ok`, `Err`, `onSuccess`, `onFailure`, `fold`, `map`, `mapError`, `andThen`, `getOrElse`, …). Note the coordinate and the package differ.
+- **Kotlin import package**: `com.github.michaelbull.result` (`Ok`, `Err`, `onOk`, `onErr`, `fold`, `map`, `mapError`, `andThen`, `getOrElse`, … — import members explicitly; 2.x deprecates `onSuccess`/`onFailure`). Note the coordinate and the package differ.
 - Declared `api` in `:domain` so the `Result` type leaks transitively to `:data` and `:feature-*`.
 
 ```kotlin
@@ -41,7 +41,7 @@ suspend operator fun invoke(id: UserId): Result<User, DomainError> =
 ## Consequences
 
 - Easier: failure modes visible in signatures; UI matches every branch exhaustively; no surprise exceptions; rich combinators out of the box; `coroutineBinding` covers multi-step workflows without Arrow.
-- Harder: one small dependency. The type is named `Result`, which **shadows `kotlin.Result`** — import `com.github.michaelbull.result.*` consistently and avoid `runCatching` (which returns the stdlib type).
-- Reviewer enforces: use cases return `Result<T, DomainError>` — never throw; ViewModels use `onSuccess`/`onFailure` and `reduce { state.copy(error = ...) }` rather than `try/catch` inside `intent {}`; `:domain` never throws checked or unchecked business errors; no careless `.get()!!` / `unwrap()`.
+- Harder: one small dependency. The type is named `Result`, which **shadows `kotlin.Result`** — import `com.github.michaelbull.result.Result` consistently and avoid `runCatching` (which returns the stdlib type).
+- Reviewer enforces: use cases return `Result<T, DomainError>` — never throw; ViewModels use `onOk`/`onErr` and `reduce { state.copy(error = ...) }` rather than `try/catch` inside `intent {}`; `:domain` never throws checked or unchecked business errors; no careless `.get()!!` / `unwrap()`.
 
 If a project grows to need a full effect system (typed errors across many composed steps, context receivers), supersede this ADR with one adopting Arrow Either + Raise.

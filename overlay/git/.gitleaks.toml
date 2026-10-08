@@ -7,7 +7,7 @@ useDefault = true
 [allowlist]
 description = "Common false-positive locations for KMP+Compose projects"
 paths = [
-    '''composeApp/src/.*/composeResources/.*''',  # Compose MP Resources (icons, strings)
+    '''[^/]+/src/[^/]+/composeResources/.*''',     # Compose MP Resources (icons, strings) — :shared, :feature-*, …
     '''.*build/.*''',                              # Build outputs
     '''gradle/wrapper/.*''',                       # Gradle wrapper
     '''.*\.lock''',                                # Lock files

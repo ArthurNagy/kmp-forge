@@ -33,14 +33,19 @@ APP_NAME=Foo BASE_PACKAGE=com.foo.app BASE_PACKAGE_PATH=com/foo/app \
 bash scripts/apply-overlay.sh patch-libs /path/to/project \
   overlay/gradle/libs.versions.toml.additions.tmpl
 
-# Query Maven Central / Google Maven for latest stable versions
+# Raise a project to the toolchain floor (AGP >= 9.4.1, Gradle >= 9.8.1; --ios: daemon heap)
+bash scripts/apply-overlay.sh pin-toolchain /path/to/project --ios
+
+# Query Maven Central / Google Maven (+ services.gradle.org) for latest stable versions
 bash scripts/fetch-latest-versions.sh toml   # or `json`
 
-# Print kmp.new wizard instructions
-bash scripts/kmp-new-url.sh Foo com.foo.app android,ios ktor,sqldelight
+# Download a fresh project from kmp.jetbrains.com's generator (no browser) / print the
+# pre-filled wizard URL (manual fallback)
+bash scripts/kmp-new.sh download Foo com.foo.app ios,desktop /tmp/kmp-forge-scratch/Foo
+bash scripts/kmp-new.sh url ios,desktop
 ```
 
-End-to-end validation of `/kmp-forge-init` requires a real kmp.jetbrains.com download — no test runner here.
+End-to-end validation of `/kmp-forge-init` = `kmp-new.sh download` + the init steps + `./gradlew build koverVerify` on the result — no test runner here. Validate at least Android+iOS and an all-platforms (incl. web) scaffold, plus a feature added via the add-feature recipe.
 
 ## Local plugin install (live testing)
 
@@ -61,16 +66,21 @@ skills/                      Workflow skills auto-triggered in scaffolded projec
                               github-release-artifacts, mvp-spec-authoring, adr-authoring,
                               driving-ci-green)
 scripts/                     Bash renderers/patchers invoked by commands
-  apply-overlay.sh             render | render-module | patch-settings | patch-libs
-  kmp-new-url.sh               prints kmp.jetbrains.com wizard instructions
-  fetch-latest-versions.sh     queries Maven Central / Google Maven for /kmp-forge-bump-stack
+  apply-overlay.sh             render | render-module | patch-settings | patch-libs | pin-toolchain
+  kmp-new.sh                   download a project from kmp.jetbrains.com's generator | print pre-filled wizard URL
+  fetch-latest-versions.sh     queries Maven Central / Google Maven / services.gradle.org for /kmp-forge-bump-stack
 overlay/                     Templated files copied into scaffolded projects
   root/                        Top-level project files (CLAUDE.md.tmpl, .gitignore, detekt.yml, cliff.toml, .editorconfig)
   ci/                          GitHub Actions workflows (pr.yml.tmpl, release.yml.tmpl)
   git/                         PR/issue templates, .gitleaks.toml, pre-commit hook
   product/                     MVP_SPEC.md.tmpl + DECISIONS/ (ADR skeletons)
-  modules/{ui,domain,data,feature}/   KMP module skeletons (`src/commonMain/kotlin/**/*.kt.tmpl`)
-  build-logic/                 Gradle convention plugin (`kmp-forge.kmp.library` precompiled script)
+  modules/{ui,domain,data,feature,testing}/   KMP module skeletons (`src/<sourceSet>/kotlin/**/*.kt.tmpl`;
+                               :testing = shared test doubles, a commonTest-only dependency)
+  shared/                      Composition root rendered into kmp.new's :shared (App.kt, AppModules.kt,
+                               AppNavigation.kt with `// kmp-forge:` markers, Home.kt placeholder)
+  optional/ktor/               Opt-in overlays rendered into :data by init step 6
+  build-logic/                 Precompiled-script conventions: `kmp-forge.kmp.library` (every shared module)
+                               + `kmp-forge.root` (root project: Kover aggregation + 75% gate)
   gradle/libs.versions.toml.additions.tmpl   Section-aware additions merged into existing catalog
   autoloop/                    Autonomous-loop overlay installed by /kmp-forge-add-autoloop
                                (merge-guard.sh 4-mode PreToolUse hook + settings.json wiring,
@@ -86,15 +96,16 @@ docs/                        Source-of-truth conventions linked from every scaff
 `/kmp-forge-init` orchestrates:
 
 1. `AskUserQuestion` gathers app name, base package, platforms, opt-in libs, license, git-init choice.
-2. `scripts/kmp-new-url.sh` prints wizard instructions — JetBrains' kmp.new is a Next.js SPA with **no URL query-param support**, so we cannot pre-fill; the user fills it manually and downloads the zip.
-3. Unzip into target dir. The user's machine path normally contains a space (`~/Development/Personal projects/<APP>`) — always quote paths.
-4. Export overlay env vars (`APP_NAME`, `BASE_PACKAGE`, `BASE_PACKAGE_PATH`, `PLATFORM_LIST`, `BUILD_COMMANDS`, `MODULE_LIST`, `FEATURE_LIST`, `OPTIONAL_LIBS`, `SCAFFOLD_DATE`, etc.). These feed `envsubst` inside `apply-overlay.sh render`.
+2. `scripts/kmp-new.sh download` fetches the project straight from kmp.jetbrains.com's generator (`/generateKmtProject` — the GET the wizard's own form submits; Compose UI on every target, tests included) and unzips it into the target dir. The wizard has **no library picker** any more. If the generator fails (exit 2), `kmp-new.sh url` prints the wizard URL with the targets pre-selected (name/ID still typed by hand) and the user downloads manually. The user's machine path normally contains a space (`~/Development/Personal projects/<APP>`) — always quote paths.
+3. (fallback only) unzip a manual download into the target dir.
+4. Export overlay env vars (`APP_NAME`, `APP_NAME_LOWER`, `BASE_PACKAGE`, `BASE_PACKAGE_PATH`, `PLATFORM_LIST`, `BUILD_COMMANDS`, `MODULE_LIST`, `FEATURE_LIST`, `OPTIONAL_LIBS`, `SCAFFOLD_DATE`, `KMP_TARGETS`, etc.) and persist them with `typeset -p … > "${TMPDIR:-/tmp}/kmp-forge-init.env"` — Bash tool calls don't share shell state, so every later block `source`s that file and guards with `${VAR:?}`. They feed `envsubst` inside `apply-overlay.sh render`.
 5. `apply-overlay.sh` sub-commands in sequence:
    - `render <src> <dest>` — walks src, runs `envsubst` on every `.tmpl` (strips suffix), copies non-tmpl as-is. `envsubst` only substitutes the variables listed in `OVERLAY_VARS` (top of the script), so shell variables in templates (`$RUNNER_TEMP` in release.yml) survive.
    - `render-module <module> <src> <dest> <base-pkg-path>` — same, but rewrites `src/<sourceSet>/kotlin/X.kt` → `src/<sourceSet>/kotlin/<base-pkg-path>/<module-path>/X.kt` for every source set. Dots in `<module>` become directories (`feature.gallery`); `""` means no module segment (init renders `overlay/shared/` — the composition root — this way).
    - `patch-settings <project> <module-csv>` — idempotently appends `include(":x")` to `settings.gradle.kts`.
    - `patch-libs <project> <additions-toml>` — Python-driven section-aware merge into `gradle/libs.versions.toml`: parses `[versions]/[libraries]/[plugins]`, appends only missing keys, preserves preamble + existing order.
-6. Manual `Edit`-tool steps: insert `includeBuild("build-logic")` inside the wizard-generated `pluginManagement { ... }` block; add `id("kmp-forge.kmp.library") apply false` to the root `build.gradle.kts` `plugins { }` (one classloader for build-logic — Spotless 8's shared build service fails otherwise); wire `:shared` (serialization plugin + `project(":ui"|":domain"|":data")` + Koin/Nav 3 deps for the composition root).
+   - `pin-toolchain <project> [--ios]` — raises the catalog's `agp` to ≥ `MIN_AGP` and the Gradle wrapper to ≥ `MIN_GRADLE` (fetching the distribution sha256), never downgrading; `--ios` raises the daemon heap to 6 GiB (Kotlin/Native framework links run in the daemon).
+6. Manual `Edit`-tool steps: insert `includeBuild("build-logic")` inside the wizard-generated `pluginManagement { ... }` block; add `id("kmp-forge.root")` to the root `build.gradle.kts` `plugins { }` (Kover gate + one classloader for build-logic — Spotless 8's shared build service fails otherwise); wire `:shared` (serialization plugin + `project(":ui"|":domain"|":data")` + Koin/Nav 3 deps for the composition root); for web, drop DataStore from `:data` (no `js` variant); wire opt-in Ktor/SQLDelight into `:data`.
 7. Optional `git init` + gitleaks pre-commit hook install + optional `gh repo create --private`.
 
 `/kmp-forge-add-feature <name>` delegates to the `kmp-feature-builder` subagent: renders `overlay/modules/feature/` into `feature-<name>/`, renames `Feature*` → `<Name>*` files, wires a matching `:domain` use case if found via grep, wires the feature into the `:shared` composition root (rendered by init from `overlay/shared/`) at its `// kmp-forge:` markers — Koin module into `AppModules.kt`, route into `AppNavigation.kt`'s `SerializersModule`, `add<Name>Entries(...)` into `NavDisplay`'s `entryProvider { }` — runs `./gradlew :feature-<name>:build :shared:build` and reports.
@@ -144,7 +155,7 @@ There is no build system here. Work is:
 - Conventional Commits (see `docs/git-conventions.md`). Releases tagged from `main`, changelog rendered by git-cliff (see `cliff.toml` analogue if added).
 - When adding a new overlay variable, update all three: (a) the `.tmpl` that uses it, (b) `OVERLAY_VARS` in `scripts/apply-overlay.sh` (anything not listed there is left verbatim), and (c) the `commands/kmp-forge-init.md` step 4 `export` block (or the add-feature/add-autoloop export for those templates). Unset envsubst vars silently become empty strings — easy footgun.
 - When changing a locked-stack rule, update **all four** in lockstep: `docs/<area>.md` (canonical), `agents/kmp-reviewer.md` (enforcement), `agents/kmp-feature-builder.md` (generation), `agents/kmp-migrator.md` (refactor recipe — detect/transform/verify for that rule), plus the relevant template under `overlay/modules/feature/` if shape changes. The v0.2 release in `CHANGELOG.md` is the example: state-only events touched 6 surfaces.
-- When changing autonomous-loop material, update in lockstep: `commands/kmp-forge-next-increment.md` (orchestrator), the worker agents (`agents/kmp-loop-*.md`, `agents/kmp-spec-critic.md`), `overlay/autoloop/` (merge-guard.sh + templates), and `docs/autoloop.md` (canonical). The `### 🤖` review-marker string is a contract: the orchestrator posts it, `merge-guard.sh` greps it — change both together or the guard denies every merge. Bump the `# version:` line in `merge-guard.sh` whenever the script changes so `/kmp-forge-add-autoloop` re-runs can detect stale project copies.
+- When changing autonomous-loop material, update in lockstep: `commands/kmp-forge-next-increment.md` (orchestrator), the worker agents (`agents/kmp-loop-*.md`, `agents/kmp-spec-critic.md`), `overlay/autoloop/` (merge-guard.sh + templates), and `docs/autoloop.md` (canonical). The `### 🤖 <gate> — round r/3 — <VERDICT>` review header is a contract between the orchestrator (posts it), its Phase-0 resume jq (parses it), and `merge-guard.sh` (checks the last ` — ` field is `PASS`, the author is the loop account, and the review's commit is the PR head) — change all three together or the guard denies every merge. The hook command in `overlay/autoloop/settings.json` must stay quoted (`bash "${CLAUDE_PROJECT_DIR}/…"`) — unquoted, it splits on paths with spaces and the guard silently never runs. Bump the `# version:` line in `merge-guard.sh` whenever the script changes so `/kmp-forge-add-autoloop` re-runs can detect stale project copies.
 - Plugin docs (`docs/*.md`) are the source of truth — scaffolded `CLAUDE.md.tmpl` links to them on GitHub `main`, so docs ship with the plugin via the repo, not via copy.
 - Paths in user-facing instructions must quote (`"$TARGET"`) — the user's Personal projects directory contains a space.
 - Do NOT push to GitHub or enable branch protection from inside any command — the user opts into both manually.

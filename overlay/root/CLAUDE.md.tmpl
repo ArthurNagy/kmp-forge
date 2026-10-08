@@ -37,6 +37,11 @@ Optional in this project: ${OPTIONAL_LIBS}.
 - iOS troubleshooting: https://github.com/arthurnagy/kmp-forge/blob/main/docs/ios-troubleshooting.md
 - Autonomous build loop (opt-in): https://github.com/arthurnagy/kmp-forge/blob/main/docs/autoloop.md
 
+Running the Android app (install, launch, UI checks, screenshots) goes through Google's Android CLI
+(`android emulator start`, `android run --device <serial>`, `android layout`, `android screen capture`)
+— see [testing.md § Running on a device or emulator](https://github.com/arthurnagy/kmp-forge/blob/main/docs/testing.md#running-on-a-device-or-emulator).
+Use an emulator; never install to a physical device without asking first.
+
 Prefer kmp-forge slash commands over hand-rolled scaffolding:
 `/kmp-forge-add-feature`, `/kmp-forge-add-screen`, `/kmp-forge-add-platform`, `/kmp-forge-add-library`, `/kmp-forge-bump-stack`, `/kmp-forge-spec`, `/kmp-forge-doctor`, `/kmp-forge-add-autoloop`.
 

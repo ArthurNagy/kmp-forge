@@ -18,7 +18,7 @@
 [versions]
 # --- toolchain fallbacks (skipped when the catalog already declares the key) ---
 kotlin = "2.4.20"
-agp = "9.1.1"
+agp = "9.4.1"
 composeMultiplatform = "1.12.1"
 material3 = "1.12.0-alpha03"
 androidx-lifecycle = "2.11.0"
@@ -34,11 +34,10 @@ ktor = "3.6.0"
 kermit = "2.2.0"
 kotlinxDatetime = "0.8.0"
 kotlinxSerialization = "1.11.0"
-# Nav 3 is versioned independently on each side: the JetBrains UI port (androidxNavigation3)
-# declares which Google runtime it was built against (ui 1.1.2 → runtime 1.1.7).
-# fetch-latest-versions.sh derives androidxNavigation3Runtime from the UI port's metadata.
+# Nav 3: ONE artifact — the JetBrains Compose Multiplatform port. It re-exports the matching
+# Google navigation3-runtime (NavKey, entryProvider, rememberNavBackStack…) as an `api`
+# dependency on every platform, so the runtime is never declared separately.
 androidxNavigation3 = "1.1.2"
-androidxNavigation3Runtime = "1.1.7"
 androidxDatastore = "1.2.1"
 sqldelight = "2.4.1"
 turbine = "1.2.1"
@@ -105,10 +104,8 @@ androidx-lifecycle-viewmodel = { module = "org.jetbrains.androidx.lifecycle:life
 androidx-lifecycle-viewmodelCompose = { module = "org.jetbrains.androidx.lifecycle:lifecycle-viewmodel-compose", version.ref = "androidx-lifecycle" }
 # Scopes each Nav 3 entry's ViewModels (koinViewModel()) to that entry: cleared when it's popped.
 androidx-lifecycle-viewmodel-navigation3 = { module = "org.jetbrains.androidx.lifecycle:lifecycle-viewmodel-navigation3", version.ref = "androidx-lifecycle" }
-# Nav 3: runtime stays on Google's androidx.navigation3 (a true KMP artifact — iOS/macOS/js/wasm);
-# the UI port lives under org.jetbrains.androidx.navigation3 because Google's navigation3-ui is
-# Android/JVM-only. Separate version refs — see [versions].
-androidx-navigation3-runtime = { module = "androidx.navigation3:navigation3-runtime", version.ref = "androidxNavigation3Runtime" }
+# Nav 3: the JetBrains port is the only Nav 3 artifact the stack declares (Google's own
+# navigation3-ui is Android/JVM-only). It brings the matching navigation3-runtime transitively.
 androidx-navigation3-ui = { module = "org.jetbrains.androidx.navigation3:navigation3-ui", version.ref = "androidxNavigation3" }
 androidx-datastore-core = { module = "androidx.datastore:datastore-core", version.ref = "androidxDatastore" }
 androidx-datastore-preferences-core = { module = "androidx.datastore:datastore-preferences-core", version.ref = "androidxDatastore" }

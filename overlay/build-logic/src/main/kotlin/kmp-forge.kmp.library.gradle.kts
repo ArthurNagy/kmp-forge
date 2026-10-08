@@ -1,12 +1,13 @@
 import org.gradle.api.tasks.testing.AbstractTestTask
 import org.jetbrains.kotlin.gradle.dsl.JvmTarget
+import org.jetbrains.kotlin.gradle.targets.js.ir.KotlinJsIrTarget
 
 /*
  * Convention applied to every shared KMP library module (:ui, :domain, :data, :feature-*).
  *
  * Implemented as a PRECOMPILED SCRIPT PLUGIN (not a Kotlin class plugin) on purpose:
  * Gradle's kotlin-dsl compiles build-logic with the Kotlin version embedded in Gradle
- * (Kotlin 2.2.0 in Gradle 9.1), which cannot read the newer metadata of the Kotlin
+ * (Kotlin 2.2.x in Gradle 9.x), which cannot read the newer metadata of the Kotlin
  * Gradle plugin the project uses (2.4.x). A class plugin that references KGP types
  * (KotlinMultiplatformExtension, …) therefore fails to compile. A precompiled script
  * plugin uses generated type-safe accessors — the same mechanism that lets an ordinary
@@ -19,11 +20,10 @@ import org.jetbrains.kotlin.gradle.dsl.JvmTarget
  * Project property `kmpForge.targets` overrides the non-Android target set, comma-separated,
  * e.g. "iosArm64,iosSimulatorArm64,jvm,js,wasmJs".
  *
- * The ROOT build.gradle.kts must declare `id("kmp-forge.kmp.library") apply false` (init/adopt
- * add it). That loads this plugin — and the Spotless/Detekt/Kover plugins it bundles — once,
- * in the root classloader. Without it every module loads its own copy, and Spotless 8's
- * shared build service fails configuration ("Cannot set the value of task ':x:spotlessKotlin'
- * property 'taskService' ... loaded with ... project-y").
+ * The ROOT build.gradle.kts applies `id("kmp-forge.root")` (init/adopt add it): that loads
+ * build-logic — and the Spotless/Detekt/Kover plugins bundled here — once, in the root
+ * classloader (otherwise Spotless 8's shared build service fails configuration), and owns the
+ * aggregated Kover gate. See kmp-forge.root.gradle.kts.
  */
 
 plugins {
@@ -54,6 +54,14 @@ kotlin {
     if ("wasmJs" in kmpTargets) {
         @OptIn(org.jetbrains.kotlin.gradle.ExperimentalWasmDsl::class)
         wasmJs { browser() }
+    }
+
+    // Compose UI on js/wasmJs: the module's tests load Skiko from a webpack bundle, which only
+    // exists when the target declares an executable binary (Compose's
+    // checkComposeUiTestConfigurationFor<Target> fails the build otherwise). Non-Compose modules
+    // (:domain, :data, :testing) stay plain libraries.
+    pluginManager.withPlugin("org.jetbrains.compose") {
+        targets.withType<KotlinJsIrTarget>().configureEach { binaries.executable() }
     }
 
     sourceSets.configureEach {

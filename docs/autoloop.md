@@ -18,7 +18,7 @@ The first two are useful entirely without the loop: the skill in any supervised 
 /loop /kmp-forge-next-increment
 ```
 
-One `/kmp-forge-next-increment` invocation = one full increment. `/loop` (self-paced) re-fires it after each increment. Stops on: empty queue, `openspec/STOP`, or escalation. Per-project configuration (local gate command, backlog path, queue-empty handoff) lives in `openspec/AUTOLOOP.md`'s `## Loop configuration` section, which the orchestrator reads at Phase 0.
+One `/kmp-forge-next-increment` invocation = one full increment. `/loop` (self-paced) re-fires it after each increment. Stops on: empty queue, the kill-switch file (default `openspec/STOP`), or escalation. Per-project configuration (local gate command, backlog path, queue-empty handoff) lives in `openspec/AUTOLOOP.md`'s `## Loop configuration` section, which the orchestrator reads at Phase 0.
 
 ## Why every phase runs in a subagent
 
@@ -36,47 +36,56 @@ So the orchestrator is a thin state machine: it reads the backlog, decides, post
 
 The orchestrator keeps only each worker's structured result block — a few hundred tokens per phase, roughly 3–5k per increment.
 
-This also makes the loop **crash-resumable**: no phase state is held in the conversation. The orchestrator re-derives where it is from `openspec list`, `gh pr list`, and the 🤖 verdict reviews already posted to the PR. Interrupt it anywhere and re-launch; it picks up at the right phase.
+This also makes the loop **crash-resumable**: no phase state is held in the conversation. The orchestrator re-derives where it is from `openspec list`, the docs and code PRs found **by head branch in every state** (`gh pr list --head spec/<slug> --state all` — so a PR merged just before a crash is seen as merged, not re-run), and the 🤖 verdict reviews already posted to the open PR, including which commit each was posted on. It checks out the open PR's branch before re-running a gate (the spec gate reads the proposal from the working tree). Interrupt it anywhere and re-launch; it picks up at the right phase.
 
 ## The two gates
 
 | Gate | Who | Checks |
 |---|---|---|
 | Spec (docs PR) | `kmp-spec-critic` | scope vs backlog, layer placement per [architecture.md](architecture.md), locked project invariants (project CLAUDE.md), dependency safety, `openspec validate`, task executability |
-| Code (code PR) | `kmp-loop-code-reviewer` (correctness, via `/code-review high --comment`) + `kmp-reviewer` (locked-stack conventions) | blocking = correctness bugs, locked-invariant violations, missing tests, layer violations, secrets |
+| Code (code PR) | `kmp-loop-code-reviewer` (correctness, via `/code-review high --comment <pr>`) + `kmp-reviewer` (locked-stack conventions, on `origin/main...origin/feat/<slug>`) | blocking = correctness bugs, locked-invariant violations, missing tests, layer violations, secrets |
 
-Both gates **post their verdict to the PR** (`### 🤖 … — cycle n/2 — VERDICT`) — the audit trail, the resume mechanism, and what the merge guard checks. The loop runs as the user's own GitHub account and GitHub blocks self-*approval*, so verdicts post as Comment-style reviews; the merge decision is the orchestrator's, gated on "no blocking findings".
+Both gates **post their verdict to the PR** (`### 🤖 <gate> — round r/3 — VERDICT`) — the audit trail, the resume mechanism, and what the merge guard checks.
+
+The code gate **fails closed**: it is always given the PR number and the exact diff range (without a target, `/code-review` reviews the empty local diff of a pushed branch — which would read as "no findings"). If the reviewer cannot establish a non-empty diff matching the PR head, it returns `ERROR`, and the loop escalates rather than passing. The loop runs as the user's own GitHub account and GitHub blocks self-*approval*, so verdicts post as Comment-style reviews; the merge decision is the orchestrator's, gated on "no blocking findings".
 
 A merge to `main` happens **only** when CI is green **and** the posted verdict is PASS. Otherwise the loop auto-fixes (≤2 tries) or stops and escalates — it never force-merges.
 
 ## Fix cycles
 
-A **fix cycle** is a gate verdict of `REVISE`/`CHANGES` that gets handed to `kmp-loop-fixer`. A trailing `PASS` that confirms the fixes is not a cycle. So a legal PR carries at most two non-PASS 🤖 reviews, optionally followed by a PASS. Cycle count is recovered on resume by counting the non-PASS 🤖 reviews on the PR.
+Each gate run on a PR is a **round** (at most 3). A non-PASS verdict (`REVISE`/`CHANGES`) in round 1 or 2 is handed to `kmp-loop-fixer` — a **fix cycle** — and followed by another round; a non-PASS verdict in round 3 escalates. So a legal PR carries at most two non-PASS 🤖 reviews before its PASS. On resume the round is recovered from the 🤖 reviews the loop's account posted, and whether the newest one was posted on the current head tells the orchestrator if its fix was already pushed.
 
 ## The merge guard
 
-Merging to `main` is the loop's one irreversible act, so "never force-merge" is also **code**: `.claude/hooks/merge-guard.sh` (installed by `/kmp-forge-add-autoloop`, source in `overlay/autoloop/`) runs as a `PreToolUse` hook on every Bash call — the orchestrator's and every subagent's. On a `gh pr merge` it independently re-checks GitHub: (1) every check concluded successfully, (2) the newest `### 🤖` gate review reads PASS. It fails closed when it cannot reach GitHub and is not fooled by whitespace or by the PR number's position.
+Merging to `main` is the loop's one irreversible act, so "never force-merge" is also **code**: `.claude/hooks/merge-guard.sh` (installed by `/kmp-forge-add-autoloop`, source in `overlay/autoloop/`) runs as a `PreToolUse` hook on every Bash, Write/Edit and `mcp__*` call — the orchestrator's and every subagent's (a subagent's calls carry an `agent_id`). Independently of the model it:
 
-Mode lives in `.claude/hooks/merge-guard.mode`, re-read on every invocation:
+- **re-checks every merge** — `gh pr merge` in any flag order or wrapper (`gh pr --repo o/r merge 7`, `bash -c '…'`, `$(…)`, `xargs`), `gh api` writes to `…/pulls/<n>/merge`, GraphQL merge mutations, MCP tools named `*merge*` — against GitHub: (1) every check on the head commit concluded successfully; (2) the newest review **posted by the loop's own GitHub account** whose body starts `### 🤖 ` has `PASS` as its verdict field, **and was posted on the PR's current head commit** (a PASS that predates later pushes is stale);
+- **denies** merges by subagents, `--admin`, force-pushes or deletes of `main`, `gh api` / MCP writes that update `main` directly, and any push to `main` from the orchestrator that touches more than loop bookkeeping (`openspec/**`, the configured backlog, the mode file — the backlog tick and the queue-empty archive);
+- **denies subagents writing the guard itself** — the script, its mode file, `.claude/settings*.json`;
+- **fails closed**: every GitHub call is time-boxed so the hook always finishes inside its `timeout` (Claude Code lets a tool call through when a hook times out or exits non-zero other than 2), and in the enforce modes an unreachable GitHub, an unresolvable PR, a missing `jq`, or an internal error denies the call.
+
+Mode lives in `.claude/hooks/merge-guard.mode` (tracked — project policy), re-read on every invocation:
 
 | Mode | Behavior |
 |---|---|
-| `log` | Observe only; record a verdict line to `merge-guard.log` evaluating both preconditions. **Install default.** |
-| `enforce-ci` | Deny any merge whose CI is not green. Gate reviews not evaluated — the guard as a general "Claude never merges a red PR" rule, usable without the loop. |
-| `enforce` | Deny any merge failing either precondition. Fails closed. **The loop's target mode.** |
+| `log` | Observe only; record a verdict line to `merge-guard.log` that evaluates every precondition as `enforce` would. **Install default.** |
+| `enforce-ci` | Deny any merge whose CI is not green, `--admin`, force-pushes/deletes of `main`, API ref writes, and subagent tampering. Gate reviews, callers and push contents are not evaluated — the guard as a general "Claude never merges a red PR" rule, usable without the loop. |
+| `enforce` | Everything above. Fails closed. **The loop's target mode.** |
 | `off` | Disabled. |
 
-**Trust ramp:** it installs in `log` so it cannot block a real merge before you have seen it agree with the loop. After an increment or two, `cut -f2,5,6 .claude/hooks/merge-guard.log` — every merge the loop performed should show `ALLOW`. Then `echo enforce > .claude/hooks/merge-guard.mode`. From then on the rule is enforced by the harness rather than trusted to the model — immune to compaction, to a confused subagent, and to future edits of the command body.
+**Trust ramp:** it installs in `log` so it cannot block a real merge before you have seen it agree with the loop. After an increment or two, `cut -f2,5,6 .claude/hooks/merge-guard.log` — every merge the loop performed should show `ALLOW`. Then `echo enforce > .claude/hooks/merge-guard.mode` and commit it. From then on the rule is enforced by the harness rather than trusted to the model — immune to compaction, to a confused subagent, and to future edits of the command body.
+
+**Wiring matters.** The hook command is `bash "${CLAUDE_PROJECT_DIR}/.claude/hooks/merge-guard.sh"`, quoted: an unquoted path splits on spaces, the hook exits 127, and Claude Code treats that as a non-blocking error — the guard would silently never run. `/kmp-forge-add-autoloop`'s smoke check runs the guard through the exact wired command string to catch this. The script's `# version:` header is bumped on every change, so a re-run of the installer can tell a stale project copy.
 
 ## Steering
 
-- **Reorder / edit / insert work:** edit `openspec/backlog.md`; the loop takes the topmost unchecked item next iteration.
-- **Emergency stop:** `touch openspec/STOP`; delete to resume.
+- **Reorder / edit / insert work:** edit `openspec/backlog.md`; the loop takes the topmost unchecked item next iteration, and commits your uncommitted backlog / runbook / guard-mode edits to `main` at its next Phase 0.
+- **Emergency stop:** create the kill-switch file (`kill-switch:` in `openspec/AUTOLOOP.md`, default `touch openspec/STOP`, gitignored); the loop checks it before every phase and every merge. Delete it to resume.
 - **Hard stop now:** interrupt `/loop` (Esc) or tell it to stop.
 
 ## When it escalates
 
-The loop prints a `⛔ ESCALATION` block (what failed, what was tried, repo state, the one decision needed) and stops when: CI is still red after 2 fix cycles; a gate returns BLOCK, or REVISE/CHANGES twice unresolved; a worker returns `RESULT: FAILED`; the next slice has an unmet `needs-human:` precondition (credentials, a URL — checked *before* proposing, never stubbed past); the merge guard denies a merge the loop believed was ready; or git state is dirty/conflicted.
+The loop prints a `⛔ ESCALATION` block (what failed, what was tried, repo state, the one decision needed) and stops when: CI is still red after 2 fix cycles; a gate returns BLOCK, or is still not PASS in round 3; the code gate returns ERROR (no verifiable diff); a worker returns `RESULT: FAILED`; the next slice has an unmet `needs-human:` precondition (credentials, a URL — checked *before* proposing, never stubbed past); the merge guard denies a merge the loop believed was ready; a human closed one of the slice's PRs; or the tree has uncommitted changes other than steering edits.
 
 ## Backlog format
 
@@ -94,7 +103,7 @@ The loop pops the first `- [ ]`, and ticks it `- [x] — PR #n, merged` when don
 
 ## Installing
 
-`/kmp-forge-add-autoloop` — checks preconditions (git, `gh` auth, CI workflow, `jq`, `openspec`), runs `openspec init --tools claude` if needed, seeds `openspec/AUTOLOOP.md` + `openspec/backlog.md`, installs the merge guard + `.claude/settings.json` wiring, and appends the CLAUDE.md section. The agents and the orchestrator command ship with the plugin — nothing per-project to copy, and plugin updates reach every project.
+`/kmp-forge-add-autoloop` — checks preconditions (git, `gh` auth + a reachable GitHub `origin`, a PR CI workflow, `jq`, `openspec`), runs `openspec init --tools claude` if needed, seeds `openspec/AUTOLOOP.md` + `openspec/backlog.md`, installs the merge guard + `.claude/settings.json` wiring (smoke-tested through the wired command), gitignores the audit log and the kill switch, and appends the CLAUDE.md section. The agents and the orchestrator command ship with the plugin — nothing per-project to copy, and plugin updates reach every project.
 
 ## Coexistence with supervised work
 
@@ -108,4 +117,6 @@ Direct edits remain right for: docs, formatting and build chores, and refactors 
 - **UI/UX slices should not auto-merge**: CI can't verify look and feel, and review agents can't judge UX unattended. Keep the loop on logic/state/data slices; gate UI slices for human review (open the PR, stop).
 - **Branch protection:** "require approvals" blocks the loop (GitHub forbids self-approval; gates post comment-reviews). Supported: no protection + guard in `enforce`, or required status checks with zero required approvals.
 - `/loop` and `/code-review` are Claude Code features the loop depends on; `kmp-loop-code-reviewer` falls back to reviewing the diff itself if `/code-review` is unavailable.
-- The `### 🤖` review marker is a contract shared by the orchestrator (posts it) and the merge guard (greps it) — a third-party review containing `🤖` on the same PR could confuse the newest-review check.
+- The `### 🤖 <gate> — round r/3 — <VERDICT>` header is a contract shared by the orchestrator (posts it), its resume logic (parses it), and the merge guard (checks it) — change all three together. The guard only trusts reviews posted by the loop's own GitHub account, so another reviewer's `🤖` comment cannot pass (or block) a merge.
+- **Least privilege.** The loop's worker agents declare explicit `tools:` (no MCP connectors; the code reviewer has no Write/Edit), because they read untrusted PR, CI and code text unattended. The guard blocks *subagents* from editing its files; the main conversation can still change its mode — that is the human's lever, and a downgrade shows up in `git diff` of the tracked mode file.
+- The guard sees tool calls only. It cannot stop a human (or a CI workflow with write access) from merging, and it does not cover tools you add later under names it does not match.

@@ -99,31 +99,58 @@ export TIMELINE=""
 
 ### 3. Phase A — safe-additive (automatic)
 
-These are purely additive and safe to run unconditionally:
+These only ever **add** — every copy below is guarded so an existing file is never replaced
+(existing ones go to scratch for a diff + hand-merge, like step 4):
 
 ```bash
 OVERLAY="${CLAUDE_PLUGIN_ROOT}/overlay"
 SH="${CLAUDE_PLUGIN_ROOT}/scripts/apply-overlay.sh"
+# copy_new <src> <dest>: copy only if dest is absent; otherwise print the diff for a hand-merge.
+copy_new() {
+    if [[ -e "$2" ]]; then
+        echo "=== exists, not replaced — diff (existing ← → kmp-forge): $2"
+        git --no-pager diff --no-index "$2" "$1" || true
+    else
+        mkdir -p "$(dirname "$2")" && cp "$1" "$2" && echo "added: $2"
+    fi
+}
 
 # Version catalog: additive merge — skips existing keys, appends under "# --- kmp-forge additions ---"
 bash "$SH" patch-libs "$TARGET" "$OVERLAY/gradle/libs.versions.toml.additions.tmpl"
 
-# Secrets hygiene
-cp "$OVERLAY/git/.gitleaks.toml" "$TARGET/.gitleaks.toml"
-cp "$OVERLAY/git/pre-commit-hook.sh" "$TARGET/.kmp-forge-pre-commit.sh"
+# Secrets hygiene: gitleaks config + pre-commit hook
+copy_new "$OVERLAY/git/.gitleaks.toml" "$TARGET/.gitleaks.toml"
+copy_new "$OVERLAY/git/pre-commit-hook.sh" "$TARGET/.kmp-forge-pre-commit.sh"
 chmod +x "$TARGET/.kmp-forge-pre-commit.sh"
+HOOK="$(git -C "$TARGET" rev-parse --git-path hooks/pre-commit)"; [[ "$HOOK" = /* ]] || HOOK="$TARGET/$HOOK"
+if [[ ! -e "$HOOK" ]]; then
+    mkdir -p "$(dirname "$HOOK")" && cp "$TARGET/.kmp-forge-pre-commit.sh" "$HOOK" && chmod +x "$HOOK" && echo "installed: pre-commit hook"
+elif ! grep -q "kmp-forge-pre-commit" "$HOOK"; then
+    echo "⚠ a pre-commit hook already exists ($HOOK) — chain ours instead of replacing it:"
+    echo '    "$(git rev-parse --show-toplevel)/.kmp-forge-pre-commit.sh" || exit 1'
+fi
 ```
 
-**Product docs** (`docs/MVP_SPEC.md`, `docs/DECISIONS/`) — only fill gaps, never clobber an existing spec:
+(For an existing hook, add that line with the Edit tool after confirming with the user; for a hook
+manager like Husky/lefthook/pre-commit, register the script there instead.)
+
+**Toolchain floor** — ask first (`AskUserQuestion`, default yes): kmp-forge's templates target AGP
+≥ 9.4.1 and Gradle ≥ 9.8.1. `pin-toolchain` only ever raises (never downgrades) the catalog's `agp`
+and the wrapper; `--ios` also raises the daemon heap for Kotlin/Native framework links:
 
 ```bash
-mkdir -p "$TARGET/docs"
-if [[ -f "$TARGET/docs/MVP_SPEC.md" ]]; then
-    bash "$SH" render "$OVERLAY/product" /tmp/kmpf-product
-    echo "⚠ docs/MVP_SPEC.md exists — review /tmp/kmpf-product and merge manually"
-else
-    bash "$SH" render "$OVERLAY/product" "$TARGET/docs"
-fi
+bash "$SH" pin-toolchain "$TARGET" [--ios]
+```
+
+**Product docs** (`docs/MVP_SPEC.md`, `docs/DECISIONS/`) — fill gaps file by file, never clobber.
+The ADRs are added even when the project already has a spec:
+
+```bash
+rm -rf /tmp/kmpf-product && bash "$SH" render "$OVERLAY/product" /tmp/kmpf-product
+copy_new /tmp/kmpf-product/MVP_SPEC.md "$TARGET/docs/MVP_SPEC.md"
+for adr in /tmp/kmpf-product/DECISIONS/*.md; do
+    copy_new "$adr" "$TARGET/docs/DECISIONS/$(basename "$adr")"
+done
 ```
 
 Report each result.
@@ -144,7 +171,7 @@ For **each** file:
 for f in CLAUDE.md .gitignore .editorconfig detekt.yml cliff.toml; do
     if [[ -f "$TARGET/$f" ]]; then
         echo "=== diff: $f (existing ← → kmp-forge) ==="
-        git --no-index --no-pager diff "$TARGET/$f" "/tmp/kmpf-root/$f" || true
+        git --no-pager diff --no-index "$TARGET/$f" "/tmp/kmpf-root/$f" || true
     else
         cp "/tmp/kmpf-root/$f" "$TARGET/$f" && echo "added: $f"
     fi
@@ -155,20 +182,24 @@ Special-case `CLAUDE.md`: the generated one links to all the `docs/<area>.md` ru
 
 ### 5. Phase A — CI workflows
 
+Per file, never replacing an existing one — so a project with other workflows still gets
+`pr.yml` (the gate `/kmp-forge-add-autoloop` requires) and `release.yml`, and the PR/issue
+templates are added only where missing:
+
 ```bash
-if [[ -d "$TARGET/.github/workflows" ]] && ls "$TARGET/.github/workflows"/*.yml >/dev/null 2>&1; then
-    mkdir -p /tmp/kmpf-ci
-    bash "$SH" render "$OVERLAY/ci" /tmp/kmpf-ci
-    echo "⚠ existing workflows found — DON'T clobber. Merge the gate into yours:"
-    echo "   required job: ./gradlew spotlessCheck detekt build koverVerify"
-    echo "   rendered reference in /tmp/kmpf-ci"
-else
-    mkdir -p "$TARGET/.github/workflows" "$TARGET/.github/ISSUE_TEMPLATE"
-    bash "$SH" render "$OVERLAY/ci" "$TARGET/.github/workflows"
-    cp "$OVERLAY/git/pull_request_template.md" "$TARGET/.github/pull_request_template.md"
-    cp "$OVERLAY/git/ISSUE_TEMPLATE/"*.yml "$TARGET/.github/ISSUE_TEMPLATE/"
-fi
+rm -rf /tmp/kmpf-ci && bash "$SH" render "$OVERLAY/ci" /tmp/kmpf-ci
+for wf in pr.yml release.yml; do
+    copy_new "/tmp/kmpf-ci/$wf" "$TARGET/.github/workflows/$wf"
+done
+copy_new "$OVERLAY/git/pull_request_template.md" "$TARGET/.github/pull_request_template.md"
+for t in "$OVERLAY/git/ISSUE_TEMPLATE/"*.yml; do
+    copy_new "$t" "$TARGET/.github/ISSUE_TEMPLATE/$(basename "$t")"
+done
+ls "$TARGET/.github/workflows"/*.yml   # other workflows: check they don't duplicate the gate
 ```
+
+If the project's own workflows already run checks, make sure exactly one of them runs the gate
+(`spotlessCheck detekt build koverVerify`) — merge rather than running it twice.
 
 The non-negotiable CI gate is `spotlessCheck detekt build koverVerify` (ktlint via Spotless, Kover target 75%). However it lands in the user's workflows, that gate must be present.
 
@@ -180,18 +211,26 @@ The `kmp-forge.kmp.library` precompiled-script convention plugin is how the stac
 2. **Add, don't rewire** — copy `build-logic/` + `includeBuild("build-logic")` into `pluginManagement { }`, but leave modules on their current build files. Plugin available, adopted later per-module.
 3. **Full adopt (heaviest)** — levels 2 + rewrite each module to `id("kmp-forge.kmp.library")`, then layer Compose/Android on the modules that need it (`alias(libs.plugins.composeMultiplatform)` + `alias(libs.plugins.composeCompiler)`; `alias(libs.plugins.androidMultiplatformLibrary)` + `kotlin { android {} }`). Big change; do per-module and build after each.
 
-For levels 2/3:
+For levels 2/3 — never over an existing `build-logic/` (a project may already have its own
+convention plugins there):
 
 ```bash
-mkdir -p "$TARGET/build-logic"
-cp -R "$OVERLAY/build-logic/." "$TARGET/build-logic/"
+if [[ -d "$TARGET/build-logic" ]]; then
+    # Existing build-logic: add only the kmp-forge convention scripts it lacks; merge
+    # build.gradle.kts / settings.gradle.kts dependencies by hand (git --no-index diff).
+    for f in $(cd "$OVERLAY/build-logic" && find . -type f); do
+        copy_new "$OVERLAY/build-logic/$f" "$TARGET/build-logic/$f"
+    done
+else
+    mkdir -p "$TARGET/build-logic" && cp -R "$OVERLAY/build-logic/." "$TARGET/build-logic/"
+fi
 # Insert includeBuild("build-logic") as first line inside pluginManagement { } via the Edit tool.
 # Idempotent — skip if already present. If no pluginManagement block, prepend:
 #   pluginManagement { includeBuild("build-logic") }
-# Level 3 also: add `id("kmp-forge.kmp.library") apply false` to the root build.gradle.kts
-# plugins { } block — loads build-logic (and its Spotless/Detekt/Kover) once in the root
-# classloader; without it Spotless 8's shared build service fails configuration as soon as two
-# modules apply the convention.
+# Then add `id("kmp-forge.root")` to the root build.gradle.kts plugins { } block: the root
+# convention owns the aggregated Kover gate (>= 75%) and loads build-logic (and its
+# Spotless/Detekt/Kover) once in the root classloader — without it Spotless 8's shared build
+# service fails configuration as soon as two modules apply the convention.
 ```
 
 ### 7. Phase A — modules
@@ -206,6 +245,13 @@ for module in ui domain data; do   # only the missing ones
 done
 ```
 
+`:testing` (shared test doubles — `TestDispatcherProvider(testScheduler)`) is new in any project;
+render it directly when the project has no module of that name, then add it to `patch-settings`:
+
+```bash
+[[ -e "$TARGET/testing" ]] || bash "$SH" render-module testing "$OVERLAY/modules/testing" "$TARGET/testing" "$BASE_PACKAGE_PATH"
+```
+
 **Composition root.** `/kmp-forge-add-feature` wires features at `// kmp-forge:` markers in the app module's `AppModules.kt` (Koin module list) and `AppNavigation.kt` (route `SerializersModule` + `entryProvider { }`). Render the reference files to scratch — never over an existing `App.kt`:
 
 ```bash
@@ -213,7 +259,7 @@ export APP_NAME_LOWER="$(echo "<rootProject.name>" | tr '[:upper:]' '[:lower:]')
 bash "$SH" render-module "" "$OVERLAY/shared" /tmp/kmpf-shared "$BASE_PACKAGE_PATH"
 ```
 
-If the project has no Koin bootstrap / `NavDisplay` yet, lift the files into the composition module (`:shared` or `:composeApp`) and make the platform entry points render its `App()`. If it already has them, merge the pattern by hand: a single module list, a `SavedStateConfiguration` registering every route, `entryProvider { addXEntries(...) }`, and the two marker comments. Add the matching dependencies (`koin-compose`, `koin-compose-viewmodel`, `androidx-navigation3-*`, `androidx-lifecycle-viewmodel-navigation3`, `kotlinx-serialization-json` + the serialization plugin).
+If the project has no Koin bootstrap / `NavDisplay` yet, lift the files into the composition module (`:shared` or `:composeApp`) and make the platform entry points render its `App()`. If it already has them, merge the pattern by hand: a single module list, a `SavedStateConfiguration` registering every route, `entryProvider { addXEntries(...) }`, and the two marker comments. Add the matching dependencies (`koin-compose`, `koin-compose-viewmodel`, `androidx-navigation3-ui` (the JetBrains Nav 3 port — it re-exports the runtime; don't add Google's artifacts alongside it), `androidx-lifecycle-viewmodel-navigation3`, `kotlinx-serialization-json` + the serialization plugin).
 
 Module build scripts reference sibling modules as `project(":domain")` — no type-safe `projects.` accessors, so they work whether or not the project enables `TYPESAFE_PROJECT_ACCESSORS`.
 

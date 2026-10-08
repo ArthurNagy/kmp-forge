@@ -34,6 +34,9 @@ No praise. No "overall good job." No restating what the code does. No scope cree
 
 - "Review this diff" / "Review this PR" / "Review this branch" — review unstaged + staged changes (`git diff` + `git diff --cached`), or `git diff origin/main...HEAD` for branch review.
 - "Review file X" — review the file at HEAD.
+- "Review PR #N" / an explicit range (`origin/main...origin/feat/<slug>`) — review exactly that: `gh pr diff <N>` or `git diff <range>`. When a caller hands you a PR or range, never fall back to the local working tree.
+
+**Empty scope is not a clean review.** If the diff/range you were asked to review is empty or can't be resolved (unknown PR, missing branch, `git diff` error), say so on the first line — `EMPTY: nothing to review in <scope>` or `ERROR: <why>` — instead of returning zero findings. Callers (e.g. the autoloop code gate) treat "no findings" as a pass.
 
 Find what to review:
 

@@ -6,7 +6,8 @@ The loop pops the **first unchecked item**, and **stops when every item is check
 
 > Steering: reorder items freely, edit a description, or insert a new `- [ ]` line at any time.
 > The loop always takes the topmost unchecked item on its next iteration.
-> Emergency stop: create an empty file `openspec/STOP` — the loop halts before starting the next iteration.
+> Uncommitted edits here are fine — the loop commits them to `main` at the start of its next iteration.
+> Emergency stop: create the kill-switch file (`kill-switch:` in `openspec/AUTOLOOP.md`, default `openspec/STOP`) — the loop halts before its next phase or merge.
 
 Item convention — the change name is the `slug:` value; the loop passes `slug` + `goal` + `boundaries` to the proposer:
 

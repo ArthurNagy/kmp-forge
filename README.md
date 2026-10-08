@@ -4,7 +4,7 @@ A Claude Code plugin that scaffolds and guides Kotlin Multiplatform + Compose Mu
 
 ## What it does
 
-`kmp-forge` drives [kmp.jetbrains.com](https://kmp.jetbrains.com/) for the base project scaffold, then overlays consistent opinions across every new project: architecture, modules, CLAUDE.md, CI, git, product docs, observability, and release plumbing. JetBrains keeps the wizard current; `kmp-forge` keeps your opinions sharp.
+`kmp-forge` downloads the base project straight from [kmp.jetbrains.com](https://kmp.jetbrains.com/)'s generator (no browser step), raises it to the toolchain floor (AGP ≥ 9.4.1, Gradle ≥ 9.8.1), then overlays consistent opinions across every new project: architecture, modules, CLAUDE.md, CI, git, product docs, observability, and release plumbing. JetBrains keeps the wizard current; `kmp-forge` keeps your opinions sharp.
 
 ## Install
 
@@ -23,7 +23,7 @@ A Claude Code plugin that scaffolds and guides Kotlin Multiplatform + Compose Mu
 - `/kmp-forge-add-library <query>` — find a KMP library via klibs.io and add it to the version catalog
 - `/kmp-forge-bump-stack` — refresh `libs.versions.toml` against the latest stable versions
 - `/kmp-forge-spec` — author `MVP_SPEC.md` interactively or from a free-form dump
-- `/kmp-forge-doctor` — check JDK, Xcode, Android SDK, Gradle wrapper versions
+- `/kmp-forge-doctor` — check JDK, Xcode, Android SDK, Android CLI, Gradle wrapper + AGP floor
 - `/kmp-forge-add-autoloop` — install the autonomous build loop (OpenSpec workflow, backlog, merge-guard hook) into a project
 - `/kmp-forge-next-increment` — run ONE autonomous increment (propose → gate → implement → gate → merge); wrap with `/loop` to run the backlog down
 
@@ -33,7 +33,7 @@ A Claude Code plugin that scaffolds and guides Kotlin Multiplatform + Compose Mu
 |---|---|
 | MVI | Orbit MVI |
 | DI | Koin |
-| Navigation | Navigation 3 (Compose Multiplatform) |
+| Navigation | Navigation 3 — the JetBrains Compose Multiplatform port only |
 | Image loading | Coil 3 |
 | HTTP (opt-in) | Ktor Client |
 | Persistence: prefs | DataStore (KMP) |
@@ -44,14 +44,17 @@ A Claude Code plugin that scaffolds and guides Kotlin Multiplatform + Compose Mu
 | Resources / i18n | Compose Multiplatform Resources |
 | Crash reporting (default) | Platform out-of-box (Play Vitals, App Store Connect) |
 | Crash reporting (opt-in) | Sentry across all platforms |
-| Testing | kotlin.test + Orbit `test()` + Turbine + Compose UI Test |
+| Testing | kotlin.test + Orbit `testWithInternalState` + Turbine + Compose UI Test; shared doubles in `:testing` |
+| Coverage | Kover, aggregated at the root, ≥ 75% gate (`koverVerify`) |
+| Toolchain floor | AGP ≥ 9.4.1, Gradle ≥ 9.8.1 (Kotlin / Compose MP from kmp.new) |
 | Mocking | Fakes preferred; MockK only on JVM |
 | CI | GitHub Actions |
 | Distribution | GitHub Release artifacts default; Firebase App Distribution + gradle-play-publisher opt-in |
 | Branching | Trunk-based, Conventional Commits |
 | Changelog | git-cliff on tag |
 | Architecture | Hybrid — features = presentation only; shared `:domain`, `:data`, `:ui` |
-| Modules at scaffold | `:shared + :androidApp + :desktopApp + iosApp/ + :ui + :domain + :data + build-logic/` |
+| Modules at scaffold | `:shared` (composition root) `+ :androidApp + :desktopApp + :webApp + iosApp/ + :ui + :domain + :data + :testing + build-logic/` |
+| Device checks | Google's Android CLI (`android emulator` / `run` / `layout` / `screen`) — emulator first |
 
 ## Documentation
 

@@ -8,7 +8,10 @@
 :data/src/jvmTest/              optional: MockK for third-party platform deps
 :feature-*/src/commonTest/      ViewModel tests with Orbit's test() harness
 :ui/src/commonTest/             optional: Composable behavior tests
+:testing/src/commonMain/        shared test doubles — TestDispatcherProvider, fakes used by >1 module
 ```
+
+`:testing` holds test code in `commonMain` (KMP has no `testFixtures`) so every module's `commonTest` can depend on it: `commonTest.dependencies { implementation(project(":testing")) }` (the overlay's `:domain`, `:data` and `:feature-*` templates already do). It is never a `commonMain` dependency and is excluded from the Kover report. Module-local fakes stay in that module's `commonTest`.
 
 ## Frameworks
 
@@ -59,7 +62,7 @@ class GalleryViewModelTest {
     @Test
     fun loadSetsPhotosOnSuccess() = runTest {
         val repo = FakeUserRepository().apply { seed(samplePhoto) }
-        val vm = GalleryViewModel(GetPhotosUseCase(repo, TestDispatcherProvider()))
+        val vm = GalleryViewModel(GetPhotosUseCase(repo, TestDispatcherProvider(testScheduler)))
 
         // Orbit 12 (`org.orbitmvi.orbit.test.testWithInternalState`): the initial state is
         // asserted automatically; then consume every emitted state in order.
@@ -73,7 +76,7 @@ class GalleryViewModelTest {
     @Test
     fun loadSurfacesErrorOnFailure() = runTest {
         val repo = FakeUserRepository().apply { nextError = DomainError.NetworkUnavailable }
-        val vm = GalleryViewModel(GetPhotosUseCase(repo, TestDispatcherProvider()))
+        val vm = GalleryViewModel(GetPhotosUseCase(repo, TestDispatcherProvider(testScheduler)))
 
         vm.testWithInternalState(this, GalleryState.Initial) {
             containerHost.load()
@@ -101,17 +104,25 @@ vm.container.stateFlow.test {
 
 ## DispatcherProvider in tests
 
-Every use case takes a `DispatcherProvider`. In tests, provide a `TestDispatcherProvider` backed by `StandardTestDispatcher`:
+Every use case takes a `DispatcherProvider`. In tests, use `:testing`'s `TestDispatcherProvider`, **always constructed with the `runTest` scheduler**:
 
 ```kotlin
-class TestDispatcherProvider(
-    private val testDispatcher: TestDispatcher = StandardTestDispatcher(),
-) : DispatcherProvider {
-    override val main = testDispatcher
-    override val io = testDispatcher
-    override val default = testDispatcher
+// :testing/src/commonMain/kotlin/<base>/testing/TestDispatcherProvider.kt (shipped by the overlay)
+class TestDispatcherProvider(scheduler: TestCoroutineScheduler) : DispatcherProvider {
+    private val dispatcher = StandardTestDispatcher(scheduler)
+    override val main: CoroutineDispatcher get() = dispatcher
+    override val io: CoroutineDispatcher get() = dispatcher
+    override val default: CoroutineDispatcher get() = dispatcher
+}
+
+@Test
+fun loadsPhotos() = runTest {
+    val useCase = GetPhotosUseCase(FakePhotoRepository(), TestDispatcherProvider(testScheduler))
+    // delays inside the use case run on runTest's virtual clock
 }
 ```
+
+Why the scheduler parameter: a `StandardTestDispatcher()` created on its own gets its **own** scheduler, which `runTest` can't advance — tests fail with "Detected use of different schedulers" or hang. Sharing `testScheduler` keeps one virtual clock.
 
 ## Compose UI Test
 
@@ -141,14 +152,41 @@ class GalleryScreenTest {
 ```kotlin
 class GetPhotosUseCaseTest {
     @Test
-    fun `returns NotFound when repo empty`() = runTest {
+    fun returnsNotFoundWhenRepoEmpty() = runTest {
         val repo = FakeUserRepository()
-        val useCase = GetPhotosUseCase(repo, TestDispatcherProvider())
+        val useCase = GetPhotosUseCase(repo, TestDispatcherProvider(testScheduler))
         val result = useCase()
         assertEquals(Err(PhotosError.NotFound), result)
     }
 }
 ```
+
+## Running on a device or emulator
+
+Unit tests run on the host (`jvmTest`, `iosSimulatorArm64Test`); checking the app itself on Android
+uses Google's **Android CLI** (`android`), which wraps the
+emulator, install/launch and UI inspection:
+
+```bash
+android info                                   # SDK path + connected devices/emulators
+android emulator list                          # AVDs
+android emulator start <avd>                   # returns once booted
+./gradlew :androidApp:assembleDebug
+android run --apks androidApp/build/outputs/apk/debug/androidApp-debug.apk --device emulator-5554
+android layout --device emulator-5554 --pretty # UI tree as JSON (text, bounds, center)
+android screen capture --device emulator-5554 -o screen.png
+adb -s emulator-5554 shell input tap <x> <y>   # interact via `center` coordinates from `layout`
+android emulator stop <avd>
+```
+
+- **Emulator first.** Agents (and the autoloop) never install or launch on a **physical** device
+  without the user's explicit OK — it's the user's phone. When more than one device is attached,
+  always pass `--device <serial>` / `adb -s <serial>`.
+- Worth a run after DI or navigation changes: launch, rotate (`adb shell settings put system
+  user_rotation 1`), background + `adb shell am kill <appId>` + relaunch — that exercises Koin
+  start-up, the Nav 3 back-stack save/restore (routes must be registered in `AppNavigation.kt`)
+  and the feature's string resources being packaged.
+- Install the CLI if `android` is missing: see `/kmp-forge-doctor`.
 
 ## What to test
 

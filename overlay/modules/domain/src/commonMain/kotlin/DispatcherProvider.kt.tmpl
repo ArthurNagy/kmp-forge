@@ -4,8 +4,8 @@ import kotlinx.coroutines.CoroutineDispatcher
 
 /**
  * Abstraction over coroutine dispatchers so production code (use cases, repos)
- * never references `Dispatchers.IO/Default/Main` directly. Tests inject a
- * `TestDispatcherProvider` backed by `StandardTestDispatcher` for deterministic timing.
+ * never references `Dispatchers.IO/Default/Main` directly. Tests inject `:testing`'s
+ * `TestDispatcherProvider(testScheduler)` — one dispatcher on the `runTest` scheduler.
  */
 interface DispatcherProvider {
     val main: CoroutineDispatcher

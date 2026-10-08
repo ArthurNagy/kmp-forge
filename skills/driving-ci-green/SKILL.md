@@ -9,27 +9,46 @@ The kmp-forge PR gate lives in `.github/workflows/pr.yml` (rendered from the plu
 
 ## Watch, don't poll
 
+**1. Wait for the checks to register.** Right after `gh pr create` or a push, GitHub has not attached the workflow runs yet, and `gh pr checks` exits **1** with `no checks reported on the '<branch>' branch` — the same exit code as a failed check. Never read that as red. Wait until at least one check exists (bounded, ~3 min):
+
 ```bash
-gh pr checks <pr> --watch --fail-fast --interval 20 >/dev/null 2>&1; echo "exit=$?"
+for i in $(seq 1 18); do
+  n=$(gh pr checks <pr> --json name --jq length 2>/dev/null) && [ "${n:-0}" -gt 0 ] && break
+  sleep 10
+done; echo "checks registered: ${n:-0}"
+```
+
+Still `0` after the loop → the workflow is not triggering (missing `pr.yml`, a path filter, Actions disabled). Report that; do not keep watching.
+
+**2. Watch.**
+
+```bash
+gh pr checks <pr> --watch --fail-fast --interval 20 >/dev/null 2>/tmp/ci-watch.err; rc=$?
+echo "exit=$rc"; grep -q "no checks reported" /tmp/ci-watch.err && echo "NOT REGISTERED — back to step 1"
 ```
 
 Run it with a Bash `timeout` of `600000` (10 min). Exit meanings:
 
 - `0` — all checks green.
-- `1` — a check failed.
-- any other non-zero (commonly `8`) — checks still pending when the command returned.
+- `1` — a check failed — **unless** stderr says `no checks reported` (then go back to step 1; nothing failed).
+- `8` — checks still pending when the command returned.
 
 If the *Bash call itself* times out, simply re-run it — the checks resume server-side. After 3 such timeouts (~30 min wall), stop and report `CI: timeout` rather than watching forever.
 
-Never busy-poll `gh pr checks` in a loop without `--watch`, and never dump its table repeatedly — one watch call per push is the pattern.
+Never busy-poll `gh pr checks` without `--watch`, and never dump its table repeatedly — one wait + one watch per push is the pattern.
 
 ## Reading failures without flooding context
 
+`gh run view --log-failed` without a run id is interactive (it prompts you to pick a run) and errors out in a non-interactive session. Resolve the failing run for the PR's head commit first:
+
 ```bash
-gh run view --log-failed 2>&1 | tail -100
+sha=$(gh pr view <pr> --json headRefOid --jq .headRefOid)
+run=$(gh run list --commit "$sha" --json databaseId,conclusion \
+        --jq '[.[] | select(.conclusion == "failure")][0].databaseId')
+gh run view "$run" --log-failed 2>&1 | tail -100
 ```
 
-Never run `gh run view --log-failed` unpiped. Always `| tail -100`; widen to `tail -300` only if the first 100 lines genuinely do not contain the error. If several runs exist, target the failing one: `gh run list --branch <branch> --limit 3` then `gh run view <run-id> --log-failed 2>&1 | tail -100`.
+Never run `gh run view --log-failed` unpiped. Always `| tail -100`; widen to `tail -300` only if the first 100 lines genuinely do not contain the error. If `$run` is empty, no run on the head commit has failed — re-check `gh pr checks <pr>` (a failing check may come from an external status, not a workflow run).
 
 ## Mirror CI locally before pushing
 

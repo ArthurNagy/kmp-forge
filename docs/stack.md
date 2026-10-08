@@ -67,7 +67,7 @@ The foundation. Compose Multiplatform 1.10+ for Material 3 + multi-platform UI.
   )
   ```
 - **Anti-patterns**: untyped routes (string keys); a route missing from the `SerializersModule` (crashes on iOS/desktop/web when the back stack is saved); the app referencing a feature's `Screen`/`ViewModel` directly instead of its `addFooEntries(...)` contribution; a feature importing another feature's Route (pass outgoing nav as a callback instead); mutating the back stack from outside Composition; using `postSideEffect` for navigation (effect type is `Nothing`) — instead set a consumable `pendingNavigation: Route?` slot inside `intent {}` and mutate the back stack in a `LaunchedEffect` observing it.
-- **Artifact**: `org.jetbrains.androidx.navigation3:navigation3-ui:1.1.2` (the JetBrains Compose Multiplatform port — Google's `androidx.navigation3:navigation3-ui` is Android/JVM-only and won't resolve in `commonMain` on iOS/web) plus `androidx.navigation3:navigation3-runtime:1.1.7` (Google's runtime *is* a true KMP artifact). The two are versioned independently — each UI port release declares the runtime it was built against — so they have separate refs (`androidxNavigation3`, `androidxNavigation3Runtime`); `fetch-latest-versions.sh` derives the runtime from the UI port's metadata. Per-entry ViewModel scoping comes from `org.jetbrains.androidx.lifecycle:lifecycle-viewmodel-navigation3` (`rememberViewModelStoreNavEntryDecorator()`).
+- **Artifact**: `org.jetbrains.androidx.navigation3:navigation3-ui:1.1.2` (the JetBrains Compose Multiplatform port — Google's `androidx.navigation3:navigation3-ui` is Android/JVM-only and won't resolve in `commonMain` on iOS/web) — the **only** Nav 3 artifact the stack declares. It re-exports the matching Google `androidx.navigation3:navigation3-runtime` (`NavKey`, `entryProvider`, `rememberNavBackStack`, …) as an `api` dependency on every platform, so never add Google's runtime or UI artifacts next to it. Per-entry ViewModel scoping comes from `org.jetbrains.androidx.lifecycle:lifecycle-viewmodel-navigation3` (`rememberViewModelStoreNavEntryDecorator()`).
 
 ### Coil 3
 - **Why**: KMP-native image loader, Compose integration, pluggable fetchers (Ktor when HTTP is on), shared memory + disk cache.
@@ -116,18 +116,31 @@ The foundation. Compose Multiplatform 1.10+ for Material 3 + multi-platform UI.
   val themeMode: Flow<ThemeMode> = dataStore.data.map { it[KEY_THEME]?.let(ThemeMode::valueOf) ?: ThemeMode.SYSTEM }
   suspend fun setThemeMode(mode: ThemeMode) { dataStore.edit { it[KEY_THEME] = mode.name } }
   ```
+- **Web**: DataStore 1.2.x has no `js` target (wasmJs only; js arrives in 1.3), so `/kmp-forge-init` drops it from `:data`'s `commonMain` when web is selected. Put preferences behind a `:domain` interface and implement it per platform (DataStore on android/iOS/jvm, `localStorage` in `webMain`).
 
 ## Opt-in libraries
 
+(kmp.new no longer has a library picker — `/kmp-forge-init` step 6 wires Ktor / SQLDelight into `:data` itself when selected.)
+
 ### Ktor Client
 - **When**: project needs HTTP.
-- **Engines**: Darwin (iOS), OkHttp (Android), Java (desktop), JS (web).
-- **Idiom**: provide `HttpClient` via Koin with `install(ContentNegotiation) { json() }`, `install(Logging) { logger = KermitKtorLogger }`.
+- **Engines**: OkHttp (Android + desktop JVM), Darwin (iOS), Js (js + wasmJs) — one per source set in `:data`'s build script; `HttpClient { }` without an engine argument picks the one on the target's classpath.
+- **Wiring** (init, when selected): `overlay/optional/ktor/` renders `HttpClientFactory.kt` (`internal fun createHttpClient()` with `ContentNegotiation` + kotlinx-json) into `:data`, bound once in `dataModule` as `single { createHttpClient() }`. Add `install(Logging) { … }` with a Kermit-backed logger when you need request logs.
 
 ### SQLDelight
 - **When**: project needs relational storage. Choose over Exposed for mobile-first KMP work (mobile-proven, lightweight drivers, type-safe SQL from `.sq` files).
-- **Where**: `:data` module. Drivers per platform via `expect/actual`.
-- **Idiom**: SQL in `.sq` files; generated `Database` class accessed via Koin singleton.
+- **Where**: `:data` module — init applies the `app.cash.sqldelight` plugin, declares `sqldelight { databases { create("AppDatabase") { packageName.set("<base>.data.db") } } }` and adds the runtime + per-platform drivers (android / sqlite (JVM) / native (iOS)).
+- **Idiom**: SQL in `data/src/commonMain/sqldelight/<base-path>/data/db/*.sq`; the generated `AppDatabase` is a Koin singleton built from a platform `SqlDriver`:
+  ```kotlin
+  // commonMain
+  internal expect class DriverFactory { fun create(): SqlDriver }
+  // androidMain — needs a Context: Koin's androidContext() is set by KoinApplication on Android
+  internal actual class DriverFactory(private val context: Context) {
+      actual fun create(): SqlDriver = AndroidSqliteDriver(AppDatabase.Schema, context, "app.db")
+  }
+  // iosMain: NativeSqliteDriver(AppDatabase.Schema, "app.db"); jvmMain: JdbcSqliteDriver("jdbc:sqlite:app.db") + Schema.create
+  ```
+- **Web**: needs `web-worker-driver` + the `sql.js` worker npm packages — not wired by init.
 
 ### Store (MobileNativeFoundation/Store)
 - **When**: offline-first repository with multiple backing sources (remote + cache + db). Common in feeds, lists, profile data — anywhere you want SWR-style staleness behavior with fallback to local.

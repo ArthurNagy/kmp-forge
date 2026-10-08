@@ -37,8 +37,7 @@ kotlin {
 
             implementation(libs.androidx.lifecycle.viewmodel)
             implementation(libs.androidx.lifecycle.viewmodelCompose)
-            implementation(libs.androidx.navigation3.runtime)
-            implementation(libs.androidx.navigation3.ui)
+            implementation(libs.androidx.navigation3.ui) // JetBrains port; re-exports navigation3-runtime
             implementation(libs.orbit.core)
             implementation(libs.orbit.viewmodel)
             implementation(libs.orbit.compose)
@@ -54,6 +53,7 @@ kotlin {
             implementation(libs.kotlinx.coroutines.test)
             implementation(libs.orbit.test)
             implementation(libs.turbine)
+            implementation(project(":testing")) // TestDispatcherProvider + shared fakes
         }
     }
 }

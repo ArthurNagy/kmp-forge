@@ -8,7 +8,7 @@ package ${BASE_PACKAGE}.domain
  * Conventions (see docs/architecture.md § Visibility):
  * - A use case is a **public** class with a **public constructor** — its type
  *   flows to `:feature-*` ViewModels, and `:feature-*` tests build it with a fake
- *   repository (`GetX(FakeRepo(), TestDispatcherProvider())`). In production it's
+ *   repository (`GetX(FakeRepo(), TestDispatcherProvider(testScheduler))`, from `:testing`). In production it's
  *   only ever constructed by `domainModule` via Koin.
  * - **Domain entities / data classes take no default values.** Construct them
  *   explicitly so call sites state full intent and every added field is surfaced:

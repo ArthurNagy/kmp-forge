@@ -13,7 +13,8 @@ iosApp/                  Xcode project consuming the Shared framework
 :domain                  use cases, domain entities, repository interfaces, DispatcherProvider, DomainError sealed base
 :data                    repository implementations, data sources (network, db, prefs), DTOs, mappers
 :feature-<name>          Compose UI + ViewModel + state + nav destination for one feature
-build-logic/             the `kmp-forge.kmp.library` precompiled-script convention plugin
+:testing                 shared test doubles (TestDispatcherProvider, cross-module fakes) — commonTest-only dependency
+build-logic/             precompiled-script conventions: `kmp-forge.kmp.library` (every shared module) + `kmp-forge.root` (root: Kover gate)
 ```
 
 > kmp.new generates `:shared` + the thin `:androidApp`/`:desktopApp` (+ `iosApp/`) instead of
@@ -30,6 +31,7 @@ build-logic/             the `kmp-forge.kmp.library` precompiled-script conventi
             └─▶ :domain
 :data       ──▶ :domain         (implements interfaces declared in :domain)
 :domain     ──▶ (nothing internal — pure Kotlin + Coroutines + kotlinx-datetime + kotlinx-serialization + kotlin-result)
+:testing    ──▶ :domain         (commonMain; consumed ONLY as a commonTest dependency by :domain/:data/:feature-*)
 ```
 
 Rules:
@@ -37,6 +39,7 @@ Rules:
 - `:data` depends only on `:domain` (interfaces) + KMP libs it needs (Ktor, SQLDelight, DataStore).
 - `:feature-*` depends on `:domain` (use cases) and `:ui` (theme + primitives). Never depends on `:data` directly — repos are injected via Koin against `:domain` interfaces.
 - Features never depend on other features.
+- `:testing` is never a `commonMain` dependency of anything.
 
 ## What goes where
 
@@ -102,7 +105,7 @@ Per-layer rules the agents and templates enforce:
 Two companion rules that go hand-in-hand with visibility:
 
 - **No default values on domain entities or presentation `State`.** Construct them explicitly. Defaults hide intent at call sites and silently swallow newly-added fields. Presentation `State` carries its starting value in a `companion object { val Initial = ... }` (one source of truth for `orbitContainer(...)` and tests), not in constructor defaults. (DTOs in `:data` may keep defaults where the wire format needs them.)
-- **Use-case constructors stay public** even though everything around them tightens — a `:feature-*` test must be able to build a real use case with a fake repository (`GetX(FakeRepo(), TestDispatcherProvider())`), which a cross-module `internal` constructor would forbid. In production a use case is still only constructed by `domainModule` via Koin.
+- **Use-case constructors stay public** even though everything around them tightens — a `:feature-*` test must be able to build a real use case with a fake repository (`GetX(FakeRepo(), TestDispatcherProvider(testScheduler))`), which a cross-module `internal` constructor would forbid. In production a use case is still only constructed by `domainModule` via Koin.
 
 ## When to extract a new shared module
 

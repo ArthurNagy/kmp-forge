@@ -21,7 +21,8 @@ modules are just platform entry points.
 
 > Earlier kmp.new revisions emitted a single `:composeApp`; the current wizard splits it into
 > `:shared` + per-platform app modules. The overlay + build-logic target the current shape:
-> Kotlin 2.4 / AGP 9 (`com.android.kotlin.multiplatform.library`) / Compose MP 1.12 / Gradle 9.5,
+> Kotlin 2.4 / AGP ≥ 9.4.1 (`com.android.kotlin.multiplatform.library`) / Compose MP 1.12 / Gradle ≥ 9.8.1
+> (kmp.new still ships older AGP/Gradle pins — step 5's `pin-toolchain` raises them),
 > with build-logic as a **precompiled script plugin** (a Kotlin class plugin can't compile against
 > KGP 2.4 under Gradle's embedded Kotlin 2.2).
 
@@ -47,84 +48,105 @@ Use `AskUserQuestion` to collect the following. Do NOT skip any.
 
 If the user already provided some of these in their initial message, skip those questions.
 
-### 2. Drive kmp.jetbrains.com
+### 2. Download the project from kmp.jetbrains.com
 
-JetBrains' KMP wizard is a Next.js SPA without URL query-param support, so the plugin cannot pre-fill it. Print explicit instructions for the user by running:
-
-```bash
-bash ${CLAUDE_PLUGIN_ROOT}/scripts/kmp-new-url.sh \
-  "<APP_NAME>" "<BASE_PACKAGE>" "<PLATFORMS_CSV>" "<LIBS_CSV>"
-```
-
-Where `<LIBS_CSV>` includes only those libraries kmp.new offers (currently: `ktor`, `sqldelight`). Locked-stack libs (Orbit, Koin, Coil, Kermit, kotlinx-datetime, Navigation 3) are added by step 5's overlay — do NOT ask the user to pick them in the wizard.
-
-Wait for the user to confirm download is complete.
-
-### 3. Locate and unzip the download
-
-Ask for the downloaded zip path (or auto-detect — the current wizard names it `<APP_NAME>.zip`; older builds used `kmp-*.zip`):
+The wizard's form is a plain GET to its generator endpoint, so the plugin downloads the project
+directly — no browser step. Every target uses Compose Multiplatform UI and tests are included:
 
 ```bash
-ls -t ~/Downloads/<APP_NAME>.zip ~/Downloads/kmp-*.zip 2>/dev/null | head -1
+TARGET="$HOME/Development/Personal projects/<APP_NAME>"
+bash "${CLAUDE_PLUGIN_ROOT}/scripts/kmp-new.sh" download \
+  "<APP_NAME>" "<BASE_PACKAGE>" "<PLATFORMS_CSV>" "$TARGET"
 ```
 
-Confirm path with user. The zip contains a **single top-level folder** (the app name), so unzip
-to a temp dir and lift that folder's contents into the target (handles dotfiles like `.idea`,
-`.gitignore`):
+`<PLATFORMS_CSV>` is the selection from step 1 (`ios,desktop,web`; android is implied). The
+wizard **no longer offers libraries** — Ktor / SQLDelight (and every locked-stack lib) are wired
+by this command in steps 5–6, never in the wizard.
+
+If `$TARGET` already exists and is **not empty** (e.g. it holds `docs/` + a project `CLAUDE.md`),
+download into an empty sibling instead (`"$TARGET.kmpnew"`), then move its contents in without
+clobbering (`cp -Rn "$TARGET.kmpnew/." "$TARGET/" && rm -rf "$TARGET.kmpnew"`), back up the
+existing `CLAUDE.md` — the overlay renders its own — and merge the two afterward.
+
+### 3. Fallback: manual download
+
+Only if step 2 exits with code 2 (generator unreachable or changed). Print the wizard URL with the
+targets pre-selected — the page reads them from URL parameters; project **name and ID are not URL
+parameters**, so tell the user to type `<APP_NAME>` and `<BASE_PACKAGE>` into the form:
 
 ```bash
-TARGET_DIR="$HOME/Development/Personal projects/<APP_NAME>"
-mkdir -p "$TARGET_DIR" "$TARGET_DIR.tmp"
-unzip -q "<zip-path>" -d "$TARGET_DIR.tmp"
-inner="$(find "$TARGET_DIR.tmp" -mindepth 1 -maxdepth 1 -type d | head -1)"
-shopt -s dotglob 2>/dev/null || setopt dotglob 2>/dev/null || true
-mv "$inner"/* "$TARGET_DIR/"
-rm -rf "$TARGET_DIR.tmp"
+bash "${CLAUDE_PLUGIN_ROOT}/scripts/kmp-new.sh" url "<PLATFORMS_CSV>"
 ```
 
-If scaffolding into an **existing** directory (e.g. one that already holds `docs/` + a
-project `CLAUDE.md`), back up the existing `CLAUDE.md` first — the overlay renders its own —
-and merge the two afterward rather than letting the overlay clobber it.
+Wait for the user to confirm the download, locate the zip (`ls -t ~/Downloads/<APP_NAME>.zip
+2>/dev/null | head -1`), confirm the path, then unzip into a fresh temp dir and lift the single
+top-level folder's contents (dotfiles included) into `$TARGET`:
+
+```bash
+tmp="$(mktemp -d)"
+unzip -q "<zip-path>" -d "$tmp"
+inner="$(find "$tmp" -mindepth 1 -maxdepth 1 -type d | head -1)"
+mkdir -p "$TARGET"
+(shopt -s dotglob && mv "$inner"/* "$TARGET/")
+rm -rf "$tmp"
+```
 
 ### 4. Export overlay variables
 
-Compute and export all env vars `apply-overlay.sh` needs:
+**Shell state does not persist between Bash tool calls.** Write the variables to an env file once
+and `source` it at the top of every later Bash block (steps 5–8), so no step ever renders with an
+empty `BASE_PACKAGE` or runs `cd ""`:
 
 ```bash
+export TARGET="$HOME/Development/Personal projects/<APP_NAME>"
 export APP_NAME="<PascalCase name>"
 # Compose resources generate :shared's Res class into "<lowercase root project name>.shared.generated.resources";
 # kmp.new sets rootProject.name = APP_NAME, so Home.kt imports it via this variable.
 export APP_NAME_LOWER="$(echo "$APP_NAME" | tr '[:upper:]' '[:lower:]')"
-export APP_TAGLINE="<one-liner or empty>"
+export APP_TAGLINE='<one-liner or empty>'
 export BASE_PACKAGE="<reverse-domain>"
 export BASE_PACKAGE_PATH="$(echo "$BASE_PACKAGE" | tr . /)"
 export SCAFFOLD_DATE="$(date -u +%Y-%m-%d)"
-export PLATFORM_LIST="$(... markdown bullet list from selected platforms ...)"
-export BUILD_COMMANDS="$(... per-platform ./gradlew ... fenced code block ...)"
-export MODULE_LIST="- :shared · :androidApp · :desktopApp · :ui · :domain · :data"
+export PLATFORM_LIST='<markdown bullet list from selected platforms>'
+export BUILD_COMMANDS='<per-platform ./gradlew … fenced code block>'   # single quotes: backticks stay literal
+export MODULE_LIST="- :shared · :androidApp · :desktopApp · :ui · :domain · :data · :testing"
 export FEATURE_LIST="_(none yet — add via /kmp-forge-add-feature)_"
 export OPTIONAL_LIBS="<csv of opted-in libs, or '(none)'>"
 export FIGMA_URL="(none)"
 export PROJECT_OVERRIDES=""
 export TIMELINE=""
-
-# Non-Android KMP targets for the overlay modules (:ui/:domain/:data). These MUST match the
-# targets :shared declares, so :shared can depend on them. The Android target is added per-module
-# by the AGP KMP plugin, so it is NOT listed here. Always include jvm (desktop + host tests);
-# add iOS / web from the platform selection. Examples:
-#   android+desktop          → "jvm"
-#   android+ios+desktop      → "iosArm64,iosSimulatorArm64,jvm"
-#   android+ios+desktop+web  → "iosArm64,iosSimulatorArm64,jvm,wasmJs"
+# Non-Android KMP targets for the overlay modules. These MUST match the targets :shared declares,
+# so :shared can depend on them. The Android target is added per-module by the AGP KMP plugin, so
+# it is NOT listed here. Always include jvm (desktop + host tests); add iOS / web from the
+# selection — web means BOTH js and wasmJs (kmp.new's :shared declares both):
+#   android+desktop          → jvm
+#   android+ios              → iosArm64,iosSimulatorArm64,jvm
+#   android+ios+desktop+web  → iosArm64,iosSimulatorArm64,jvm,js,wasmJs
 export KMP_TARGETS="<computed from selected platforms>"
+
+# Persist for later Bash calls (typeset -p quotes every value safely, in bash and zsh alike).
+typeset -p TARGET APP_NAME APP_NAME_LOWER APP_TAGLINE BASE_PACKAGE BASE_PACKAGE_PATH \
+    SCAFFOLD_DATE PLATFORM_LIST BUILD_COMMANDS MODULE_LIST FEATURE_LIST OPTIONAL_LIBS \
+    FIGMA_URL PROJECT_OVERRIDES TIMELINE KMP_TARGETS > "${TMPDIR:-/tmp}/kmp-forge-init.env"
 ```
+
+Every later Bash block starts with:
+
+```bash
+source "${TMPDIR:-/tmp}/kmp-forge-init.env"
+: "${TARGET:?}" "${APP_NAME:?}" "${BASE_PACKAGE:?}" "${BASE_PACKAGE_PATH:?}" "${KMP_TARGETS:?}"
+```
+
+(`apply-overlay.sh render-module` also refuses to run with an empty `BASE_PACKAGE`.)
 
 ### 5. Apply overlay
 
-Run the four sub-commands in sequence:
+Run the sub-commands in sequence (one Bash call; start it with the `source` line from step 4):
 
 ```bash
+source "${TMPDIR:-/tmp}/kmp-forge-init.env"
+: "${TARGET:?}" "${APP_NAME:?}" "${BASE_PACKAGE:?}" "${BASE_PACKAGE_PATH:?}" "${KMP_TARGETS:?}"
 OVERLAY="${CLAUDE_PLUGIN_ROOT}/overlay"
-TARGET="<project-dir>"
 
 # Root files (CLAUDE.md, .gitignore, .editorconfig, detekt.yml, cliff.toml)
 bash "${CLAUDE_PLUGIN_ROOT}/scripts/apply-overlay.sh" render "$OVERLAY/root" "$TARGET"
@@ -145,8 +167,9 @@ chmod +x "$TARGET/.kmp-forge-pre-commit.sh"
 mkdir -p "$TARGET/docs"
 bash "${CLAUDE_PLUGIN_ROOT}/scripts/apply-overlay.sh" render "$OVERLAY/product" "$TARGET/docs"
 
-# Modules (:ui, :domain, :data)
-for module in ui domain data; do
+# Modules (:ui, :domain, :data) + :testing (shared test doubles — TestDispatcherProvider; only
+# ever a commonTest dependency)
+for module in ui domain data testing; do
     bash "${CLAUDE_PLUGIN_ROOT}/scripts/apply-overlay.sh" render-module \
         "$module" "$OVERLAY/modules/$module" "$TARGET/$module" "$BASE_PACKAGE_PATH"
 done
@@ -163,7 +186,7 @@ mkdir -p "$TARGET/build-logic"
 cp -R "$OVERLAY/build-logic/." "$TARGET/build-logic/"
 
 # Patch settings.gradle.kts to include the new modules
-bash "${CLAUDE_PLUGIN_ROOT}/scripts/apply-overlay.sh" patch-settings "$TARGET" "ui,domain,data"
+bash "${CLAUDE_PLUGIN_ROOT}/scripts/apply-overlay.sh" patch-settings "$TARGET" "ui,domain,data,testing"
 
 # Patch settings.gradle.kts to includeBuild("build-logic").
 # kmp.new ships a pluginManagement { ... } block; use the Edit tool to insert
@@ -184,26 +207,41 @@ bash "${CLAUDE_PLUGIN_ROOT}/scripts/apply-overlay.sh" patch-settings "$TARGET" "
 #   pluginManagement { includeBuild("build-logic") }
 
 # Root build.gradle.kts: use the Edit tool to add, as the first line inside kmp.new's
-# `plugins { … }` block (next to its other `apply false` lines):
-#   id("kmp-forge.kmp.library") apply false
-# This loads build-logic (and the Spotless/Detekt/Kover plugins it bundles) once, in the root
-# classloader. Without it each module loads its own copy and Spotless 8's shared build service
-# fails configuration ("Cannot set the value of task ':ui:spotlessKotlin' property 'taskService'").
+# `plugins { … }` block:
+#   id("kmp-forge.root")
+# The root convention (build-logic/…/kmp-forge.root.gradle.kts) owns the Kover gate — it
+# aggregates every module that applies kmp-forge.kmp.library (except :testing) and fails
+# `koverVerify` below 75% line coverage — and it loads build-logic (with the Spotless/Detekt/Kover
+# plugins it bundles) once, in the root classloader. Without that each module loads its own copy
+# and Spotless 8's shared build service fails configuration ("Cannot set the value of task
+# ':ui:spotlessKotlin' property 'taskService'").
 
 # Merge libs.versions.toml additions
 bash "${CLAUDE_PLUGIN_ROOT}/scripts/apply-overlay.sh" patch-libs \
     "$TARGET" "$OVERLAY/gradle/libs.versions.toml.additions.tmpl"
+
+# Toolchain floor: AGP >= 9.4.1 and Gradle >= 9.8.1 (kmp.new still ships older pins; never
+# downgrades). --ios / --web also raise the build heaps (kmp.new's defaults run out on a clean
+# build with the locked stack): --ios → org.gradle.jvmargs -Xmx6144M (Kotlin/Native links the
+# frameworks in the Gradle daemon); --web → also kotlin.daemon.jvmargs -Xmx6144M (the js/wasmJs
+# Compose executables compile in the Kotlin daemon).
+IOS_FLAG=""; WEB_FLAG=""
+[[ "$KMP_TARGETS" == *ios* ]] && IOS_FLAG="--ios"
+[[ "$KMP_TARGETS" == *wasmJs* ]] && WEB_FLAG="--web"
+bash "${CLAUDE_PLUGIN_ROOT}/scripts/apply-overlay.sh" pin-toolchain "$TARGET" \
+    ${IOS_FLAG:+"$IOS_FLAG"} ${WEB_FLAG:+"$WEB_FLAG"}
 
 # Pin the overlay modules' non-Android targets to match :shared (Gradle property read by the
 # build-logic convention). Without this they default to iosArm64,iosSimulatorArm64,jvm.
 printf '\nkmpForge.targets=%s\n' "$KMP_TARGETS" >> "$TARGET/gradle.properties"
 ```
 
-When iOS is selected, use the Edit tool to raise the `-Xmx` in `gradle.properties`'
-`org.gradle.jvmargs` line to at least `-Xmx6144M` (keep its other flags). Kotlin/Native links the
-iOS frameworks inside the Gradle daemon, and with the locked stack on the classpath kmp.new's
-default 4 GiB heap runs out on a clean `./gradlew build` (`OutOfMemoryError` in
-`:shared:linkReleaseFrameworkIosArm64`).
+**Web selected?** DataStore has no `js` variant yet (1.2.x ships wasmJs only; js first appears in
+1.3.0 pre-releases), and the overlay's `:data` declares it in `commonMain`. With the Edit tool,
+remove `implementation(libs.androidx.datastore.core)` and
+`implementation(libs.androidx.datastore.preferences.core)` from `data/build.gradle.kts`'
+`commonMain.dependencies` (nothing in the overlay uses them yet). For preferences on web, add a
+`webMain` implementation (e.g. `localStorage`) behind a `:domain` interface — see docs/stack.md.
 
 Then wire **`:shared`** (the composition root) with the Edit tool, in `shared/build.gradle.kts`:
 
@@ -218,8 +256,7 @@ implementation(project(":data"))
 implementation(libs.koin.core)
 implementation(libs.koin.compose)
 implementation(libs.koin.compose.viewmodel)
-implementation(libs.androidx.navigation3.runtime)
-implementation(libs.androidx.navigation3.ui)
+implementation(libs.androidx.navigation3.ui)   // JetBrains Nav 3 port — re-exports navigation3-runtime
 implementation(libs.androidx.lifecycle.viewmodel.navigation3)
 implementation(libs.kotlinx.serialization.json)
 ```
@@ -233,13 +270,60 @@ Use `project(":x")`, not `projects.x`: type-safe project accessors need
 `include(...)` lines, so the kmp.new `settings.gradle.kts` (which ships without one) won't get a
 concatenated `include`.
 
-### 6. Optional-lib post-overlay tweaks
+### 6. Optional libraries
 
-- **Sentry**: not enabled → skip. If enabled, add the `sentryDsn` slot to `AppBuildConfig` generation in `shared/build.gradle.kts` (the composition host owns `AppBuildConfig`), document the `SENTRY_DSN` secret in `docs/observability.md`. (v0.1.0: just print a note for the user to wire manually; full integration arrives in v0.2.)
-- **Firebase App Distribution**: append the firebase-android / firebase-ios jobs to `.github/workflows/release.yml` from `overlay/ci/firebase-jobs.yml.snippet` (v0.2 — for v0.1.0 just print a note).
-- **gradle-play-publisher**: append `id("com.github.triplet.play") version "3.10.1"` to `androidApp/build.gradle.kts` plugins block (the Android application module) + a Play upload step in release.yml. (v0.2 — for v0.1.0 print a note pointing to `docs/release.md` § Store tier.)
+kmp.new no longer has a library picker, so kmp-forge wires the opt-ins itself, into `:data` (the
+only module allowed to talk to the network / disk). The catalog entries already exist (step 5's
+`patch-libs`). Use the Edit tool on `data/build.gradle.kts`; add source-set blocks only for the
+targets the project has (`jvmMain` always; `iosMain` with iOS; `webMain` with web).
 
-For v0.1.0: just print which opt-in libs were selected and remind the user to follow the docs to wire them in.
+- **Ktor** (HTTP client):
+  ```bash
+  source "${TMPDIR:-/tmp}/kmp-forge-init.env"; : "${TARGET:?}" "${BASE_PACKAGE_PATH:?}"
+  bash "${CLAUDE_PLUGIN_ROOT}/scripts/apply-overlay.sh" render-module \
+      data "${CLAUDE_PLUGIN_ROOT}/overlay/optional/ktor" "$TARGET/data" "$BASE_PACKAGE_PATH"
+  ```
+  ```kotlin
+  // data/build.gradle.kts → kotlin { sourceSets { … } }
+  commonMain.dependencies {
+      implementation(libs.ktor.client.core)
+      implementation(libs.ktor.client.content.negotiation)
+      implementation(libs.ktor.serialization.kotlinx.json)
+  }
+  androidMain.dependencies { implementation(libs.ktor.client.okhttp) }
+  jvmMain.dependencies { implementation(libs.ktor.client.okhttp) }
+  iosMain.dependencies { implementation(libs.ktor.client.darwin) }   // iOS only
+  webMain.dependencies { implementation(libs.ktor.client.js) }       // web only
+  ```
+  and in `dataModule.kt`, bind the client inside `module { … }`: `single { createHttpClient() }`.
+- **SQLDelight** (relational DB):
+  ```kotlin
+  // data/build.gradle.kts
+  plugins { …; alias(libs.plugins.sqldelight) }
+  kotlin { sourceSets {
+      commonMain.dependencies {
+          implementation(libs.sqldelight.runtime)
+          implementation(libs.sqldelight.coroutines)
+      }
+      androidMain.dependencies { implementation(libs.sqldelight.android.driver) }
+      jvmMain.dependencies { implementation(libs.sqldelight.sqlite.driver) }
+      iosMain.dependencies { implementation(libs.sqldelight.native.driver) }   // iOS only
+  } }
+  sqldelight {
+      databases {
+          create("AppDatabase") {
+              packageName.set("<BASE_PACKAGE>.data.db")
+          }
+      }
+  }
+  ```
+  Schema files go in `data/src/commonMain/sqldelight/<base-pkg-path>/data/db/*.sq`. The platform
+  `SqlDriver` factory (Android needs a `Context`) is app code — see docs/stack.md § SQLDelight.
+  **Web:** SQLDelight's web driver needs a worker plus `sql.js` npm packages; it is not wired
+  automatically — tell the user and point at the SQLDelight web-worker-driver docs.
+- **Sentry / Firebase App Distribution / gradle-play-publisher**: not wired automatically yet —
+  print which were selected and point to docs/observability.md (Sentry: `SENTRY_DSN` secret, the
+  `:shared` composition root owns the init) and docs/release.md § Store tier.
 
 ### 7. License
 
@@ -250,7 +334,8 @@ If user picked Apache-2.0, replace the `LICENSE` text (currently MIT from kmp.ne
 If user opted in to git init:
 
 ```bash
-cd "$TARGET"
+source "${TMPDIR:-/tmp}/kmp-forge-init.env"
+cd "${TARGET:?}" || exit 1
 git init -q -b main
 # Install gitleaks pre-commit hook
 mkdir -p .git/hooks
@@ -277,7 +362,7 @@ Print a checklist of what the user should do next:
 
 ```
 ✓ Project scaffolded at <path>
-✓ Modules: :shared · :androidApp · :desktopApp · :ui · :domain · :data + build-logic/
+✓ Modules: :shared · :androidApp · :desktopApp · :ui · :domain · :data · :testing + build-logic/
 ✓ Composition root: shared/…/App.kt (Koin) + AppNavigation.kt (Nav 3) + AppModules.kt
 ✓ CI workflows: .github/workflows/pr.yml + release.yml
 ✓ Product docs: docs/MVP_SPEC.md + docs/DECISIONS/{0001..0006}.md

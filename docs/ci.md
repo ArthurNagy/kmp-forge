@@ -22,10 +22,10 @@ jobs:
   build-jvm:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-java@v4
-        with: { distribution: 'temurin', java-version: '17' }
-      - uses: gradle/actions/setup-gradle@v3
+      - uses: actions/checkout@v7
+      - uses: actions/setup-java@v6
+        with: { distribution: 'zulu', java-version: '21' }   # = gradle/gradle-daemon-jvm.properties
+      - uses: gradle/actions/setup-gradle@v5
       - run: ./gradlew spotlessCheck
       - run: ./gradlew detekt
       - run: ./gradlew build -x test
@@ -36,10 +36,10 @@ jobs:
     if: ${{ vars.IOS_ENABLED == 'true' }}
     runs-on: macos-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-java@v4
-        with: { distribution: 'temurin', java-version: '17' }
-      - uses: gradle/actions/setup-gradle@v3
+      - uses: actions/checkout@v7
+      - uses: actions/setup-java@v6
+        with: { distribution: 'zulu', java-version: '21' }   # = gradle/gradle-daemon-jvm.properties
+      - uses: gradle/actions/setup-gradle@v5
       - run: ./gradlew :shared:linkReleaseFrameworkIosSimulatorArm64
 ```
 
@@ -47,7 +47,8 @@ jobs:
 
 - **Ubuntu** for everything that doesn't need Xcode (cheap).
 - **macOS** only when iOS is enabled (expensive — gate on the `IOS_ENABLED` repository variable).
-- Gradle build cache is enabled by `gradle/actions/setup-gradle@v3` automatically (writes to GitHub Actions cache).
+- Gradle build cache is enabled by `gradle/actions/setup-gradle@v5` automatically (writes to GitHub Actions cache).
+- The JDK is Zulu 21 because kmp.new's `gradle/gradle-daemon-jvm.properties` pins the Gradle daemon to it; a different setup-java JDK makes Gradle download Zulu 21 on every cold run.
 - `concurrency` cancels older PR runs when the user pushes new commits.
 - **Driving a PR to green from the CLI** — watching checks, reading failures without dumping logs, mirroring this gate locally — is the plugin's `driving-ci-green` skill.
 
@@ -65,11 +66,11 @@ jobs:
   android:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with: { fetch-depth: 0 }
-      - uses: actions/setup-java@v4
-        with: { distribution: 'temurin', java-version: '17' }
-      - uses: gradle/actions/setup-gradle@v3
+      - uses: actions/setup-java@v6
+        with: { distribution: 'zulu', java-version: '21' }   # = gradle/gradle-daemon-jvm.properties
+      - uses: gradle/actions/setup-gradle@v5
       - name: Decode keystore
         run: echo "$ANDROID_KEYSTORE_BASE64" | base64 -d > $RUNNER_TEMP/release.keystore
         env: { ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }} }
@@ -85,7 +86,7 @@ jobs:
           -Pandroid.injected.signing.store.password="$KEYSTORE_PASSWORD"
           -Pandroid.injected.signing.key.alias="$KEY_ALIAS"
           -Pandroid.injected.signing.key.password="$KEY_PASSWORD"
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: android
           path: androidApp/build/outputs/**/*.{aab,apk}
@@ -106,12 +107,12 @@ jobs:
     permissions:
       contents: write                # new repos default GITHUB_TOKEN to read-only
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with: { fetch-depth: 0 }
-      - uses: orhun/git-cliff-action@v3
+      - uses: orhun/git-cliff-action@v4
         with: { config: cliff.toml, args: --latest --strip header }
         id: cliff
-      - uses: softprops/action-gh-release@v2
+      - uses: softprops/action-gh-release@v3
         with:
           body: ${{ steps.cliff.outputs.content }}
           files: |
@@ -143,33 +144,11 @@ macOS minutes are billed at ~10× Linux on private repos. Gate iOS jobs behind e
 
 **Detekt** — static analysis (complexity, smells). Convention plugin applies it; config in `detekt.yml` at project root.
 
-**Kover** — JetBrains' KMP-native coverage tool. Convention plugin applies Kover per module. Target coverage **75%**. CI runs `./gradlew koverVerify` against a root-project rule and uploads `koverHtmlReport` + `koverXmlReport` as a workflow artifact.
+**Kover** — JetBrains' KMP-native coverage tool. The library convention applies Kover to every module; the **root convention** `kmp-forge.root` (applied as `id("kmp-forge.root")` in the root `build.gradle.kts` by init/adopt) aggregates them and owns the gate: **≥ 75% line coverage**, enforced by `./gradlew koverVerify`. CI also uploads `koverHtmlReport` + `koverXmlReport` as a workflow artifact.
 
-Add the verify rule to root `build.gradle.kts`:
-
-```kotlin
-plugins { alias(libs.plugins.kover) }
-
-dependencies {
-    kover(projects.shared)
-    kover(project(":domain"))
-    kover(project(":data"))
-    kover(project(":ui"))
-    // kover(project(":feature-gallery"))  // one per feature module
-}
-
-kover {
-    reports {
-        verify {
-            rule {
-                bound { minValue.set(75) }
-            }
-        }
-    }
-}
-```
-
-Adjust the 75 threshold or carve exclusions (`excludes { classes("*Module") }`) if the threshold is too aggressive for early-stage projects.
+- **Aggregation is automatic** — every module that applies `kmp-forge.kmp.library` is added to the root report (new `:feature-*` modules included); `:testing` (test doubles) is skipped. Nothing to register per feature.
+- **Excluded from the measurement** (see `build-logic/src/main/kotlin/kmp-forge.root.gradle.kts`): `@Composable` functions (covered by Compose UI / screenshot tests), generated code (Compose resources, `ComposableSingletons`, serializers), Koin module declarations (`*ModuleKt`), Nav 3 entry contributions (`*NavEntryKt`) and feature routes (`*Route` NavKeys), the per-platform `RealDispatcherProvider` one-liners, and the `:ui` design tokens. What remains — ViewModels, use cases, repositories, mappers — is what the 75% is about.
+- **Changing it** — edit the `minBound(75)` rule or the `excludes { }` block in that convention file (it's project-owned after scaffolding). Don't lower the bound in CI flags; change it in one place.
 
 ## Required secrets
 
@@ -203,6 +182,6 @@ Configure in repo Settings → Branches → Add branch protection rule for `main
 
 ## Build cache
 
-`gradle/actions/setup-gradle@v3` writes to GitHub Actions cache automatically. Cache key uses `gradle/**/*.lockfile`, `**/*.gradle*`, `**/gradle-wrapper.properties`. No further config needed.
+`gradle/actions/setup-gradle@v5` writes to GitHub Actions cache automatically. (It stays on v5 deliberately: v6 moved caching into a proprietary component that requires accepting Gradle's Terms of Use — upgrade only if you accept them.) Cache key uses `gradle/**/*.lockfile`, `**/*.gradle*`, `**/gradle-wrapper.properties`. No further config needed.
 
 For locally-shared cache between projects, configure `~/.gradle/caches/`. No Develocity / Gradle Enterprise needed for personal projects.

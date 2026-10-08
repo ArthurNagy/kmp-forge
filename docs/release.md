@@ -44,7 +44,7 @@ firebase-android:
   needs: android
   runs-on: ubuntu-latest
   steps:
-    - uses: actions/download-artifact@v4
+    - uses: actions/download-artifact@v8
       with: { name: android }
     - uses: wzieba/Firebase-Distribution-Github-Action@v1
       with:
@@ -142,24 +142,17 @@ CI:
 
 ## Changelog (git-cliff)
 
-`cliff.toml` at repo root:
+`cliff.toml` at repo root (shipped by the overlay — `overlay/root/cliff.toml` is the full file). The part that decides what reaches the notes:
 
 ```toml
-[changelog]
-header = "# Changelog\n\n"
-body = """
-{% for group, commits in commits | group_by(attribute="group") %}
-### {{ group | upper_first }}
-{% for commit in commits %}
-- {{ commit.message | upper_first }} ({{ commit.id | truncate(length=7, end="") }})
-{% endfor %}
-{% endfor %}
-"""
-
 [git]
 conventional_commits = true
-filter_unconventional = false
+filter_unconventional = false   # keep non-conventional commits…
+filter_commits = false
 commit_parsers = [
+    # …except merge commits, skipped on purpose: they only restate a PR whose commits
+    # (merge workflow) or squash commit (squash workflow) are already listed.
+    { message = "^Merge (pull request|branch|remote-tracking branch) ", skip = true },
     { message = "^feat", group = "Features" },
     { message = "^fix", group = "Fixes" },
     { message = "^perf", group = "Performance" },
@@ -169,8 +162,13 @@ commit_parsers = [
     { message = "^build", group = "Build" },
     { message = "^ci", group = "CI" },
     { message = "^test", group = "Tests" },
+    { message = "^style", group = "Style" },
+    { message = "^[Rr]evert", group = "Reverts" },   # `revert: …` and git's `Revert "…"`
+    { message = ".*", group = "Other" },             # catch-all: nothing disappears silently
 ]
 ```
+
+Every commit since the last tag lands in exactly one group except GitHub/GitLab merge commits. A non-conventional subject still shows up (under **Other**) so a sloppy message is visible in review rather than silently missing from the release.
 
 Release workflow runs `git-cliff --latest --strip header` to populate the GitHub Release body. Full `CHANGELOG.md` regenerated on each release via `git-cliff -o CHANGELOG.md` and committed back to `main` via a follow-up PR (optional — manual is fine for solo work).
 

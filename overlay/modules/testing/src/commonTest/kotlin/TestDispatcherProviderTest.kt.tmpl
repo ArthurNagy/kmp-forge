@@ -1,0 +1,22 @@
+package ${BASE_PACKAGE}.testing
+
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.test.runTest
+import kotlinx.coroutines.withContext
+import kotlin.test.Test
+import kotlin.test.assertEquals
+
+class TestDispatcherProviderTest {
+    @Test
+    fun dispatchersShareTheRunTestVirtualClock() = runTest {
+        val dispatchers = TestDispatcherProvider(testScheduler)
+
+        val result = withContext(dispatchers.io) {
+            delay(60_000)
+            withContext(dispatchers.default) { "done" }
+        }
+
+        assertEquals("done", result)
+        assertEquals(60_000, testScheduler.currentTime)
+    }
+}

@@ -26,11 +26,16 @@ brew install git-cliff
 ```toml
 [git]
 conventional_commits = true
+filter_unconventional = false
 tag_pattern = "v[0-9]+.[0-9]+.[0-9]+"
 sort_commits = "newest"
-
-[git.commit_parsers]
-# feat → Features, fix → Fixes, chore → Chore, etc.
+commit_parsers = [
+    { message = "^Merge (pull request|branch|remote-tracking branch) ", skip = true },
+    { message = "^feat", group = "Features" },
+    # … fix → Fixes, chore → Chore, etc. …
+    { message = "^[Rr]evert", group = "Reverts" },
+    { message = ".*", group = "Other" },
+]
 ```
 
 Full template: see `overlay/root/cliff.toml`.
@@ -43,7 +48,7 @@ Full template: see `overlay/root/cliff.toml`.
 git cliff --latest --strip header
 ```
 
-Pipes into `softprops/action-gh-release@v2` as the `body` input.
+Pipes into `softprops/action-gh-release@v3` as the `body` input.
 
 ### Regenerate the full CHANGELOG.md (occasional)
 
@@ -76,8 +81,12 @@ The default `commit_parsers` map:
 | `build` | Build |
 | `ci` | CI |
 | `test` | Tests |
+| `style` | Style |
+| `revert:` or git's default `Revert "…"` | Reverts (rendered with the full subject, e.g. `Revert "fix: retry upload"`) |
+| anything else (non-conventional) | Other |
+| `Merge pull request …` / `Merge branch …` | **skipped on purpose** — the PR's own commits (merge workflow) or its squash commit already carry the entry |
 
-Anything that doesn't match falls under "Other" (or is filtered out — config-dependent).
+Nothing is dropped silently: a non-conventional subject still reaches the notes under **Other**, where it's visible in review.
 
 ## Breaking changes
 
@@ -97,12 +106,12 @@ Example output:
 2. Decide semver bump (major / minor / patch based on commits)
 3. `git tag -a v0.3.0 -m "Release v0.3.0"`
 4. `git push origin v0.3.0` → triggers `.github/workflows/release.yml`
-5. CI generates release body via `orhun/git-cliff-action@v3` + uploads artifacts
+5. CI generates release body via `orhun/git-cliff-action@v4` + uploads artifacts
 
 ## Troubleshooting
 
 - **Empty changelog**: tag pattern doesn't match. Check `tag_pattern` in `cliff.toml`.
-- **Commits missing**: they don't match any `commit_parsers` rule. Either add a parser, or fix the commit message (rebase + force-push if not yet merged).
+- **Commits missing**: only merge commits are skipped (by the first parser). If a commit you expected is absent, check it isn't before the previous tag (`git describe --tags`). If it shows under **Other**, its subject isn't a Conventional Commit — reword it before merging next time (rebase + force-push if still unmerged).
 - **Old tag pulled into "latest"**: git-cliff needs `fetch-depth: 0` in the checkout step. Workflow ships with that already.
 
 ## kmp-forge convention

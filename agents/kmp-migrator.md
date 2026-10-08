@@ -62,8 +62,13 @@ for ss in commonMain androidMain jvmMain nativeMain webMain; do
   done
 done
 # commonTest helper
-DOMT="$project_root/domain/src/commonTest/kotlin/$(echo "$base_package" | tr . /)/domain"
-[[ -f "$DOMT/TestDispatcherProvider.kt" ]] || envsubst < "$claude_plugin_root/overlay/modules/domain/src/commonTest/kotlin/TestDispatcherProvider.kt.tmpl" > "$DOMT/TestDispatcherProvider.kt"
+# :testing module — TestDispatcherProvider(testScheduler) + shared fakes, a commonTest-only dependency.
+# (Older scaffolds kept a TestDispatcherProvider in :domain's commonTest, invisible to feature
+# tests and on its own scheduler — delete it once :testing exists.)
+[[ -e "$project_root/testing" ]] || bash "$claude_plugin_root/scripts/apply-overlay.sh" render-module \
+    testing "$claude_plugin_root/overlay/modules/testing" "$project_root/testing" "$(echo "$base_package" | tr . /)"
+bash "$claude_plugin_root/scripts/apply-overlay.sh" patch-settings "$project_root" testing
+# then add `implementation(project(":testing"))` to the commonTest deps of :domain, :data, :feature-*
 ```
 
 Adapt module paths to the project's real layout (detected by `/kmp-forge-adopt` step 1). Ensure `dataModule` binds the provider: `singleOf(::RealDispatcherProvider) bind DispatcherProvider::class`. If an existing `RealDispatcherProvider.kt` in `commonMain` references `Dispatchers.IO` directly (pre-0.4 kmp-forge template), replace it with the template set above — that line doesn't compile for iOS/shared metadata and can't for web.

@@ -14,7 +14,9 @@ Queries Maven Central + Google Maven for the latest stable versions of every loc
 bash ${CLAUDE_PLUGIN_ROOT}/scripts/fetch-latest-versions.sh toml > /tmp/kmp-forge-latest.toml
 ```
 
-This emits a `[versions]` block keyed exactly like the project's catalog: the toolchain keys kmp.new owns (`kotlin`, `agp`, `composeMultiplatform`, `androidx-lifecycle`, `kotlinx-coroutines`) plus the overlay's keys (`orbitMvi`, `koin`, `coil`, `ktor`, `kermit`, `kotlinxDatetime`, `kotlinxSerialization`, `androidxNavigation3`, `androidxNavigation3Runtime`, `androidxDatastore`, `sqldelight`, `turbine`, `kotlinResult`, `store`, `detekt`, `spotless`, `ktlint`, `kover`). "Latest" means the highest purely numeric release in version order — `-alpha`/`-beta`/`-RC`/`-compat` builds are skipped, except for keys whose pin already tracks a pre-release line (`store`). `androidxNavigation3Runtime` is derived from the latest JetBrains `navigation3-ui` port's own dependency (the two are versioned independently). `material3` is not reported — bump it by hand together with `composeMultiplatform`.
+This emits a `[versions]` block keyed exactly like the project's catalog: the toolchain keys kmp.new owns (`kotlin`, `agp`, `composeMultiplatform`, `androidx-lifecycle`, `kotlinx-coroutines`) plus the overlay's keys (`orbitMvi`, `koin`, `coil`, `ktor`, `kermit`, `kotlinxDatetime`, `kotlinxSerialization`, `androidxNavigation3`, `androidxDatastore`, `sqldelight`, `turbine`, `kotlinResult`, `store`, `detekt`, `spotless`, `ktlint`, `kover`). "Latest" means the highest purely numeric release in version order — `-alpha`/`-beta`/`-RC`/`-compat` builds are skipped, except for keys whose pin already tracks a pre-release line (`store`). `material3` is not reported — bump it by hand together with `composeMultiplatform`.
+
+It also emits a `[wrapper]` section with the latest stable Gradle release (`gradle = "…"`) — the wrapper isn't a catalog key.
 
 ### 2. Read the current project catalog
 
@@ -47,6 +49,15 @@ Continue?
 ### 5. Apply the bump
 
 Use the `Edit` tool with `replace_all = false` to update each `[versions]` entry in `PROJECT_LIBS`. Use unique anchor text (the full `key = "old_version"` line) for safety.
+
+If `[wrapper] gradle` is newer than the version in `gradle/wrapper/gradle-wrapper.properties`'s `distributionUrl`, include it in the confirmation and update it the supported way — run the wrapper task **twice** (the second run regenerates the wrapper jar/scripts with the new version):
+
+```bash
+./gradlew wrapper --gradle-version <latest> --distribution-type bin
+./gradlew wrapper --gradle-version <latest> --distribution-type bin
+```
+
+Never go below kmp-forge's floor (Gradle 9.8.1 / AGP 9.4.1 — `pin-toolchain` in `scripts/apply-overlay.sh`).
 
 ### 6. Build to verify
 

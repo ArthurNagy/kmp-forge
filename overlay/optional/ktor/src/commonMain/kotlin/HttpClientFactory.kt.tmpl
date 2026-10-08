@@ -1,0 +1,18 @@
+package ${BASE_PACKAGE}.data
+
+import io.ktor.client.HttpClient
+import io.ktor.client.plugins.contentnegotiation.ContentNegotiation
+import io.ktor.serialization.kotlinx.json.json
+import kotlinx.serialization.json.Json
+
+/**
+ * The app's single Ktor client — bound once in [dataModule] (`single { createHttpClient() }`) and
+ * injected into remote data sources. `HttpClient { }` without an engine argument uses the engine
+ * on each target's classpath (see :data's build.gradle.kts): OkHttp on Android/JVM, Darwin on iOS,
+ * Js on web. `internal`: nothing outside :data talks HTTP.
+ */
+internal fun createHttpClient(): HttpClient = HttpClient {
+    install(ContentNegotiation) {
+        json(Json { ignoreUnknownKeys = true })
+    }
+}

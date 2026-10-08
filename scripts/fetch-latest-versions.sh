@@ -24,9 +24,6 @@ fmt="${1:-toml}"
 #                      (-alpha01, -RC, -Beta1, -0.6.x-compat, ...) is skipped.
 #   channel "pre"    — the pin itself tracks a pre-release line; report the newest
 #                      pre-release unless a stable release at or above its base exists.
-#   channel "nav3rt" — derived: the navigation3-runtime version the latest JetBrains
-#                      navigation3-ui port requires (the two are versioned
-#                      independently; ui 1.1.2 requires runtime 1.1.7).
 declare -a coords=(
     # --- toolchain (keys owned by kmp.new's catalog) ---
     "org.jetbrains.kotlin:kotlin-stdlib:kotlin:maven-central:stable"
@@ -45,7 +42,6 @@ declare -a coords=(
     "org.jetbrains.kotlinx:kotlinx-datetime:kotlinxDatetime:maven-central:stable"
     "org.jetbrains.kotlinx:kotlinx-serialization-json:kotlinxSerialization:maven-central:stable"
     "org.jetbrains.androidx.navigation3:navigation3-ui:androidxNavigation3:maven-central:stable"
-    "org.jetbrains.androidx.navigation3:navigation3-ui:androidxNavigation3Runtime:maven-central:nav3rt"
     "androidx.datastore:datastore-core:androidxDatastore:google-maven:stable"
     "app.cash.sqldelight:runtime:sqldelight:maven-central:stable"
     "app.cash.turbine:turbine:turbine:maven-central:stable"
@@ -83,6 +79,12 @@ is_stable() { [[ "$1" =~ ^[0-9]+(\.[0-9]+)*$ ]]; }
 # Version-order comparison: true if $1 >= $2.
 version_ge() { [[ "$(printf '%s\n%s\n' "$1" "$2" | sort -V | tail -1)" == "$1" ]]; }
 
+# Latest stable Gradle release (the wrapper isn't a catalog key — emitted in its own section).
+fetch_gradle() {
+    curl -sfL https://services.gradle.org/versions/current 2>/dev/null \
+        | grep -oE '"version" *: *"[0-9][^"]*"' | head -1 | sed -E 's/.*"([^"]+)"$/\1/' || true
+}
+
 fetch_latest() {
     local repo="$1" group="$2" artifact="$3" channel="$4"
     local versions stable pre
@@ -100,14 +102,6 @@ fetch_latest() {
                 echo "$pre"
             fi
             ;;
-        nav3rt)
-            [[ -z "$stable" ]] && { echo ""; return; }
-            # Gradle module metadata (pretty-printed JSON): the root variant's dependency
-            # block lists "module": "navigation3-runtime" followed by "requires": "<ver>".
-            curl -sfL "$(repo_base "$repo")/${group//.//}/${artifact}/${stable}/${artifact}-${stable}.module" 2>/dev/null \
-                | grep -A4 '"module": "navigation3-runtime"' \
-                | grep -oE '"requires": "[^"]+"' | head -1 | cut -d'"' -f4 || true
-            ;;
     esac
 }
 
@@ -124,6 +118,10 @@ emit_toml() {
             echo "$key = \"$v\""
         fi
     done
+    echo
+    echo "[wrapper]"
+    local g; g="$(fetch_gradle)"
+    if [[ -n "$g" ]]; then echo "gradle = \"$g\""; else echo "# WARN gradle — services.gradle.org unreachable"; fi
 }
 
 emit_json() {
@@ -137,6 +135,7 @@ emit_json() {
         first=0
         printf '  "%s": "%s"' "$key" "$v"
     done
+    printf ',\n  "gradle-wrapper": "%s"' "$(fetch_gradle)"
     echo
     echo "}"
 }

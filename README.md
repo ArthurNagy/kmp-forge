@@ -24,8 +24,8 @@ A Claude Code plugin that scaffolds and guides Kotlin Multiplatform + Compose Mu
 - `/kmp-forge-bump-stack` — refresh `libs.versions.toml` against the latest stable versions
 - `/kmp-forge-spec` — author `MVP_SPEC.md` interactively or from a free-form dump
 - `/kmp-forge-doctor` — check JDK, Xcode, Android SDK, Android CLI, Gradle wrapper + AGP floor
-- `/kmp-forge-add-autoloop` — install the autonomous build loop (OpenSpec workflow, backlog, merge-guard hook) into a project
-- `/kmp-forge-next-increment` — run ONE autonomous increment (propose → gate → implement → gate → merge); wrap with `/loop` to run the backlog down
+- `/kmp-forge-add-autoloop` — install the autonomous build loop (OpenSpec workflow, GitHub-issue queue, merge-guard hook) into a project
+- `/kmp-forge-next-increment` — run ONE autonomous increment on the next `ready` issue (propose → gate → implement → gate → merge); wrap with `/loop` to work the queue down
 
 ## Locked stack
 
@@ -50,6 +50,8 @@ A Claude Code plugin that scaffolds and guides Kotlin Multiplatform + Compose Mu
 | Mocking | Fakes preferred; MockK only on JVM |
 | CI | GitHub Actions |
 | Distribution | GitHub Release artifacts default; Firebase App Distribution + gradle-play-publisher opt-in |
+| Work tracking | GitHub issues — `ready` (human-applied) = the backlog |
+| Spec workflow | OpenSpec (default; plain docs opt-out) with kmp-forge rules in `openspec/config.yaml`; CI `spec-link` check |
 | Branching | Trunk-based, Conventional Commits |
 | Changelog | git-cliff on tag |
 | Architecture | Hybrid — features = presentation only; shared `:domain`, `:data`, `:ui` |

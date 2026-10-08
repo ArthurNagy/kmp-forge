@@ -68,6 +68,18 @@ Read `gradle/libs.versions.toml` → `[versions] kotlin` (the key kmp.new's cata
 - `.git/hooks/pre-commit` exists and is executable
 - gitleaks binary available on PATH (`command -v gitleaks`)
 
+### 7b. Spec & work workflow (OpenSpec + GitHub issues)
+
+```bash
+[[ -d openspec ]] && openspec --version && node --version
+grep -q "kmp-forge project rules" openspec/config.yaml 2>/dev/null && echo "kmp-forge rules present"
+gh label list --limit 200 --json name --jq '[.[].name] | map(select(. == "ready" or . == "in-progress" or . == "epic" or . == "no-spec"))'
+```
+
+- `openspec/` present → `openspec` **≥ 1.14** (kmp-forge's `openspec/config.yaml` rules need it; older CLIs ignore them). Remediation: `brew upgrade openspec` or `npm install -g @fission-ai/openspec@latest` (Node ≥ 20.19). Absent → report "plain docs" (✓, not drift).
+- `openspec/config.yaml` without kmp-forge's rules → ⚠, remediation: merge in the plugin's `overlay/openspec/config.yaml.tmpl`.
+- The workflow labels (`ready`, `in-progress`, `epic`, `no-spec`, …) missing on the GitHub repo → ⚠, remediation: `bash "${CLAUDE_PLUGIN_ROOT}/scripts/issues.sh" labels` (writes labels to GitHub — say so). Skip when `gh` is unauthenticated or there is no GitHub `origin`.
+
 ### 8. Check Compose MP version
 
 Read `gradle/libs.versions.toml` → `[versions] composeMultiplatform` (and `material3`, which kmp.new pins to a build matched to it). Cross-reference with what's compatible with the declared Kotlin version (compose-multiplatform release notes).
@@ -95,6 +107,8 @@ Example:
 ✓ Kotlin: 2.4.20
 ✗ signing.properties: not present. Required for release builds — see docs/secrets.md
 ✓ git hooks: pre-commit installed, gitleaks on PATH
+⚠ OpenSpec: 1.3.1 found, ≥ 1.14 needed for openspec/config.yaml rules. Upgrade: brew upgrade openspec
+✓ Issue labels: ready, in-progress, epic, no-spec present
 ✓ Compose MP: 1.12.1 (compatible with Kotlin 2.4.20)
 ```
 

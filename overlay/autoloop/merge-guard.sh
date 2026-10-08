@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # merge-guard.sh — PreToolUse guard for the kmp-forge autonomous build loop.
-# version: 2
+# version: 3
 #
 # Installed into a project's .claude/hooks/ by /kmp-forge-add-autoloop and wired in
 # .claude/settings.json for the Bash, Write/Edit and mcp__* tools.
@@ -18,6 +18,11 @@
 #           `--all`/`--mirror`, deletes, forces) — plus `gh api` writes to `…/merges` or
 #           `git/refs/heads/main|master`, GraphQL merge/ref mutations, and MCP file writes to main.
 #   tamper  a subagent writing this script, its mode file, or .claude/settings*.json.
+#   promote applying the `ready` label to an issue — `gh issue create|edit` with `ready` among
+#           its labels, `gh api` writes to an issue's labels that name it, GraphQL label
+#           mutations (they carry label ids, not names, so they cannot be checked), and MCP
+#           issue/label tools whose input names it. `ready` puts an issue in the loop's work queue;
+#           only a human may apply it, so Claude never approves its own work.
 #
 # A merge passes only when
 #   1. every check on the PR's head commit concluded successfully,
@@ -25,16 +30,18 @@
 #      `### 🤖 ` has a first line whose last ` — ` field is the verdict `PASS`, AND it was
 #      posted on the PR's current head commit (a PASS predating new commits is stale), and
 #   3. [enforce] the caller is the main conversation — subagents never merge.
+# Applying `ready` never passes [enforce], from any caller.
 # A push to main passes [enforce] only from the main conversation, never forced or deleting,
-# and only when every file it changes is loop bookkeeping: openspec/**, the configured
-# backlog, or the mode file.
+# and only when every file it changes is loop bookkeeping: openspec/** (the queue-empty archive,
+# runbook steering edits), a legacy pre-issue-queue backlog file, or the mode file.
 #
 # Modes — read fresh on every invocation from .claude/hooks/merge-guard.mode:
 #   log         observe only; never denies. Appends a verdict line to merge-guard.log that
 #               evaluates every precondition as `enforce` would — the trust-ramp signal.
 #   enforce-ci  deny merges unless CI is green; deny --admin, force-pushes/deletes of main,
-#               API ref writes, and subagent tampering. Gate reviews, the caller and push
-#               contents are not evaluated — for supervised projects where the human is the gate.
+#               API ref writes, and subagent tampering. Gate reviews, the caller, push contents
+#               and `ready` labels are not evaluated — for supervised projects where the human
+#               is the gate.
 #   enforce     everything. The loop's target mode.
 #   off         no-op.
 #   (unknown)   treated as `log`, with a warning line in the audit log.
@@ -81,7 +88,7 @@ deny_json() {
 # where we can no longer parse it properly.
 looks_guarded() {
   case "$input" in
-    *merge*|*push*|*git/refs*|*.claude/settings*) return 0 ;;
+    *merge*|*push*|*git/refs*|*.claude/settings*|*ready*) return 0 ;;
   esac
   return 1
 }
@@ -263,8 +270,21 @@ api_repo() {
   fi
 }
 
+# `ready` as a whole label name inside a ,-joined list (case-insensitive; GitHub labels are).
+has_ready_label() {
+  case ",$(printf '%s' "$1" | tr '[:upper:]' '[:lower:]' | tr -d ' ')," in
+    *,ready,*) return 0 ;;
+  esac
+  return 1
+}
+
+# Does free text (a gh api call, an MCP tool input) name the `ready` label as a whole word?
+names_ready() {
+  printf '%s' "$1" | grep -qiE '(^|[^a-z0-9_-])ready([^a-z0-9_-]|$)'
+}
+
 classify_gh() { # <raw segment> <from_xargs> <args after gh>…
-  local raw=$1 from_xargs=$2 a repo="" method="" fields=0 admin=0 disable_auto=0
+  local raw=$1 from_xargs=$2 a repo="" method="" fields=0 admin=0 disable_auto=0 labels=","
   shift 2
   local -a w
   w=()
@@ -280,6 +300,8 @@ classify_gh() { # <raw segment> <from_xargs> <args after gh>…
       --field=*|--raw-field=*|--input=*) fields=1 ;;
       -t|--subject|-b|--body|--body-file|-A|--author-email|--match-head-commit|-H|--header|-q|--jq|--template|--hostname|-p|--preview|--cache)
         [ $# -gt 0 ] && shift ;;
+      -l|--label|--add-label) labels="$labels${1:-},"; [ $# -gt 0 ] && shift ;;
+      --label=*|--add-label=*) labels="$labels${a#*=}," ;;
       --admin) admin=1 ;;
       --disable-auto) disable_auto=1 ;;
       -*) ;;
@@ -293,6 +315,9 @@ classify_gh() { # <raw segment> <from_xargs> <args after gh>…
       local target="${w[2]:-}"
       [ "$from_xargs" = 1 ] && target="?"
       add_action "merge|$target|$repo|admin=$admin" ;;
+    issue)
+      case "${w[1]:-}" in create|new|edit) ;; *) return 0 ;; esac
+      if has_ready_label "$labels"; then add_action "promote|gh issue ${w[1]} --label ready"; fi ;;
     api)
       local ep=${w[1]:-} m
       ep=${ep#/}
@@ -304,12 +329,16 @@ classify_gh() { # <raw segment> <from_xargs> <args after gh>…
         case "$raw" in
           *mergePullRequest*|*enablePullRequestAutoMerge*|*mergeBranch*|*updateRef*|*deleteRef*)
             add_action "refwrite|gh api graphql merge/ref mutation" ;;
+          *addLabelsToLabelable*|*labelIds*)
+            add_action "promote|gh api graphql label mutation (label ids cannot be checked)" ;;
         esac
       elif [ "$m" != GET ]; then
         if [[ "$ep" =~ (^|/)pulls/([0-9]+)/merge$ ]]; then
           add_action "merge|${BASH_REMATCH[2]}|$(api_repo "$ep" "$repo")|admin=0"
         elif [[ "$ep" =~ (^|/)merges$ ]] || [[ "$ep" =~ (^|/)git/refs/heads/(main|master)$ ]]; then
           add_action "refwrite|gh api $m $ep"
+        elif [[ "$ep" =~ (^|/)issues(/[0-9]+(/labels)?)?$ ]] && names_ready "$raw"; then
+          add_action "promote|gh api $m $ep"
         fi
       fi ;;
   esac
@@ -487,7 +516,8 @@ eval_merge() { # <target> <repo> <flags>
   esac
 }
 
-# Paths the loop may push straight to main: openspec/**, the configured backlog, the mode file.
+# Paths the loop may push straight to main: openspec/**, the mode file, and — for projects that
+# predate the GitHub-issue queue — the backlog file their runbook still configures.
 bookkeeping_backlog() {
   local f="$PROJECT_DIR/openspec/AUTOLOOP.md" b=""
   [ -r "$f" ] && b=$(sed -n 's/^- backlog:[[:space:]]*//p' "$f" | head -1 | tr -d '`' | tr -d '[:space:]')
@@ -548,6 +578,9 @@ evaluate() {
       refwrite) pr="-"
                 block ci "direct ref write: $f1" \
                   "merge-guard: writing main through the API ($f1) bypasses every gate. Merge through gh pr merge <number>." || return 1 ;;
+      promote)  pr="-"
+                block gate "applying the ready label ($f1)" \
+                  "merge-guard: only a human applies the 'ready' label — it puts an issue in the build loop's work queue. Create or edit the issue without it and tell the human which issues to promote." || return 1 ;;
       tamper)   pr="-"
                 block ci "subagent writing guard files ($f1)" \
                   "merge-guard: subagents may not modify the merge guard, its mode file, or .claude/settings*.json." || return 1 ;;
@@ -599,6 +632,13 @@ run_all() {
           case "${branch#refs/heads/}" in
             main|master) add_action "refwrite|$tool on $branch" ;;
           esac ;;
+        *label*|*issue*)
+          # Only label-named fields (`labels`, `add_labels`, …): a title or body saying "ready" is fine.
+          if jq -e '[.tool_input | objects | to_entries[] | select(.key | test("label"; "i")) | .value
+                     | .. | strings | ascii_downcase | gsub("^\\s+|\\s+$"; "")] | any(. == "ready")' \
+               <<<"$input" >/dev/null 2>&1; then
+            add_action "promote|$tool"
+          fi ;;
       esac ;;
     *) return 0 ;;
   esac

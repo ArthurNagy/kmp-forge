@@ -72,7 +72,7 @@ jobs:
         with: { distribution: 'zulu', java-version: '21' }   # = gradle/gradle-daemon-jvm.properties
       - uses: gradle/actions/setup-gradle@v6
       - name: Decode keystore
-        run: echo "$ANDROID_KEYSTORE_BASE64" | base64 -d > $RUNNER_TEMP/release.keystore
+        run: echo "$ANDROID_KEYSTORE_BASE64" | base64 -d > "$RUNNER_TEMP/release.keystore"
         env: { ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }} }
       - name: Build signed release AAB + APK   # AGP injected signing — see docs/release.md
         env:

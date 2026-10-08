@@ -93,9 +93,15 @@ export OPTIONAL_LIBS="<detected opt-in libs: ktor, sqldelight, ...>"
 export FIGMA_URL="(none)"
 export PROJECT_OVERRIDES=""
 export TIMELINE=""
+export USE_OPENSPEC="<yes|no — see below>"
+export SPEC_WORKFLOW="<the matching text from /kmp-forge-init step 4>"
 ```
 
 `MODULE_LIST`/`FEATURE_LIST`/`PLATFORM_LIST` must reflect reality — they feed the generated `CLAUDE.md`.
+
+**Spec workflow** — `USE_OPENSPEC=yes` when the project already has an `openspec/` directory.
+Otherwise ask via `AskUserQuestion`, exactly like `/kmp-forge-init` step 1 question 7 (OpenSpec
+recommended; OpenSpec ≥ 1.14 per init step 1b — never install the CLI without the user's answer).
 
 ### 3. Phase A — safe-additive (automatic)
 
@@ -155,6 +161,27 @@ done
 
 Report each result.
 
+**OpenSpec** (`USE_OPENSPEC=yes`) — kmp-forge's project rules live in `openspec/config.yaml`:
+
+```bash
+rm -rf /tmp/kmpf-openspec && bash "$SH" render "$OVERLAY/openspec" /tmp/kmpf-openspec
+if [[ -d "$TARGET/openspec" ]]; then
+    # Already spec-driven: merge kmp-forge's context/rules/operations into the existing config
+    # by hand (Edit tool) — keep the project's own rules, add ours where they don't conflict.
+    copy_new /tmp/kmpf-openspec/config.yaml "$TARGET/openspec/config.yaml"
+else
+    openspec init --tools claude --no-animation "$TARGET"
+    cp /tmp/kmpf-openspec/config.yaml "$TARGET/openspec/config.yaml"   # replaces init's fresh stub
+fi
+```
+
+**Issue labels** — the backlog is GitHub issues labeled `ready`. If `origin` is a GitHub repo, ask
+(`AskUserQuestion`, default yes) before creating the workflow labels there — it writes to GitHub:
+
+```bash
+(cd "$TARGET" && bash "${CLAUDE_PLUGIN_ROOT}/scripts/issues.sh" labels)
+```
+
 ### 4. Phase A — overwrite-danger (scratch + diff + merge)
 
 `overlay/root` renders `CLAUDE.md`, `.gitignore`, `.editorconfig`, `detekt.yml`, `cliff.toml` — all likely to already exist. Render to scratch first:
@@ -183,12 +210,12 @@ Special-case `CLAUDE.md`: the generated one links to all the `docs/<area>.md` ru
 ### 5. Phase A — CI workflows
 
 Per file, never replacing an existing one — so a project with other workflows still gets
-`pr.yml` (the gate `/kmp-forge-add-autoloop` requires) and `release.yml`, and the PR/issue
-templates are added only where missing:
+`pr.yml` (the gate `/kmp-forge-add-autoloop` requires), `release.yml` and `spec-link.yml` (a
+no-op without `openspec/`), and the PR/issue templates are added only where missing:
 
 ```bash
 rm -rf /tmp/kmpf-ci && bash "$SH" render "$OVERLAY/ci" /tmp/kmpf-ci
-for wf in pr.yml release.yml; do
+for wf in pr.yml release.yml spec-link.yml; do
     copy_new "/tmp/kmpf-ci/$wf" "$TARGET/.github/workflows/$wf"
 done
 copy_new "$OVERLAY/git/pull_request_template.md" "$TARGET/.github/pull_request_template.md"
@@ -317,7 +344,8 @@ Print what changed and what remains:
 ✓ Branch: chore/adopt-kmp-forge
 ✓ Version catalog: kmp-forge libs merged (additive)
 ✓ Docs: docs/<...> added/merged
-✓ CI gate: spotlessCheck detekt build koverVerify present
+✓ CI gate: spotlessCheck detekt build koverVerify present (+ spec-link)
+✓ Spec workflow: <OpenSpec with kmp-forge rules | plain docs>; issue labels <created | skipped>
 ~ CLAUDE.md / .gitignore / detekt.yml: merged (review the diffs)
 ~ build-logic: <level chosen>
 

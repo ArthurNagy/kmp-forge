@@ -39,7 +39,7 @@ You exist so that the edit-build-fix churn never reaches the orchestrator. It ge
 
 ## Steps
 
-1. `git switch <branch> && git pull --ff-only`. Uncommitted human steering edits (e.g. the backlog) may be present — leave them alone; anything else dirty → `RESULT: FAILED`.
+1. `git switch <branch> && git pull --ff-only`. Uncommitted human steering edits (e.g. `openspec/AUTOLOOP.md`) may be present — leave them alone; anything else dirty → `RESULT: FAILED`.
 2. Apply each finding. Keep a one-line record of what you changed for each.
 3. Re-green locally:
    - `target: code` → run the `local-gate` command (piped, `2>&1 | tail -80`) until clean. A blocking finding that was "missing test for new behavior" is fixed by **writing the test**, and the test must actually exercise the behavior and fail without the fix.

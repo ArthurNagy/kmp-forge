@@ -25,7 +25,7 @@ jobs:
       - uses: actions/checkout@v7
       - uses: actions/setup-java@v6
         with: { distribution: 'zulu', java-version: '21' }   # = gradle/gradle-daemon-jvm.properties
-      - uses: gradle/actions/setup-gradle@v5
+      - uses: gradle/actions/setup-gradle@v6
       - run: ./gradlew spotlessCheck
       - run: ./gradlew detekt
       - run: ./gradlew build -x test
@@ -39,7 +39,7 @@ jobs:
       - uses: actions/checkout@v7
       - uses: actions/setup-java@v6
         with: { distribution: 'zulu', java-version: '21' }   # = gradle/gradle-daemon-jvm.properties
-      - uses: gradle/actions/setup-gradle@v5
+      - uses: gradle/actions/setup-gradle@v6
       - run: ./gradlew :shared:linkReleaseFrameworkIosSimulatorArm64
 ```
 
@@ -47,7 +47,7 @@ jobs:
 
 - **Ubuntu** for everything that doesn't need Xcode (cheap).
 - **macOS** only when iOS is enabled (expensive — gate on the `IOS_ENABLED` repository variable).
-- Gradle build cache is enabled by `gradle/actions/setup-gradle@v5` automatically (writes to GitHub Actions cache).
+- Gradle build cache is enabled by `gradle/actions/setup-gradle@v6` automatically (writes to GitHub Actions cache).
 - The JDK is Zulu 21 because kmp.new's `gradle/gradle-daemon-jvm.properties` pins the Gradle daemon to it; a different setup-java JDK makes Gradle download Zulu 21 on every cold run.
 - `concurrency` cancels older PR runs when the user pushes new commits.
 - **Driving a PR to green from the CLI** — watching checks, reading failures without dumping logs, mirroring this gate locally — is the plugin's `driving-ci-green` skill.
@@ -70,7 +70,7 @@ jobs:
         with: { fetch-depth: 0 }
       - uses: actions/setup-java@v6
         with: { distribution: 'zulu', java-version: '21' }   # = gradle/gradle-daemon-jvm.properties
-      - uses: gradle/actions/setup-gradle@v5
+      - uses: gradle/actions/setup-gradle@v6
       - name: Decode keystore
         run: echo "$ANDROID_KEYSTORE_BASE64" | base64 -d > $RUNNER_TEMP/release.keystore
         env: { ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }} }
@@ -182,6 +182,6 @@ Configure in repo Settings → Branches → Add branch protection rule for `main
 
 ## Build cache
 
-`gradle/actions/setup-gradle@v5` writes to GitHub Actions cache automatically. (It stays on v5 deliberately: v6 moved caching into a proprietary component that requires accepting Gradle's Terms of Use — upgrade only if you accept them.) Cache key uses `gradle/**/*.lockfile`, `**/*.gradle*`, `**/gradle-wrapper.properties`. No further config needed.
+`gradle/actions/setup-gradle@v6` writes to GitHub Actions cache automatically. Its caching lives in the proprietary `gradle-actions-caching` component: using v6 accepts [Gradle's Terms of Use](https://gradle.com/legal/terms-of-use/) (kmp-forge's default). A project that can't accept them pins `@v5` (MIT, no new features) instead. Cache key uses `gradle/**/*.lockfile`, `**/*.gradle*`, `**/gradle-wrapper.properties`. No further config needed.
 
 For locally-shared cache between projects, configure `~/.gradle/caches/`. No Develocity / Gradle Enterprise needed for personal projects.

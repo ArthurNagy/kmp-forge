@@ -16,9 +16,10 @@ jobs:
         with:
           distribution: zulu        # kmp.new pins the Gradle daemon to Azul Zulu 21
           java-version: 21          # (gradle/gradle-daemon-jvm.properties) — match it, no per-run JDK download
-      # setup-gradle stays on v5 (MIT, Node 24): v6 moved caching into a proprietary component whose
-      # Terms of Use you accept by upgrading — https://blog.gradle.org/github-actions-for-gradle-v6
-      - uses: gradle/actions/setup-gradle@v5
+      # setup-gradle v6: its caching is the proprietary `gradle-actions-caching` component — using it
+      # accepts Gradle's Terms of Use (https://gradle.com/legal/terms-of-use/). Pin `@v5` (MIT) instead
+      # if your project can't accept them. https://blog.gradle.org/github-actions-for-gradle-v6
+      - uses: gradle/actions/setup-gradle@v6
       - name: Spotless (ktlint)
         run: ./gradlew spotlessCheck
       - name: Detekt
@@ -48,6 +49,6 @@ jobs:
         with:
           distribution: zulu        # kmp.new pins the Gradle daemon to Azul Zulu 21
           java-version: 21          # (gradle/gradle-daemon-jvm.properties) — match it, no per-run JDK download
-      - uses: gradle/actions/setup-gradle@v5
+      - uses: gradle/actions/setup-gradle@v6
       - name: Link iOS framework (simulator arm64)
         run: ./gradlew :shared:linkReleaseFrameworkIosSimulatorArm64

@@ -80,7 +80,7 @@ ls "$TARGET/.claude/commands/opsx/propose.md" "$TARGET/.claude/commands/opsx/app
 Use `AskUserQuestion` to collect the following. Do NOT skip any:
 
 1. **Merge-guard starting mode** — `log` (recommended: observe first, flip to `enforce` after the log agrees with the loop — the trust ramp), `enforce` (strict from the first merge), or `enforce-ci` (CI-green-only; for using the guard *without* the loop).
-2. **Queue-empty handoff** — what the loop should print when no `ready` issue is left: the generic default ("Queue empty. Label the next issues `ready`, or stop here.") or a project-specific checkpoint the user dictates (e.g. "review the eval output and decide go/no-go before Phase 1"). This becomes `AUTOLOOP_HANDOFF`.
+2. **Queue-empty handoff** — what the loop should print when no `ready` issue is left: the generic default ("Queue empty. Approve the drafted issues (or run /kmp-forge-groom) by labeling them `ready`, or stop here.") or a project-specific checkpoint the user dictates (e.g. "review the eval output and decide go/no-go before Phase 1"). This becomes `AUTOLOOP_HANDOFF`.
 3. **Ready approvers** — whose issues and `ready` labels the loop trusts besides its own account: **just me** (default — empty) or a comma-separated list of GitHub logins (collaborators who triage). This becomes `READY_APPROVERS`.
 4. **First work** — skip, or dictate the first slices now (filed as issues in step 3; the user labels them `ready`). If `openspec/backlog.md` exists, this question is instead: migrate its unchecked items to issues (recommended), or keep the file for reference and start fresh.
 

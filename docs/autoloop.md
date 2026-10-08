@@ -103,7 +103,7 @@ The queue is the repo's open issues labeled **`ready`** — the same issues you 
 
 Issues follow the **Feature / backlog item** form (`.github/ISSUE_TEMPLATE/feature_request.yml`): **Problem** and **Acceptance criteria** (WHEN … THEN …, one per line) are the slice's goal; **Out of scope** is binding; **Depends on**, **Needs a human first** (preconditions checked before starting) and **Change name** are optional. Bug reports work too.
 
-Per increment the loop adds `in-progress` when it starts, the docs PR says `Refs #<issue>`, the code PR `Fixes #<issue>` (merging closes the issue), and the loop then removes `in-progress`. Non-blocking findings worth keeping become one **follow-up issue** — filed without `ready`, so you decide. When no `ready` issue is left it prints the configured **queue-empty handoff** (from `openspec/AUTOLOOP.md`) with the issues it skipped and why, and stops. It never labels anything `ready`.
+Per increment the loop adds `in-progress` when it starts, the docs PR says `Refs #<issue>`, the code PR `Fixes #<issue>` (merging closes the issue), and the loop then removes `in-progress`. Non-blocking findings worth keeping become one **follow-up issue** — filed without `ready`, so you decide. When no `ready` issue is left it prints the configured **queue-empty handoff** (from `openspec/AUTOLOOP.md`) with the issues it skipped and why, and stops. With `queue-empty-groom: on` (the install default) it first spawns the `kmp-product-owner` agent in gaps mode and files up to 3 drafted next slices from the MVP spec — without `ready`, so the next increment starts only when you approve one. It never labels anything `ready`.
 
 ## Installing
 

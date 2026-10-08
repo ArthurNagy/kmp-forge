@@ -39,6 +39,7 @@ When you "STOP + escalate": leave the repo in a safe state (no half-merged branc
 | 3 · Implement | `kmp-forge:kmp-loop-implementer` | `RESULT / PR / CI / FILES` |
 | 4 · Code gate | `kmp-forge:kmp-loop-code-reviewer` **and** `kmp-forge:kmp-reviewer` | `VERDICT: PASS \| CHANGES \| ERROR` + findings |
 | 2b / 4b · Fix | `kmp-forge:kmp-loop-fixer` | `RESULT / CI / APPLIED / UNADDRESSED` |
+| 0b · Queue empty | `kmp-forge:kmp-product-owner` | `RESULT` + drafted issues (filed by you, never `ready`) |
 
 Pass each worker the `issue` number and the `slug`, plus `claude_plugin_root` = `${CLAUDE_PLUGIN_ROOT}` — the workers read the issue themselves (`gh issue view <issue> --json title,body`); its Problem / Acceptance criteria / Out of scope sections are the slice's goal and binding boundaries. Pass `local-gate` (from the loop configuration) to the implementer and the fixer; pass `pr`, `branch`, and `round` to the gates and the fixer. If a worker returns `RESULT: FAILED`, its `FAILURE:` line is your escalation cause — do not retry it blind.
 
@@ -46,7 +47,7 @@ Pass each worker the `issue` number and the `slug`, plus `claude_plugin_root` = 
 
 ### 0. Precheck and resume
 
-1. **Read the loop configuration** from `openspec/AUTOLOOP.md`'s `## Loop configuration` section: `local-gate`, `spec-workflow`, `ready-approvers`, `kill-switch`, and the `### Queue-empty handoff` block. Missing file or missing keys → fail-safe defaults: ready-approvers empty (only this account), kill-switch `openspec/STOP`, local-gate `./gradlew spotlessApply detekt build -x test jvmTest koverVerify`, handoff = "label more issues `ready`, or stop". (A legacy `backlog:` key means the project predates the issue queue — STOP + escalate: "re-run /kmp-forge-add-autoloop to migrate openspec/backlog.md to issues".)
+1. **Read the loop configuration** from `openspec/AUTOLOOP.md`'s `## Loop configuration` section: `local-gate`, `spec-workflow`, `ready-approvers`, `queue-empty-groom`, `kill-switch`, and the `### Queue-empty handoff` block. Missing file or missing keys → fail-safe defaults: ready-approvers empty (only this account), queue-empty-groom `off`, kill-switch `openspec/STOP`, local-gate `./gradlew spotlessApply detekt build -x test jvmTest koverVerify`, handoff = "label more issues `ready`, or stop". (A legacy `backlog:` key means the project predates the issue queue — STOP + escalate: "re-run /kmp-forge-add-autoloop to migrate openspec/backlog.md to issues".)
 2. If the kill-switch file exists → kill-switch halt.
 3. **Working tree.** `git fetch origin --prune`, then `git status --porcelain`:
    - **Clean** → continue.
@@ -73,7 +74,13 @@ Pass each worker the `issue` number and the `slug`, plus `claude_plugin_root` = 
      openspec archive <slug> --yes
      git add -- openspec && git commit -m "docs(openspec): archive <slug>" && git push origin main
      ```
-     Print a `🏁 QUEUE EMPTY` block containing the configured **Queue-empty handoff** verbatim plus the `skipped` list (ready issues the queue passed over, and why — blocked, untrusted, epic), then tell `/loop` to stop and wait for the human. Never label anything `ready` yourself.
+     **Queue-empty grooming** (only when `queue-empty-groom: on`): spawn `kmp-forge:kmp-product-owner` with `mode: gaps`, `max: 3`, `claude_plugin_root`. On `RESULT: OK`, file each `action: create` draft in its listed order (skip `replace` drafts — re-filing someone's issue is the human's call), replacing every `draft:<j>` with the number draft *j* got, and strip `ready` from the labels should it ever appear:
+     ```bash
+     gh issue create --title "<title>" --label "<labels>" --body-file <scratch file with the draft body>
+     ```
+     Any other result → note it in the block below; it is not an escalation.
+
+     Print a `🏁 QUEUE EMPTY` block containing the configured **Queue-empty handoff** verbatim, the `skipped` list (ready issues the queue passed over, and why — blocked, untrusted, epic), and any issues just drafted with the command that approves them — `gh issue edit <n…> --add-label ready`, **for the human to run**. Then tell `/loop` to stop and wait for the human. Never label anything `ready` yourself.
 5. **Derive the phase to resume at — never guess from memory.** A prior iteration may have been interrupted, compacted, or crashed between any two steps. The repo, GitHub, and OpenSpec are the only sources of truth. Query by **head branch and every state** (a plain `--search "<slug>"` misses branch names, and `--state open` misses a PR merged just before a crash):
    ```bash
    gh pr list --head "spec/<slug>" --state all --json number,state --limit 5

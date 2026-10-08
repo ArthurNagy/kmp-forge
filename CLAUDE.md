@@ -64,12 +64,12 @@ Marketplace install: `/plugin marketplace add arthurnagy/kmp-forge` then `/plugi
 .claude-plugin/plugin.json   Plugin manifest (name, description, author, repo)
 commands/                    Slash commands (kmp-forge-*.md) — entry points for users
 agents/                      Subagents invoked by commands (kmp-feature-builder, kmp-reviewer,
-                              kmp-migrator, kmp-spec-critic, kmp-loop-{proposer,implementer,
-                              code-reviewer,fixer} — the loop workers)
+                              kmp-migrator, kmp-spec-critic, kmp-product-owner (backlog drafts),
+                              kmp-loop-{proposer,implementer,code-reviewer,fixer} — the loop workers)
 skills/                      Workflow skills auto-triggered in scaffolded projects
                              (conventional-commits, git-cliff-changelog,
                               github-release-artifacts, mvp-spec-authoring, adr-authoring,
-                              driving-ci-green)
+                              backlog-issue-authoring, driving-ci-green)
 scripts/                     Bash renderers/patchers invoked by commands
   apply-overlay.sh             render | render-module | patch-settings | patch-libs | pin-toolchain
   kmp-new.sh                   download a project from kmp.jetbrains.com's generator | print pre-filled wizard URL

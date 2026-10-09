@@ -41,7 +41,7 @@ ${AUTOLOOP_HANDOFF}
 
 ## Steering (no need to interrupt)
 
-- **Add work:** file an issue (the Feature / backlog item form) and label it `ready`. **Reorder:** `priority:high` / `priority:low`. **Pause one:** remove `ready` (an `in-progress` issue without it is skipped until relabeled). **Hold an epic:** `epic`. The loop re-reads the queue at every iteration.
+- **Add work:** file an issue (the Feature / backlog item form) and label it `ready`. **Reorder:** `priority:high` / `priority:low`. **Pause one:** remove `ready`. On the `in-progress` issue that pauses the whole loop (`⏸ LOOP PAUSED` — it never starts another slice meanwhile); relabel it to resume, or remove `in-progress` to drop it. **Hold an epic:** `epic`. The loop re-reads the queue at every iteration.
 - **Edit this runbook or the guard mode** while the loop runs: it commits your uncommitted `openspec/AUTOLOOP.md` / guard-mode edits to `main` at its next Phase 0 — you don't need to commit them yourself.
 - **Emergency stop:** create the kill-switch file (`kill-switch:` above — by default `touch openspec/STOP`). The loop checks it before every phase and every merge, and halts leaving any open PRs as they are. Delete the file to resume.
 - **Hard stop now:** interrupt the running `/loop` (Esc), or tell it to stop.

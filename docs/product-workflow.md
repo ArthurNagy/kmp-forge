@@ -138,7 +138,7 @@ GitHub issues are the **single source of work** — no Jira, no Linear, no secon
 1. **File** — an idea, a bug, a raw request (anyone's). Use the forms in `.github/ISSUE_TEMPLATE/`.
 2. **Groom** — `/kmp-forge-groom` (the `kmp-product-owner` agent drafts, you pick what gets filed; rules in the `backlog-issue-authoring` skill) or by hand. Shape it into one change that fits one PR: **Problem**, **Acceptance criteria** (WHEN … THEN …, one per line — each becomes a spec scenario and a test), **Out of scope**, optional **Depends on**, **Needs a human first**, **Change name**. Too big → label it `epic` and split it into slice issues. An outsider's issue is raw intake: re-file the groomed version as your own and close the original with a link.
 3. **Approve** — a human labels it `ready` (plus `priority:high` / `priority:low` if it should jump or trail the queue). **Only a human applies `ready`.** Claude files and grooms issues but never approves them; with the autonomous loop installed, the merge guard enforces that.
-4. **Work** — `in-progress` while someone (or the loop) works it. Branch `feat/<issue>-<kebab>` / `fix/<issue>-…`; the OpenSpec change is `<issue>-<kebab>` too.
+4. **Work** — `in-progress` while someone (or the loop) works it. One name for everything: the OpenSpec change is `<issue>-<kebab>` and its branches are `spec/<that name>` / `feat/<that name>` (`fix/…` for a bug) — the loop treats two different names for one issue as a conflict.
 5. **Close** — the PR body says `Fixes #<issue>`; merging closes it.
 
 ### Labels
@@ -185,21 +185,7 @@ Three templates ship:
 
 ### `bug_report.yml`
 
-```yaml
-name: Bug report
-description: Something is broken or behaving unexpectedly
-labels: [bug]
-body:
-  - type: textarea
-    attributes: { label: What happened?, description: Concrete steps + expected vs actual }
-    validations: { required: true }
-  - type: input
-    attributes: { label: Platform, placeholder: "Android 14 / iOS 17 / desktop macOS 14 / web Chrome 120" }
-  - type: input
-    attributes: { label: App version, placeholder: "v0.3.2" }
-  - type: textarea
-    attributes: { label: Logs / screenshots }
-```
+Labeled `bug`: **What happened?** (required — steps, expected vs actual) · **Acceptance criteria** (optional WHEN … THEN … lines, each a regression test) · **Depends on** · **Change name** · **Platform** · **App version** · **Logs / screenshots**. Labeled `ready`, a bug enters the same queue; its fix PR is a `fix(…)`, so the spec-link check doesn't apply.
 
 ### `feature_request.yml` — Feature / backlog item
 

@@ -41,7 +41,7 @@ When you "STOP + escalate": leave the repo in a safe state (no half-merged branc
 | 2b / 4b · Fix | `kmp-forge:kmp-loop-fixer` | `RESULT / CI / APPLIED / UNADDRESSED` |
 | 0b · Queue empty | `kmp-forge:kmp-product-owner` | `RESULT` + drafted issues (filed by you, never `ready`) |
 
-Pass each worker the `issue` number and the `slug`, plus `claude_plugin_root` = `${CLAUDE_PLUGIN_ROOT}` — the workers read the issue themselves (`gh issue view <issue> --json title,body`); its Problem / Acceptance criteria / Out of scope sections are the slice's goal and binding boundaries. Pass `local-gate` (from the loop configuration) to the implementer and the fixer; pass `pr`, `branch`, and `round` to the gates and the fixer. If a worker returns `RESULT: FAILED`, its `FAILURE:` line is your escalation cause — do not retry it blind.
+Pass each worker the `issue` number and the `slug`, plus `claude_plugin_root` = `${CLAUDE_PLUGIN_ROOT}` — the workers read the issue themselves (`gh issue view <issue> --json title,body,labels`); its Problem / Acceptance criteria / Out of scope sections (a bug report: What happened? / Acceptance criteria) are the slice's goal and binding boundaries. Pass `local-gate` (from the loop configuration) to the implementer and the fixer; pass `pr`, `branch`, and `round` to the gates and the fixer. If a worker returns `RESULT: FAILED`, its `FAILURE:` line is your escalation cause — do not retry it blind.
 
 ## Flow
 
@@ -66,13 +66,14 @@ Pass each worker the `issue` number and the `slug`, plus `claude_plugin_root` = 
    ```bash
    bash "${CLAUDE_PLUGIN_ROOT}/scripts/issues.sh" next --approvers "<ready-approvers>"
    ```
-   It prints one JSON object (it resumes an open `in-progress` issue first; otherwise the highest-priority, oldest `ready` issue that is not an `epic`, whose author and `ready`-labeler are this account or an approver, and that nothing open blocks):
+   It prints one JSON object (it resumes an open `in-progress` issue first; otherwise the highest-priority, oldest `ready` issue that is not an `epic`, whose author and `ready`-labeler are this account or an approver, that nothing open blocks, and that is not already implemented):
    - `"status": "error"` or `"conflict"` → STOP + escalate with its `reason`.
+   - `"status": "paused"` → the `in-progress` issue (this loop's current slice) can't be worked right now — a human removed `ready`, or a dependency reopened. Do **not** start another issue (that would leave two half-done slices). Print a `⏸ LOOP PAUSED — #<issue>` block with its `reason`, then tell `/loop` to stop. Not an escalation: the human resumes by relabeling it `ready`, or drops it by removing `in-progress`.
    - `"status": "next"` → take `issue`, `title`, `slug` (`<issue>-<kebab>`, reused from any earlier attempt) and `preconditions`. Non-empty `preconditions` (the issue's **Needs a human first** section: credentials, a URL) are a **precondition, not a task**: check them before doing anything. If unmet → STOP + escalate immediately, before Phase 1.
-   - `"status": "empty"` → **the queue is COMPLETE.** Archive any still-active change and land it:
+   - `"status": "empty"` → **the queue is COMPLETE.** Archive every still-active change that is **finished** — `openspec list --json` shows all its tasks done (`completedTasks == totalTasks`, `totalTasks > 0`) **and** its `feat/<name>` PR is MERGED — and land them. Never archive any other active change: a half-built one (its issue paused, blocked or not yet implemented) would fold specs for behavior that was never built into `openspec/specs/`.
      ```bash
-     openspec archive <slug> --yes
-     git add -- openspec && git commit -m "docs(openspec): archive <slug>" && git push origin main
+     openspec archive <name> --yes          # once per finished change
+     git add -- openspec && git commit -m "docs(openspec): archive <name…>" && git push origin main
      ```
      **Queue-empty grooming** (only when `queue-empty-groom: on`): spawn `kmp-forge:kmp-product-owner` with `mode: gaps`, `max: 3`, `claude_plugin_root`. On `RESULT: OK`, file each `action: create` draft in its listed order (skip `replace` drafts — re-filing someone's issue is the human's call), replacing every `draft:<j>` with the number draft *j* got, and strip `ready` from the labels should it ever appear:
      ```bash
@@ -83,11 +84,11 @@ Pass each worker the `issue` number and the `slug`, plus `claude_plugin_root` = 
      Print a `🏁 QUEUE EMPTY` block containing the configured **Queue-empty handoff** verbatim, the `skipped` list (ready issues the queue passed over, and why — blocked, untrusted, epic), and any issues just drafted with the command that approves them — `gh issue edit <n…> --add-label ready`, **for the human to run**. Then tell `/loop` to stop and wait for the human. Never label anything `ready` yourself.
 5. **Derive the phase to resume at — never guess from memory.** A prior iteration may have been interrupted, compacted, or crashed between any two steps. The repo, GitHub, and OpenSpec are the only sources of truth. Query by **head branch and every state** (a plain `--search "<slug>"` misses branch names, and `--state open` misses a PR merged just before a crash):
    ```bash
-   gh pr list --head "spec/<slug>" --state all --json number,state --limit 5
-   gh pr list --head "feat/<slug>" --state all --json number,state --limit 5
+   gh pr list --head "spec/<slug>" --state all --json number,state,isCrossRepository,author --limit 10
+   gh pr list --head "feat/<slug>" --state all --json number,state,isCrossRepository,author --limit 10
    openspec list --json
    ```
-   If a head has several PRs, the OPEN one wins, then the most recent MERGED one.
+   Ignore PRs from forks (`isCrossRepository: true`) and PRs not opened by this account or an approver — anyone can open a PR whose branch happens to be named `feat/<slug>`. Of the rest, if a head has several PRs, the OPEN one wins, then the most recent MERGED one.
 
    | docs PR (`spec/<slug>`) | code PR (`feat/<slug>`) | Resume at |
    |---|---|---|
@@ -167,15 +168,19 @@ Runs only once CI is green — the two merge conditions are **CI green AND this 
    ```bash
    [ "$(gh issue view <issue> --json state --jq .state)" = CLOSED ] \
      || gh issue close <issue> --comment "Implemented in #<code-pr> (spec: #<docs-pr>)."
-   gh issue edit <issue> --remove-label in-progress
+   gh issue edit <issue> --remove-label in-progress --remove-label ready
    ```
+   (Removing `ready` keeps a reopened issue from silently re-entering the queue; finished work needs a new issue.)
 3. **Deferred findings** (non-blocking ones worth keeping, from either gate) → file ONE follow-up issue, never labeled `ready` — a human decides whether it is worth doing:
    ```bash
-   gh issue create --title "Follow-ups from #<issue>" --label chore \
-     --body "<one bullet per finding, file:line>
+   cat > "${TMPDIR:-/tmp}/followups-<issue>.md" <<'EOF'
+   <one bullet per finding, file:line>
 
-   Refs #<issue>"
+   Refs #<issue>
+   EOF
+   gh issue create --title "Follow-ups from #<issue>" --label chore --body-file "${TMPDIR:-/tmp}/followups-<issue>.md"
    ```
+   (Always `--body-file` from a quoted heredoc: findings contain backticks and `$`, which a double-quoted `--body` would execute.)
 4. Print the increment report:
    ```
    ✅ INCREMENT COMPLETE — #<issue> <slug>
@@ -217,4 +222,4 @@ Decision needed: <the specific human judgment required>
 
 - This command assumes `/kmp-forge-add-autoloop` has been run: OpenSpec initialized (`/opsx:*` commands present), AUTOLOOP.md seeded, the issue labels created, merge guard installed. If any of that is missing, stop and point the user at `/kmp-forge-add-autoloop`.
 - Launch: `/loop /kmp-forge-next-increment`. One invocation = one increment; `/loop` provides the repetition.
-- Steering is all on GitHub: label an issue `ready` to queue it, `priority:high` / `priority:low` to reorder, remove `ready` to pause it (an `in-progress` issue without `ready` is skipped until relabeled), `epic` to keep it out of the queue. Create the configured kill-switch file (`kill-switch:` in `openspec/AUTOLOOP.md`, default `openspec/STOP` — gitignored) for an emergency stop, delete it to resume.
+- Steering is all on GitHub: label an issue `ready` to queue it, `priority:high` / `priority:low` to reorder, remove `ready` to pause it (on the `in-progress` issue that pauses the whole loop — `⏸ LOOP PAUSED`, no other slice starts meanwhile; relabel to resume, or remove `in-progress` to drop it), `epic` to keep it out of the queue. Create the configured kill-switch file (`kill-switch:` in `openspec/AUTOLOOP.md`, default `openspec/STOP` — gitignored) for an emergency stop, delete it to resume.

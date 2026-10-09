@@ -9,6 +9,23 @@ body:
       description: Concrete steps + expected vs actual behavior
     validations:
       required: true
+  - type: textarea
+    id: acceptance
+    attributes:
+      label: Acceptance criteria
+      description: Optional. How we'll know it's fixed, one per line, so each becomes a regression test.
+      placeholder: "- WHEN the device is offline THEN the gallery shows the cached photos instead of an error"
+  - type: input
+    id: depends-on
+    attributes:
+      label: Depends on
+      description: Issues that must be closed before this one starts.
+      placeholder: "#12"
+  - type: input
+    id: change-name
+    attributes:
+      label: Change name
+      description: Optional. Kebab-case, verb first (fix-offline-gallery). Prefixed with the issue number for the change and branch names.
   - type: input
     id: platform
     attributes:

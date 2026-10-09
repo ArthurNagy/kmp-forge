@@ -82,7 +82,7 @@ Mode lives in `.claude/hooks/merge-guard.mode` (tracked — project policy), re-
 
 All work steering happens on GitHub, where you already triage:
 
-- **Add work:** file an issue and label it `ready`. **Reorder:** `priority:high` / `priority:low` (then oldest first). **Pause one:** remove `ready` — an `in-progress` issue without it is skipped until relabeled. **Keep a big one out:** `epic` (split it into slice issues).
+- **Add work:** file an issue and label it `ready`. **Reorder:** `priority:high` / `priority:low` (then oldest first). **Pause one:** remove `ready`. On the `in-progress` issue that pauses the whole loop (`⏸ LOOP PAUSED` — it never starts another slice meanwhile); relabel it to resume, or remove `in-progress` to drop it. **Keep a big one out:** `epic` (split it into slice issues).
 - **Runbook / guard mode:** edit `openspec/AUTOLOOP.md` or `.claude/hooks/merge-guard.mode` any time; the loop commits your uncommitted edits to `main` at its next Phase 0.
 - **Emergency stop:** create the kill-switch file (`kill-switch:` in `openspec/AUTOLOOP.md`, default `touch openspec/STOP`, gitignored); the loop checks it before every phase and every merge. Delete it to resume.
 - **Hard stop now:** interrupt `/loop` (Esc) or tell it to stop.
@@ -95,13 +95,14 @@ The loop prints a `⛔ ESCALATION` block (what failed, what was tried, repo stat
 
 The queue is the repo's open issues labeled **`ready`** — the same issues you triage by hand; there is no second backlog file. `scripts/issues.sh next` (in the plugin) picks the next one, so the rules are code, not model judgment:
 
-1. An open `in-progress` issue (the loop's current slice) is resumed first. Two at once is a conflict → escalate.
+1. An open `in-progress` issue (the loop's current slice) is resumed first. Two at once is a conflict → escalate. One that can't be worked right now (`ready` removed, a dependency reopened) **pauses** the loop — it never starts another slice beside a half-done one.
 2. Otherwise: `ready` issues that are not `epic`s, ordered `priority:high` → unlabeled → `priority:low`, then oldest issue number first.
 3. **Trust.** An issue is worked only when its **author and whoever last applied `ready`** are the loop's own GitHub account or listed in `ready-approvers:` (`openspec/AUTOLOOP.md`). Anyone can open an issue on a public repo, and an issue form can auto-apply labels on its author's behalf — a label alone proves nothing. An outsider's issue is raw intake: re-file it as your own to queue it.
 4. **Dependencies.** An issue waits while anything in its **Depends on** section — or GitHub's native "blocked by" relationship — is still open.
-5. **Naming.** The change is `<issue>-<kebab>` (from the issue's **Change name**, else its title), reused from any earlier attempt — so a crashed increment resumes on the same `spec/` / `feat/` branches even if the title changed.
+5. **Naming.** The change is `<issue>-<kebab>` (from the issue's **Change name**, else its title), reused from any earlier attempt — an open change dir, a branch on `origin`, or a same-repo PR by an approver (fork PRs and outsiders' branch names are ignored) — so a crashed increment resumes on the same `spec/` / `feat/` branches even if the title changed.
+6. **Done is done.** A `ready` issue whose `feat/` PR already merged (a finished issue someone reopened) is skipped: further changes need a new issue.
 
-Issues follow the **Feature / backlog item** form (`.github/ISSUE_TEMPLATE/feature_request.yml`): **Problem** and **Acceptance criteria** (WHEN … THEN …, one per line) are the slice's goal; **Out of scope** is binding; **Depends on**, **Needs a human first** (preconditions checked before starting) and **Change name** are optional. Bug reports work too.
+Issues follow the **Feature / backlog item** form (`.github/ISSUE_TEMPLATE/feature_request.yml`): **Problem** and **Acceptance criteria** (WHEN … THEN …, one per line) are the slice's goal; **Out of scope** is binding; **Depends on**, **Needs a human first** (preconditions checked before starting) and **Change name** are optional. Bug reports (the **Bug report** form) work too: **What happened?** (steps, expected vs actual) plus optional **Acceptance criteria** are the goal, and the code PR is titled `fix(…)`.
 
 Per increment the loop adds `in-progress` when it starts, the docs PR says `Refs #<issue>`, the code PR `Fixes #<issue>` (merging closes the issue), and the loop then removes `in-progress`. Non-blocking findings worth keeping become one **follow-up issue** — filed without `ready`, so you decide. When no `ready` issue is left it prints the configured **queue-empty handoff** (from `openspec/AUTOLOOP.md`) with the issues it skipped and why, and stops. With `queue-empty-groom: on` (the install default) it first spawns the `kmp-product-owner` agent in gaps mode and files up to 3 drafted next slices from the MVP spec — without `ready`, so the next increment starts only when you approve one. It never labels anything `ready`.
 

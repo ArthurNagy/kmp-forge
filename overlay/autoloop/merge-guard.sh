@@ -88,7 +88,7 @@ deny_json() {
 # where we can no longer parse it properly.
 looks_guarded() {
   case "$input" in
-    *merge*|*push*|*git/refs*|*.claude/settings*|*ready*) return 0 ;;
+    *merge*|*push*|*git/refs*|*.claude/settings*|*label*ready*|*ready*label*) return 0 ;;
   esac
   return 1
 }
@@ -632,8 +632,11 @@ run_all() {
           case "${branch#refs/heads/}" in
             main|master) add_action "refwrite|$tool on $branch" ;;
           esac ;;
-        *label*|*issue*)
-          # Only label-named fields (`labels`, `add_labels`, …): a title or body saying "ready" is fine.
+        *label*create*|*label*update*|*label*add*|*label*write*|*label*set*|*label*edit*|\
+        *issue*create*|*issue*update*|*issue*add*|*issue*write*|*issue*set*|*issue*edit*|\
+        *create*issue*|*update*issue*|*add*issue*|*add*label*|*set*label*|*edit*issue*)
+          # Write tools only (a list_issues filtered by `ready` is a read), and only label-named
+          # fields (`labels`, `add_labels`, …): a title or body saying "ready" is fine.
           if jq -e '[.tool_input | objects | to_entries[] | select(.key | test("label"; "i")) | .value
                      | .. | strings | ascii_downcase | gsub("^\\s+|\\s+$"; "")] | any(. == "ready")' \
                <<<"$input" >/dev/null 2>&1; then

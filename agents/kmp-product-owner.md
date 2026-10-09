@@ -52,7 +52,7 @@ You are the product owner for a kmp-forge project. You decide *what is worth bui
    ```
 4. Do the mode's work:
    - `idea` → one issue if it fits one PR; otherwise an `epic` draft plus its slice drafts, ordered dependencies-first.
-   - `issues` → for each: workable already (say so, suggest nothing) · vague (a `replace #n` draft with the groomed body) · too big (an `epic` + slices) · duplicate (say which). An issue whose author is not the repo owner or a collaborator is always re-filed as a `replace` draft, never edited in place.
+   - `issues` → for each: workable already (say so, suggest nothing) · vague (a `replace #n` draft with the groomed body) · too big (an `epic` + slices) · duplicate (say which). An issue whose author is not an **approver** — the account `gh api user --jq .login` returns, or a login listed under `ready-approvers:` in `openspec/AUTOLOOP.md` (when present) — is always re-filed as a `replace` draft, never edited in place, and never called "workable already": the build loop only trusts approver-authored issues, so leaving it would strand it once labeled `ready`.
    - `gaps` → walk the MVP spec's Must-have list and Key user flows; for each part no closed issue, open issue or spec covers, draft the **next** slice only (the one that unblocks the most), not the whole remainder. Prefer flows end-to-end over polishing one screen.
 5. Rank: suggest a priority for each draft and, for the open `ready` queue, flag at most 3 issues whose priority looks wrong (blocking others, stale, or out of scope).
 

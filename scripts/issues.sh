@@ -11,7 +11,8 @@
 #   issues.sh next [--approvers login1,login2] [--repo OWNER/REPO]
 #       Pick the issue the build loop works next and print ONE JSON object on stdout.
 #       Read-only. The selection rules are code, not model judgment:
-#         1. An open `in-progress` issue is resumed first (two of them → "conflict").
+#         1. An open `in-progress` issue is resumed first (two of them → "conflict"; one that is no
+#            longer workable → "paused", so a half-done slice is never abandoned for another).
 #         2. Otherwise the open `ready` issues, minus `epic`s, ordered priority:high →
 #            unlabeled → priority:low, then oldest issue number first.
 #         3. A candidate is TRUSTED only if its author AND whoever last applied `ready` are the
@@ -22,12 +23,15 @@
 #            "Depends on" section's #refs plus GitHub's native "blocked by" relationships.
 #         5. Its change name (also the spec/ and feat/ branch suffix) is `<issue>-<kebab>`,
 #            reusing whatever name an earlier attempt already used (open change dir, remote
-#            branch, or PR head with that `<issue>-` prefix), so a crashed increment resumes
-#            on the same branches even if the issue title changed since.
+#            branch, or a same-repo PR head by an approver with that `<issue>-` prefix), so a
+#            crashed increment resumes on the same branches even if the issue title changed since.
+#            A `ready` issue whose feat/ PR already merged (a reopened, finished issue) is skipped.
 #       Output — one of:
 #         {"status":"next","issue":42,"title":"…","slug":"42-add-session-cache","resume":false,
 #          "priority":"high|normal|low","preconditions":"…","skipped":[…]}
 #         {"status":"empty","skipped":[{"issue":12,"reason":"…"}]}
+#         {"status":"paused","issue":42,"title":"…","reason":"…"}   (the in-progress issue can't be
+#                                                    worked right now — the loop waits, never starts another)
 #         {"status":"conflict","reason":"…"}
 #         {"status":"error","reason":"…"}            (exit 1)
 #
@@ -185,39 +189,50 @@ try:
     cache = {"heads": None}
 
     def existing_names(number):
-        names = set()
+        """Change names already used for this issue → {"spec": [PR states], "feat": [PR states]}.
+
+        Only names this repo's approvers created count: an open change dir, a branch on origin, or a
+        PR head from this repository opened by a trusted account — a fork PR named feat/<n>-x can
+        neither rename the change nor wedge the queue with a "conflict"."""
+        names = {}
         prefix = "%d-" % number
         changes = os.path.join("openspec", "changes")
         if os.path.isdir(changes):
             for d in os.listdir(changes):
                 if d.startswith(prefix) and os.path.isdir(os.path.join(changes, d)):
-                    names.add(d)
+                    names.setdefault(d, {"spec": [], "feat": []})
         r = subprocess.run(["git", "branch", "-r", "--list", "origin/spec/" + prefix + "*",
                             "origin/feat/" + prefix + "*"], capture_output=True, text=True)
         for line in r.stdout.splitlines():
             m = re.match(r"^\s*origin/(?:spec|feat)/(%s.+)$" % re.escape(prefix), line)
             if m:
-                names.add(m.group(1).strip())
+                names.setdefault(m.group(1).strip(), {"spec": [], "feat": []})
         if cache["heads"] is None:
-            raw = gh("pr", "list", *rflag, "--state", "all", "--limit", "500", "--json", "headRefName")
-            cache["heads"] = [p["headRefName"] for p in json.loads(raw or "[]")]
-        for head in cache["heads"]:
-            m = re.match(r"^(?:spec|feat)/(%s.+)$" % re.escape(prefix), head)
+            raw = gh("pr", "list", *rflag, "--state", "all", "--limit", "500",
+                     "--json", "headRefName,state,isCrossRepository,author")
+            cache["heads"] = [p for p in json.loads(raw or "[]")
+                              if not p.get("isCrossRepository")
+                              and (p.get("author") or {}).get("login", "").lower() in trusted]
+        for pr in cache["heads"]:
+            m = re.match(r"^(spec|feat)/(%s.+)$" % re.escape(prefix), pr["headRefName"])
             if m:
-                names.add(m.group(1))
+                names.setdefault(m.group(2), {"spec": [], "feat": []})[m.group(1)].append(pr.get("state", ""))
         return names
 
     def slug_for(issue, secs):
+        """→ (slug, in_flight, implemented)."""
         names = existing_names(issue["number"])
         if len(names) > 1:
-            raise LookupError("issue #%d has several change names in flight: %s"
+            raise LookupError("issue #%d has several change names in flight: %s (use one name for the "
+                              "OpenSpec change and its spec/ + feat/ branches)"
                               % (issue["number"], ", ".join(sorted(names))))
         if names:
-            return names.pop(), True
+            name, prs = names.popitem()
+            return name, True, "MERGED" in prs["feat"]
         hint = secs.get("change name", "").strip().strip("`").strip()
         if not re.fullmatch(r"[a-z0-9]+(-[a-z0-9]+)*", hint or ""):
             hint = kebab(issue.get("title", ""))
-        return "%d-%s" % (issue["number"], hint or "change"), False
+        return "%d-%s" % (issue["number"], hint or "change"), False, False
 
     skipped = []
 
@@ -239,22 +254,17 @@ try:
             return "blocked by open " + ", ".join("#%d" % n for n in blockers)
         return None
 
-    def pick(issue, resume_label):
-        secs = sections(issue.get("body", ""))
-        try:
-            slug, in_flight = slug_for(issue, secs)
-        except LookupError as e:
-            out({"status": "conflict", "reason": str(e)})
-        out({
+    def result(issue, slug, resume, secs):
+        return {
             "status": "next",
             "issue": issue["number"],
             "title": issue.get("title", ""),
             "slug": slug,
-            "resume": bool(resume_label or in_flight),
+            "resume": resume,
             "priority": priority(label_names(issue))[1],
             "preconditions": secs.get("needs a human first", ""),
             "skipped": skipped,
-        })
+        }
 
     in_progress = listing("in-progress")
     if len(in_progress) > 1:
@@ -262,18 +272,35 @@ try:
              + ", ".join("#%d" % i["number"] for i in in_progress)
              + " (the loop works one at a time; remove the label from all but one)"})
     for issue in in_progress:
+        # The loop's current slice. If it can't be worked right now (a human removed `ready`, a
+        # dependency reopened, …) the loop must wait — starting another issue would leave two
+        # half-done slices and two `in-progress` labels.
         reason = vet(issue)
-        if reason is None:
-            pick(issue, True)
-        skipped.append({"issue": issue["number"], "reason": "in-progress but " + reason})
+        if reason is not None:
+            out({"status": "paused", "issue": issue["number"], "title": issue.get("title", ""),
+                 "reason": reason + " — relabel it `ready` to resume, or remove `in-progress` to drop it"})
+        secs = sections(issue.get("body", ""))
+        try:
+            slug, _, _ = slug_for(issue, secs)
+        except LookupError as e:
+            out({"status": "conflict", "reason": str(e)})
+        out(result(issue, slug, True, secs))
 
-    seen = {i["number"] for i in in_progress}
-    ready = [i for i in listing("ready") if i["number"] not in seen]
+    ready = listing("ready")
     ready.sort(key=lambda i: (priority(label_names(i))[0], i["number"]))
     for issue in ready:
         reason = vet(issue)
         if reason is None:
-            pick(issue, False)
+            secs = sections(issue.get("body", ""))
+            try:
+                slug, in_flight, implemented = slug_for(issue, secs)
+            except LookupError as e:
+                out({"status": "conflict", "reason": str(e)})
+            if not implemented:
+                out(result(issue, slug, in_flight, secs))
+            # Its code PR already merged and the loop isn't mid-increment on it: a human reopened a
+            # finished issue. Resuming would just close it again — new work needs a new issue.
+            reason = "already implemented (feat/%s merged): file a new issue for further changes" % slug
         skipped.append({"issue": issue["number"], "reason": reason})
 
     out({"status": "empty", "skipped": skipped})

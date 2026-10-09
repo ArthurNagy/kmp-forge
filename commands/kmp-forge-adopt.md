@@ -94,7 +94,9 @@ export FIGMA_URL="(none)"
 export PROJECT_OVERRIDES=""
 export TIMELINE=""
 export USE_OPENSPEC="<yes|no — see below>"
-export SPEC_WORKFLOW="<the matching text from /kmp-forge-init step 4>"
+# SPEC_WORKFLOW: copy the whole `if [[ "$USE_OPENSPEC" == yes ]]; then export SPEC_WORKFLOW='…' else … fi`
+# block from /kmp-forge-init step 4 verbatim. Keep its SINGLE quotes — the text is full of backticks,
+# which double quotes would execute as commands.
 ```
 
 `MODULE_LIST`/`FEATURE_LIST`/`PLATFORM_LIST` must reflect reality — they feed the generated `CLAUDE.md`.

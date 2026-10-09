@@ -98,11 +98,16 @@ export READY_APPROVERS="<from step 2 — empty for just the loop's account>"
 export AUTOLOOP_QA="<emulator | tests-only | off — from step 2>"
 
 bash "$SH" render "$OVERLAY/autoloop" /tmp/kmpf-autoloop
+bash "$SH" render "$OVERLAY/openspec" /tmp/kmpf-openspec     # kmp-forge's OpenSpec rules (needs APP_NAME)
 ```
+
+Bash tool calls don't share variables: start each block below with `TARGET="$PWD"` (step 0) and
+reuse only the rendered files under `/tmp/kmpf-*`.
 
 Place the rendered files — **diff + Edit-merge, never clobber, if a target already exists**:
 
 ```bash
+TARGET="$PWD"
 # Runbook → openspec/
 if [[ -f "$TARGET/openspec/AUTOLOOP.md" ]]; then
     git --no-pager diff --no-index "$TARGET/openspec/AUTOLOOP.md" /tmp/kmpf-autoloop/AUTOLOOP.md || true
@@ -113,7 +118,6 @@ else
 fi
 
 # kmp-forge's OpenSpec project rules (absent → add; present → diff, merge by hand)
-bash "$SH" render "$OVERLAY/openspec" /tmp/kmpf-openspec
 if grep -q "kmp-forge project rules" "$TARGET/openspec/config.yaml" 2>/dev/null; then
     git --no-pager diff --no-index "$TARGET/openspec/config.yaml" /tmp/kmpf-openspec/config.yaml || true
 elif [[ -f "$TARGET/openspec/config.yaml" ]] && grep -qvE '^[[:space:]]*(#|$|schema:)' "$TARGET/openspec/config.yaml"; then

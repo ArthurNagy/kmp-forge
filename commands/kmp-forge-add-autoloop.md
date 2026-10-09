@@ -82,7 +82,7 @@ Use `AskUserQuestion` to collect the following (it takes up to 4 questions per c
 1. **Merge-guard starting mode** — `log` (recommended: observe first, flip to `enforce` after the log agrees with the loop — the trust ramp), `enforce` (strict from the first merge), or `enforce-ci` (CI-green-only; for using the guard *without* the loop).
 2. **Queue-empty handoff** — what the loop should print when no `ready` issue is left: the generic default ("Queue empty. Approve the drafted issues (or run /kmp-forge-groom) by labeling them `ready`, or stop here.") or a project-specific checkpoint the user dictates (e.g. "review the eval output and decide go/no-go before Phase 1"). This becomes `AUTOLOOP_HANDOFF`.
 3. **Ready approvers** — whose issues and `ready` labels the loop trusts besides its own account: **just me** (default — empty) or a comma-separated list of GitHub logins (collaborators who triage). This becomes `READY_APPROVERS`.
-4. **QA in the code gate** — `emulator` (recommended when `android emulator list` shows an AVD: the `kmp-qa` reviewer runs each user-visible scenario as a journey on an emulator, never a physical device), `tests-only` (it only checks every scenario has a `// Scenario:`-tagged test), or `off`. This becomes `AUTOLOOP_QA`.
+4. **QA in the code gate** — `device` (recommended when `android emulator list` shows an AVD or a phone is connected: the `kmp-qa` reviewer runs each user-visible scenario as a journey on a running emulator, a connected physical device, or an AVD it boots — pin one later with `qa-device:` in the runbook), `tests-only` (it only checks every scenario has a `// Scenario:`-tagged test), or `off`. This becomes `AUTOLOOP_QA`.
 5. **First work** — skip, or dictate the first slices now (filed as issues in step 3; the user labels them `ready`). If `openspec/backlog.md` exists, this question is instead: migrate its unchecked items to issues (recommended), or keep the file for reference and start fresh.
 
 ### 3. Render and install the overlay
@@ -95,7 +95,7 @@ export APP_NAME="<from the project CLAUDE.md Product section>"
 export SCAFFOLD_DATE="$(date -u +%Y-%m-%d)"
 export AUTOLOOP_HANDOFF="<from step 2>"
 export READY_APPROVERS="<from step 2 — empty for just the loop's account>"
-export AUTOLOOP_QA="<emulator | tests-only | off — from step 2>"
+export AUTOLOOP_QA="<device | tests-only | off — from step 2>"
 
 bash "$SH" render "$OVERLAY/autoloop" /tmp/kmpf-autoloop
 bash "$SH" render "$OVERLAY/openspec" /tmp/kmpf-openspec     # kmp-forge's OpenSpec rules (needs APP_NAME)

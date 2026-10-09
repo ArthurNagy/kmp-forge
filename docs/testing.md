@@ -179,9 +179,10 @@ adb -s emulator-5554 shell input tap <x> <y>   # interact via `center` coordinat
 android emulator stop <avd>
 ```
 
-- **Emulator first.** Agents (and the autoloop) never install or launch on a **physical** device
-  without the user's explicit OK — it's the user's phone. When more than one device is attached,
-  always pass `--device <serial>` / `adb -s <serial>`.
+- **Emulator first for ad-hoc work.** Agents never install or launch on a **physical** device
+  without the user's explicit OK — it's the user's phone. The exception is the `kmp-qa` agent (below),
+  which may use a connected phone under strict rules. When more than one device is attached, always
+  pass `--device <serial>` / `adb -s <serial>`.
 - Worth a run after DI or navigation changes: launch, rotate (`adb shell settings put system
   user_rotation 1`), background + `adb shell am kill <appId>` + relaunch — that exercises Koin
   start-up, the Nav 3 back-stack save/restore (routes must be registered in `AppNavigation.kt`)
@@ -205,10 +206,12 @@ fun pickedThemeIsRestored() = runTest {
 }
 ```
 
-The tag is how coverage is traced: the **`kmp-qa` agent** (QA engineer) maps every scenario of a change to its tagged test, flags missing or hollow ones, and — in emulator mode — runs each **user-visible** scenario as an Android CLI journey on an emulator (fresh app per journey, screenshots at every check, logcat for crashes, plus a rotation / process-death pass on changed screens), writing `build/qa/<change>/report.md`. It reports PASS / FAIL / ERROR and never edits code; it never touches a physical device, and it returns ERROR rather than PASS when it could not verify something.
+The tag is how coverage is traced: the **`kmp-qa` agent** (QA engineer) maps every scenario of a change to its tagged test, flags missing or hollow ones, and — in device mode — runs each **user-visible** scenario as an Android CLI journey on a device (fresh app per journey, screenshots at every check, logcat for crashes, plus a rotation / process-death pass on changed screens), writing `build/qa/<change>/report.md`. It reports PASS / FAIL / ERROR, never edits code, and returns ERROR rather than PASS when it could not verify something.
 
-- **Supervised:** after `/opsx:apply`, ask for the `kmp-qa` agent ("QA the `<change>` change on the emulator").
-- **Autonomous loop:** a third reviewer in the code gate — `qa: emulator | tests-only | off` in `openspec/AUTOLOOP.md`. Its blocking findings block the merge like any other.
+Device choice: the one you name (serial or AVD), else a running emulator, else a connected **physical** device, else an AVD it boots. On a phone it touches only the app under test (installs the debug APK, clears only that app's data — and only once its debug build installed over it), never uninstalls a differently-signed copy such as your store install, skips a locked screen rather than unlocking it, and restores the rotation settings it changes.
+
+- **Supervised:** after `/opsx:apply`, ask for the `kmp-qa` agent ("QA the `<change>` change", optionally naming the device).
+- **Autonomous loop:** a third reviewer in the code gate — `qa: device | tests-only | off` (+ `qa-device: auto | <serial> | <AVD>`) in `openspec/AUTOLOOP.md`. Its blocking findings block the merge like any other.
 - **Scope:** journeys run on Android; iOS / desktop / web behavior rests on the tagged tests. QA checks that the app *does* what the scenario says, not how it looks.
 
 ## What to test

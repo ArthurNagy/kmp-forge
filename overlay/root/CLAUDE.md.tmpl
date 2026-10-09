@@ -44,9 +44,9 @@ ${SPEC_WORKFLOW}
 Running the Android app (install, launch, UI checks, screenshots) goes through Google's Android CLI
 (`android emulator start`, `android run --device <serial>`, `android layout`, `android screen capture`)
 — see [testing.md § Running on a device or emulator](https://github.com/arthurnagy/kmp-forge/blob/main/docs/testing.md#running-on-a-device-or-emulator).
-Use an emulator; never install to a physical device without asking first. To check a change against
-its acceptance scenarios on an emulator (journeys + screenshots), ask for the `kmp-qa` agent after
-`/opsx:apply`.
+Use an emulator for ad-hoc runs; never install to a physical device without asking first. To check a
+change against its acceptance scenarios on a device (journeys + screenshots), ask for the `kmp-qa`
+agent after `/opsx:apply` — it may use a connected phone, touching only the app under test.
 
 Prefer kmp-forge slash commands over hand-rolled scaffolding:
 `/kmp-forge-add-feature`, `/kmp-forge-add-screen`, `/kmp-forge-add-platform`, `/kmp-forge-add-library`, `/kmp-forge-bump-stack`, `/kmp-forge-spec`, `/kmp-forge-groom`, `/kmp-forge-doctor`, `/kmp-forge-add-autoloop`.

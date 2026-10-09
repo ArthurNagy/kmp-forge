@@ -28,10 +28,12 @@ Each increment's change is named `<issue>-<kebab>` (branches `spec/<name>`, `fea
 - ready-approvers: ${READY_APPROVERS}
 - queue-empty-groom: on
 - qa: ${AUTOLOOP_QA}
+- qa-device: auto
 - kill-switch: openspec/STOP
 <!-- ready-approvers: comma-separated GitHub logins, besides the loop's own account, whose issues and `ready` labels the loop trusts. Empty = the loop's account only. -->
 <!-- queue-empty-groom: on = when no ready issue is left, the kmp-product-owner agent drafts up to 3 next slices from MVP-spec gaps and the loop files them WITHOUT `ready` before stopping; off = just stop. -->
-<!-- qa: emulator = the code gate's kmp-qa reviewer checks scenario-tagged tests AND runs user-visible scenarios as journeys on an Android emulator (never a physical device); tests-only = tagged-test coverage only; off = no QA reviewer. -->
+<!-- qa: device = the code gate's kmp-qa reviewer checks scenario-tagged tests AND runs user-visible scenarios as journeys on an Android device; tests-only = tagged-test coverage only; off = no QA reviewer.
+     qa-device: auto = a running emulator, else a connected (unlocked) physical device, else boot an AVD; or pin a serial / AVD name. On a phone QA touches only the app under test and never removes a differently-signed (e.g. store) install. -->
 <!-- If you change kill-switch, add the new path to .gitignore too (a worker's commit must never pick it up). -->
 
 ### Queue-empty handoff

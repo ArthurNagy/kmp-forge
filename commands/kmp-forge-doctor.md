@@ -40,7 +40,7 @@ Expected: the `android-compileSdk` platform from `gradle/libs.versions.toml` (km
 command -v android && android --version && android info
 ```
 
-`android` is Google's Android CLI: emulator management (`android emulator list/start/stop`), install + launch (`android run --apks … --device <serial>`), UI inspection (`android layout`, `android screen capture`) and SDK management (`android sdk install …`). kmp-forge's device-verification steps (docs/testing.md § Running on a device or emulator) use it. If missing, report ⚠ and print the installer for the host (macOS arm64: `curl -fsSL https://dl.google.com/android/cli/latest/darwin_arm64/install.sh | bash`; macOS Intel: `…/darwin_x86_64/install.sh`; Linux: `…/linux_x86_64/install.sh`). Also list attached devices — a **physical** device is the user's phone: never install to it without asking.
+`android` is Google's Android CLI: emulator management (`android emulator list/start/stop`), install + launch (`android run --apks … --device <serial>`), UI inspection (`android layout`, `android screen capture`) and SDK management (`android sdk install …`). kmp-forge's device-verification steps (docs/testing.md § Running on a device or emulator) use it. If missing, report ⚠ and print the installer for the host (macOS arm64: `curl -fsSL https://dl.google.com/android/cli/latest/darwin_arm64/install.sh | bash`; macOS Intel: `…/darwin_x86_64/install.sh`; Linux: `…/linux_x86_64/install.sh`). Also list attached devices (`adb devices -l` — the one adb use besides input, since the CLI has no device list) — a **physical** device is the user's phone: never install to it without asking (the `kmp-qa` agent is the exception, under its own rules).
 
 ### 4. Check Gradle wrapper version + toolchain floor
 

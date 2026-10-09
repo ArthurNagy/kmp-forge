@@ -42,8 +42,9 @@ ${SPEC_WORKFLOW}
 - Autonomous build loop (opt-in): https://github.com/arthurnagy/kmp-forge/blob/main/docs/autoloop.md
 
 Running the Android app (install, launch, UI checks, screenshots) goes through Google's Android CLI
-(`android emulator start`, `android run --device <serial>`, `android layout`, `android screen capture`)
-— see [testing.md § Running on a device or emulator](https://github.com/arthurnagy/kmp-forge/blob/main/docs/testing.md#running-on-a-device-or-emulator).
+(`android emulator start`, `android install`, `android run --device <serial>`, `android layout`,
+`android screen capture`), not adb — adb only lists devices and sends input taps / typing, which the
+CLI lacks — see [testing.md § Running on a device or emulator](https://github.com/arthurnagy/kmp-forge/blob/main/docs/testing.md#running-on-a-device-or-emulator).
 Use an emulator for ad-hoc runs; never install to a physical device without asking first. To check a
 change against its acceptance scenarios on a device (journeys + screenshots), ask for the `kmp-qa`
 agent after `/opsx:apply` — it may use a connected phone, touching only the app under test.

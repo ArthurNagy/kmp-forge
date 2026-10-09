@@ -47,7 +47,7 @@ Pass each worker the `issue` number and the `slug`, plus `claude_plugin_root` = 
 
 ### 0. Precheck and resume
 
-1. **Read the loop configuration** from `openspec/AUTOLOOP.md`'s `## Loop configuration` section: `local-gate`, `spec-workflow`, `ready-approvers`, `queue-empty-groom`, `qa`, `qa-device`, `kill-switch`, and the `### Queue-empty handoff` block. Missing file or missing keys → fail-safe defaults: ready-approvers empty (only this account), queue-empty-groom `off`, qa `off`, qa-device `auto`, kill-switch `openspec/STOP`, local-gate `./gradlew spotlessApply detekt build -x test jvmTest koverVerify`, handoff = "label more issues `ready`, or stop". (A legacy `backlog:` key means the project predates the issue queue — STOP + escalate: "re-run /kmp-forge-add-autoloop to migrate openspec/backlog.md to issues".)
+1. **Read the loop configuration** from `openspec/AUTOLOOP.md`'s `## Loop configuration` section: `local-gate`, `spec-workflow`, `ready-approvers`, `queue-empty-refine`, `qa`, `qa-device`, `kill-switch`, and the `### Queue-empty handoff` block. Missing file or missing keys → fail-safe defaults: ready-approvers empty (only this account), queue-empty-refine `off`, qa `off`, qa-device `auto`, kill-switch `openspec/STOP`, local-gate `./gradlew spotlessApply detekt build -x test jvmTest koverVerify`, handoff = "label more issues `ready`, or stop". A 0.5.0 runbook's `queue-empty-groom` is the same key under its old name — honor it when `queue-empty-refine` is absent. (A legacy `backlog:` key means the project predates the issue queue — STOP + escalate: "re-run /kmp-forge-add-autoloop to migrate openspec/backlog.md to issues".)
 2. If the kill-switch file exists → kill-switch halt.
 3. **Working tree.** `git fetch origin --prune`, then `git status --porcelain`:
    - **Clean** → continue.
@@ -75,7 +75,7 @@ Pass each worker the `issue` number and the `slug`, plus `claude_plugin_root` = 
      openspec archive <name> --yes          # once per finished change
      git add -- openspec && git commit -m "docs(openspec): archive <name…>" && git push origin main
      ```
-     **Queue-empty grooming** (only when `queue-empty-groom: on`): spawn `kmp-forge:kmp-product-owner` with `mode: gaps`, `max: 3`, `claude_plugin_root`. On `RESULT: OK`, file each `action: create` draft in its listed order (skip `replace` drafts — re-filing someone's issue is the human's call), replacing every `draft:<j>` with the number draft *j* got, and strip `ready` from the labels should it ever appear:
+     **Queue-empty refinement** (only when `queue-empty-refine: on`): spawn `kmp-forge:kmp-product-owner` with `mode: gaps`, `max: 3`, `claude_plugin_root`. On `RESULT: OK`, file each `action: create` draft in its listed order (skip `replace` drafts — re-filing someone's issue is the human's call), replacing every `draft:<j>` with the number draft *j* got, and strip `ready` from the labels should it ever appear:
      ```bash
      gh issue create --title "<title>" --label "<labels>" --body-file <scratch file with the draft body>
      ```

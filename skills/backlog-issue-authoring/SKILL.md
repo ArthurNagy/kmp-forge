@@ -1,6 +1,6 @@
 ---
 name: backlog-issue-authoring
-description: Write or groom a GitHub issue for a kmp-forge project so it can enter the backlog — Problem, WHEN/THEN acceptance criteria, Out of scope, Depends on, Needs a human first, Change name; slicing epics into one-PR issues; priority labels. Use when filing a feature, bug or chore issue, turning an idea or a vague issue into a workable one, splitting an epic, or when /kmp-forge-groom or the kmp-product-owner agent drafts issues. Never applies the `ready` label.
+description: Write or refine a GitHub issue for a kmp-forge project so it can enter the backlog — Problem, WHEN/THEN acceptance criteria, Out of scope, Depends on, Needs a human first, Change name; slicing epics into one-PR issues; priority labels. Use when filing a feature, bug or chore issue, turning an idea or a vague issue into a workable one, splitting an epic, or when /kmp-forge-refine or the kmp-product-owner agent drafts issues. Never applies the `ready` label.
 ---
 
 # Backlog issue authoring — kmp-forge style
@@ -9,7 +9,7 @@ In a kmp-forge project, GitHub issues are the single source of work: open issues
 
 ## The one rule about `ready`
 
-**Never apply `ready`.** It is how a human approves work. File and groom issues freely, add `priority:*` / `epic` / type labels when asked, but finish by telling the human which issues to promote — and give them the command to run themselves:
+**Never apply `ready`.** It is how a human approves work. File and refine issues freely, add `priority:*` / `epic` / type labels when asked, but finish by telling the human which issues to promote — and give them the command to run themselves:
 
 ```
 gh issue edit 41 42 43 --add-label ready
@@ -84,8 +84,8 @@ Empty optional sections render as `_No response_`; omit them or leave that marke
 
 Unlabeled = normal. `priority:high` jumps the queue (blocking a release, user-facing breakage); `priority:low` trails it (nice-to-have). Inside a level the oldest issue goes first — file issues in the order they should run. Suggest priorities; the human decides.
 
-## Grooming an existing issue
+## Refining an existing issue
 
 - Vague but yours → edit it into the shape above (`gh issue edit <n> --body-file …`), asking the human for anything you would otherwise guess.
-- From someone outside the project's approvers → do not edit their text into a trusted item: file the groomed version as a new issue ("Groomed from #<n>"), then comment on the original with the link (closing it is the human's call). The loop only trusts issues whose author is an approver.
+- From someone outside the project's approvers → do not edit their text into a trusted item: file the refined version as a new issue ("Refined from #<n>"), then comment on the original with the link (closing it is the human's call). The loop only trusts issues whose author is an approver.
 - Duplicate of an open issue → say so; don't file a second one.

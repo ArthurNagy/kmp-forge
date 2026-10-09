@@ -5,6 +5,12 @@ All notable changes to `kmp-forge` will be documented in this file.
 Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Fixed
+- **Feature template: no dead Back button on the start destination.** `add<Name>Entries(onNavigateBack)` and the generated screen take a nullable `(() -> Unit)?`; the screen shows its Back control only when it is non-null. The app's start destination is wired with `onNavigateBack = null`, because `navigateBack` never pops the root and the button did nothing. Pushed destinations keep `onNavigateBack = navigateBack` (the add-feature wiring is unchanged). `Home.kt`, the add-feature/add-screen recipes and the canonical nav examples in `docs/architecture.md` / `docs/stack.md` (whose start destination had the same bug) say so. kmp-reviewer warns when the start destination gets a non-null back.
+- **Feature template: the placeholder no longer looks like shipped UI.** The screen's content branch rendered "`<Name>` ready"; it now renders the `placeholder_content` string ("`<Name>`: replace this placeholder with the real screen content") under a `// TODO(kmp-forge):` marker, so QA and reviewers can tell template from product. kmp-reviewer warns about a feature that still renders it.
+
 ## [0.5.0] - 2026-10-09
 
 The first two roles of a spec-driven "software factory": GitHub issues are the one backlog (only a human approves work with `ready`), OpenSpec is the default change workflow with kmp-forge's own rules, a product owner turns ideas and the MVP spec into workable issues, and a QA engineer checks every change's acceptance scenarios — with tagged tests and, on Android, journeys on a device.

@@ -77,7 +77,7 @@ The feature's **public surface is exactly three things**: its `Route`, its Koin 
 - One `*ViewModel.kt` per screen — `internal class FooViewModel(private val useCase: ...) : ViewModel(), OrbitContainerHost<FooState, FooState, Nothing>` with `override val container = orbitContainer<FooState, Nothing>(FooState.Initial)`
 - One `*State.kt` — `internal data class FooState(...)` with **no default values** and a `companion object { val Initial = FooState(...) }` (the single starting-state source used by `orbitContainer(...)` and tests). Or a `sealed interface FooState` for mutually-exclusive page-level sub-states (its initial state is an explicit object, e.g. `Loading`).
 - One `*Route.kt` — `@Serializable data class FooRoute(...) : NavKey` — **public** (the app/back stack pushes it).
-- One `*NavEntry.kt` — **public** `fun EntryProviderScope<NavKey>.addFooEntries(onNavigateBack: () -> Unit, ...)` containing `entry<FooRoute> { FooScreen(...) }`. The feature's only screen-facing public API.
+- One `*NavEntry.kt` — **public** `fun EntryProviderScope<NavKey>.addFooEntries(onNavigateBack: (() -> Unit)?, ...)` containing `entry<FooRoute> { FooScreen(...) }`. The feature's only screen-facing public API. `onNavigateBack` is `null` when `FooRoute` is the start destination — the root has nothing to go back to, so the screen shows no Back control.
 - One `*Module.kt` — **public** Koin module exposing the ViewModel via `viewModelOf(::FooViewModel)` (resolves the `internal` VM; legal because it's the same module).
 - `commonTest/FooViewModelTest.kt` with Orbit's `test()` harness and `FooState.Initial`.
 - `composeResources/values/strings.xml` — the feature's default string table (`Res` generated into `<base>.feature.<pkg>.resources`, `internal`).
@@ -208,7 +208,7 @@ entry contribution.
 ```kotlin
 // :feature-gallery — the feature's only screen-facing public API
 fun EntryProviderScope<NavKey>.addGalleryEntries(
-    onNavigateBack: () -> Unit,
+    onNavigateBack: (() -> Unit)?,    // null when GalleryRoute is the start destination
     onOpenPhoto: (PhotoId) -> Unit,   // outgoing nav as a callback — no cross-feature import
 ) {
     entry<GalleryRoute> { GalleryScreen(onNavigateBack = onNavigateBack, onOpenPhoto = onOpenPhoto) }
@@ -240,7 +240,7 @@ internal fun AppNavigation() {
         ),
         entryProvider = entryProvider {
             addGalleryEntries(
-                onNavigateBack = navigateBack,
+                onNavigateBack = null,   // the start destination: no Back control
                 onOpenPhoto = { backStack.add(PhotoDetailRoute(it)) },
             )
             addPhotoDetailEntries(onNavigateBack = navigateBack)
@@ -254,6 +254,11 @@ Cross-feature navigation flows through these callbacks, so a feature never depen
 on another feature: `:feature-gallery` knows nothing about `PhotoDetailRoute` — the
 app wires `onOpenPhoto`. Adding a screen to an existing feature means adding another
 `entry<...> { ... }` line inside that feature's `addFooEntries` **and** registering its route in `AppNavigation.kt`'s `SerializersModule`.
+
+`onNavigateBack` is nullable because only the app knows which route is the root: the
+start destination (the route passed to `rememberNavBackStack`) is wired with `null`, since
+`navigateBack` never pops the last entry — a Back control there would do nothing. Every
+pushed destination gets `navigateBack`. System back on the root is left to the platform.
 
 ## Hybrid architecture rationale
 

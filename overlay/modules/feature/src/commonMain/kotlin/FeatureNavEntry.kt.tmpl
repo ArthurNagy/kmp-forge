@@ -19,8 +19,11 @@ import androidx.navigation3.runtime.NavKey
  * `entry<OtherRoute> { OtherScreen(...) }` line here as the feature grows
  * (see /kmp-forge-add-screen). Every Route must also be registered in `:shared`'s
  * navigation SerializersModule (AppNavigation.kt) or saving the back stack throws.
+ *
+ * Pass `onNavigateBack = null` when [${FEATURE_NAME_PASCAL}Route] is the app's start destination
+ * (the root of the back stack has nothing to go back to, so the screen shows no Back control).
  */
-fun EntryProviderScope<NavKey>.add${FEATURE_NAME_PASCAL}Entries(onNavigateBack: () -> Unit) {
+fun EntryProviderScope<NavKey>.add${FEATURE_NAME_PASCAL}Entries(onNavigateBack: (() -> Unit)?) {
     entry<${FEATURE_NAME_PASCAL}Route> {
         ${FEATURE_NAME_PASCAL}Screen(onNavigateBack = onNavigateBack)
     }

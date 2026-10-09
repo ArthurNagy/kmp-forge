@@ -33,7 +33,7 @@ The foundation. Compose Multiplatform 1.10+ for Material 3 + multi-platform UI.
   // :feature-gallery — the feature's only screen-facing public symbol
   fun EntryProviderScope<NavKey>.addGalleryEntries(
       onOpenPhoto: (String) -> Unit,
-      onNavigateBack: () -> Unit,
+      onNavigateBack: (() -> Unit)?,   // null for the start destination: no Back control
   ) {
       entry<GalleryRoute> { GalleryScreen(onOpenPhoto = onOpenPhoto, onNavigateBack = onNavigateBack) }
   }
@@ -60,13 +60,13 @@ The foundation. Compose Multiplatform 1.10+ for Material 3 + multi-platform UI.
       entryProvider = entryProvider {
           addGalleryEntries(
               onOpenPhoto = { backStack.add(PhotoDetailRoute(it)) },
-              onNavigateBack = navigateBack,
+              onNavigateBack = null,   // GalleryRoute is the root: nothing to go back to
           )
           addPhotoDetailEntries(onNavigateBack = navigateBack)
       },
   )
   ```
-- **Anti-patterns**: untyped routes (string keys); a route missing from the `SerializersModule` (crashes on iOS/desktop/web when the back stack is saved); the app referencing a feature's `Screen`/`ViewModel` directly instead of its `addFooEntries(...)` contribution; a feature importing another feature's Route (pass outgoing nav as a callback instead); mutating the back stack from outside Composition; using `postSideEffect` for navigation (effect type is `Nothing`) — instead set a consumable `pendingNavigation: Route?` slot inside `intent {}` and mutate the back stack in a `LaunchedEffect` observing it.
+- **Anti-patterns**: untyped routes (string keys); a route missing from the `SerializersModule` (crashes on iOS/desktop/web when the back stack is saved); the app referencing a feature's `Screen`/`ViewModel` directly instead of its `addFooEntries(...)` contribution; wiring the start destination with `onNavigateBack = navigateBack` (a Back control that does nothing — pass `null`); a feature importing another feature's Route (pass outgoing nav as a callback instead); mutating the back stack from outside Composition; using `postSideEffect` for navigation (effect type is `Nothing`) — instead set a consumable `pendingNavigation: Route?` slot inside `intent {}` and mutate the back stack in a `LaunchedEffect` observing it.
 - **Artifact**: `org.jetbrains.androidx.navigation3:navigation3-ui:1.1.2` (the JetBrains Compose Multiplatform port — Google's `androidx.navigation3:navigation3-ui` is Android/JVM-only and won't resolve in `commonMain` on iOS/web) — the **only** Nav 3 artifact the stack declares. It re-exports the matching Google `androidx.navigation3:navigation3-runtime` (`NavKey`, `entryProvider`, `rememberNavBackStack`, …) as an `api` dependency on every platform, so never add Google's runtime or UI artifacts next to it. Per-entry ViewModel scoping comes from `org.jetbrains.androidx.lifecycle:lifecycle-viewmodel-navigation3` (`rememberViewModelStoreNavEntryDecorator()`).
 
 ### Coil 3

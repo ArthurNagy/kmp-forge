@@ -5,7 +5,11 @@ All notable changes to `kmp-forge` will be documented in this file.
 Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [0.5.1] - 2026-10-09
+
+Feature-template fixes from the first QA run, and the backlog command now says *refine*.
+
+**Upgrading:** type `/kmp-forge-refine` where you used `/kmp-forge-groom`. Features generated before 0.5.1 keep their own code: if one is your start destination, make its `onNavigateBack` nullable (`(() -> Unit)?`) in its `*NavEntry.kt` and `*Screen.kt` as the template now does, show Back only when it isn't null, and wire it with `onNavigateBack = null`.
 
 ### Changed
 - **`/kmp-forge-groom` is now `/kmp-forge-refine`**, and the docs, the `kmp-product-owner` agent and the `backlog-issue-authoring` skill say *refine* throughout. The autonomous loop's runbook key `queue-empty-groom` is now `queue-empty-refine`; the loop still reads the old key, and re-running `/kmp-forge-add-autoloop` renames it.

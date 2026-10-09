@@ -1,19 +1,52 @@
-name: Feature request
-description: A new capability or improvement
+name: Feature / backlog item
+description: A new capability or improvement. Labeled `ready` by a maintainer, it enters the work queue.
 labels: [enhancement]
 body:
+  - type: markdown
+    attributes:
+      value: |
+        One issue = one change that fits one pull request. Bigger than that? File it as an epic
+        (add the `epic` label) and split it into one issue per slice.
   - type: textarea
     id: problem
     attributes:
       label: Problem
-      description: What user problem does this solve?
+      description: What user problem does this solve, and for whom?
     validations:
       required: true
   - type: textarea
-    id: proposal
+    id: acceptance
     attributes:
-      label: Proposed solution
+      label: Acceptance criteria
+      description: Observable outcomes, one per line, so each becomes a spec scenario and a test.
+      placeholder: |
+        - WHEN the user opens Settings THEN the current theme is selected
+        - WHEN the user picks Dark THEN the app switches to dark colors and keeps them after a restart
+    validations:
+      required: true
   - type: textarea
-    id: alternatives
+    id: out-of-scope
     attributes:
-      label: Alternatives considered
+      label: Out of scope
+      description: Binding exclusions. Layers not to touch, features not to build, decisions not to make here.
+  - type: input
+    id: depends-on
+    attributes:
+      label: Depends on
+      description: Issues that must be closed before this one starts.
+      placeholder: "#12, #15"
+  - type: textarea
+    id: needs-human
+    attributes:
+      label: Needs a human first
+      description: Preconditions only a person can provide (credentials, a URL, a store listing). The build loop checks them before starting and stops instead of stubbing past them.
+  - type: input
+    id: change-name
+    attributes:
+      label: Change name
+      description: Optional. Kebab-case, verb first (add-settings-store). Becomes the OpenSpec change and branch name, prefixed with the issue number.
+  - type: textarea
+    id: notes
+    attributes:
+      label: Notes
+      description: Design links (Figma), hints, prior art.

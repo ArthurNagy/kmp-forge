@@ -34,8 +34,8 @@
 # Required env vars when rendering .tmpl files:
 #   APP_NAME, APP_NAME_LOWER, BASE_PACKAGE, BASE_PACKAGE_PATH, APP_TAGLINE (optional),
 #   PLATFORM_LIST, BUILD_COMMANDS, MODULE_LIST, FEATURE_LIST, OPTIONAL_LIBS, FIGMA_URL,
-#   PROJECT_OVERRIDES, TIMELINE, SCAFFOLD_DATE. For feature templates: FEATURE_NAME (kebab),
-#   FEATURE_NAME_PKG, FEATURE_NAME_CAMEL, FEATURE_NAME_PASCAL. For autoloop: AUTOLOOP_HANDOFF.
+#   PROJECT_OVERRIDES, TIMELINE, SCAFFOLD_DATE, SPEC_WORKFLOW. For feature templates: FEATURE_NAME (kebab),
+#   FEATURE_NAME_PKG, FEATURE_NAME_CAMEL, FEATURE_NAME_PASCAL. For autoloop: AUTOLOOP_HANDOFF, READY_APPROVERS, AUTOLOOP_QA.
 #   Unset variables substitute as empty strings (envsubst default).
 
 set -euo pipefail
@@ -48,9 +48,9 @@ die() { echo "apply-overlay: $*" >&2; exit 1; }
 # Adding an overlay variable? Add it here AND to the export block in commands/kmp-forge-init.md.
 OVERLAY_VARS='${APP_NAME} ${APP_NAME_LOWER} ${APP_TAGLINE} ${BASE_PACKAGE} ${BASE_PACKAGE_PATH}
 ${PLATFORM_LIST} ${BUILD_COMMANDS} ${MODULE_LIST} ${FEATURE_LIST} ${OPTIONAL_LIBS} ${FIGMA_URL}
-${PROJECT_OVERRIDES} ${TIMELINE} ${SCAFFOLD_DATE}
+${PROJECT_OVERRIDES} ${TIMELINE} ${SCAFFOLD_DATE} ${SPEC_WORKFLOW}
 ${FEATURE_NAME} ${FEATURE_NAME_PKG} ${FEATURE_NAME_CAMEL} ${FEATURE_NAME_PASCAL}
-${AUTOLOOP_HANDOFF}'
+${AUTOLOOP_HANDOFF} ${READY_APPROVERS} ${AUTOLOOP_QA}'
 
 # Toolchain floor applied by pin-toolchain (kmp.new may ship older pins). /kmp-forge-bump-stack
 # moves projects beyond it; bump these when the floor itself should rise.

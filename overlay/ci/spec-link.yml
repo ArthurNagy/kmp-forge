@@ -1,0 +1,45 @@
+name: Spec link
+# A `feat:` PR that changes production code must carry its OpenSpec change (proposal or ticked
+# tasks under openspec/changes/, or a spec under openspec/specs/) — or the `no-spec` label for a
+# deliberate exception. Keeps openspec/specs/ the accurate record of what the app does.
+# Skipped entirely in projects without an openspec/ directory; fix/chore/refactor/… PRs pass.
+on:
+  pull_request:
+    branches: [main]
+    types: [opened, edited, synchronize, reopened, labeled, unlabeled]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: spec-link-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  spec-link:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+      - name: Behavior changes carry an OpenSpec change
+        env:
+          TITLE: ${{ github.event.pull_request.title }}
+          LABELS: ${{ join(github.event.pull_request.labels.*.name, ',') }}
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          if [ ! -d openspec ]; then echo "No openspec/ directory: check skipped."; exit 0; fi
+          if ! printf '%s' "$TITLE" | grep -qE '^feat(\([^)]*\))?!?:'; then
+            echo "Not a feat: PR: check skipped."; exit 0
+          fi
+          case ",$LABELS," in *,no-spec,*) echo "Labeled no-spec: check skipped."; exit 0 ;; esac
+          files=$(git diff --name-only "$BASE_SHA...$HEAD_SHA")
+          code=$(printf '%s\n' "$files" | grep -E '^(shared|ui|domain|data|feature-[^/]+)/src/[A-Za-z]*Main/' || true)
+          if [ -z "$code" ]; then echo "No production code changed: check passed."; exit 0; fi
+          if printf '%s\n' "$files" | grep -qE '^openspec/(changes|specs)/'; then
+            echo "OpenSpec change included: check passed."; exit 0
+          fi
+          echo "::error title=Missing OpenSpec change::This feat: PR changes production code but nothing under openspec/changes/ or openspec/specs/. Propose it with /opsx:propose (the PR then carries the change or its ticked tasks.md), or add the no-spec label if it deliberately has no spec-visible behavior."
+          printf 'Production code changed:\n%s\n' "$code" | head -20
+          exit 1

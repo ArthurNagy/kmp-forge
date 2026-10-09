@@ -45,8 +45,31 @@ Use `AskUserQuestion` to collect the following. Do NOT skip any.
    - gradle-play-publisher (Play Store releases without fastlane)
 5. **License**: MIT (default) / Apache-2.0 / Proprietary
 6. **Initialize git + first commit**: yes (default) / no
+7. **Spec workflow**: **OpenSpec (Recommended)** — spec-driven changes (`/opsx:propose` →
+   `/opsx:apply`) with kmp-forge's project rules, the `spec-link` CI check, and the path the
+   autonomous build loop runs on / **Plain docs** — `docs/MVP_SPEC.md` + ADRs only (OpenSpec can be
+   added later). Either way, GitHub issues labeled `ready` are the backlog.
 
 If the user already provided some of these in their initial message, skip those questions.
+
+### 1b. OpenSpec CLI (OpenSpec chosen)
+
+kmp-forge's project rules (`openspec/config.yaml` with `context` / `rules` / `operations`) need
+**OpenSpec ≥ 1.14** (Node ≥ 20.19 for the npm install):
+
+```bash
+v="$(openspec --version 2>/dev/null || true)"
+if [[ -n "$v" && "$(printf '%s\n' 1.14.0 "$v" | sort -V | head -1)" == 1.14.0 ]]; then
+    echo "✓ openspec $v"
+else
+    echo "✗ openspec >= 1.14 needed (found: ${v:-none})"
+fi
+```
+
+If it is missing or older, ask via `AskUserQuestion` whether to install/upgrade it now —
+`brew install openspec` / `brew upgrade openspec` (Homebrew), or
+`npm install -g @fission-ai/openspec@latest` — or to continue with **Plain docs**. Never install
+without that answer.
 
 ### 2. Download the project from kmp.jetbrains.com
 
@@ -115,6 +138,26 @@ export OPTIONAL_LIBS="<csv of opted-in libs, or '(none)'>"
 export FIGMA_URL="(none)"
 export PROJECT_OVERRIDES=""
 export TIMELINE=""
+export USE_OPENSPEC="<yes|no — from step 1 question 7>"
+# The CLAUDE.md "Work & spec workflow" section. Single quotes keep the backticks literal.
+if [[ "$USE_OPENSPEC" == yes ]]; then
+export SPEC_WORKFLOW='Work starts as a GitHub issue (forms in `.github/ISSUE_TEMPLATE/`). Open issues labeled `ready`
+are the backlog, ordered `priority:high` → unlabeled → `priority:low`. **Only a human applies
+`ready`**: Claude may file and groom issues (`/kmp-forge-groom`) but never approves them.
+
+Behavior changes go through OpenSpec: `/opsx:propose` (naming the issue: `Issue: #<n>`) →
+optionally the `kmp-spec-critic` agent → `/opsx:apply` → a PR whose body says `Fixes #<n>` →
+`/opsx:archive` once merged. `openspec/specs/` records what the app does today;
+`openspec/config.yaml` holds the spec rules for this project. Direct edits are for non-behavioral
+work only (docs, chores, behavior-neutral refactors). The `spec-link` CI check fails a `feat:` PR
+that changes production code without an OpenSpec change; the `no-spec` label is the deliberate
+escape hatch.'
+else
+export SPEC_WORKFLOW='Plain docs (OpenSpec not installed): product scope in `docs/MVP_SPEC.md`, decisions in
+`docs/DECISIONS/`. Work is tracked as GitHub issues; open issues labeled `ready` are the backlog,
+and only a human applies `ready`. Opt into spec-driven changes later (`openspec init --tools claude`
+plus the kmp-forge rules): see product-workflow.md § OpenSpec.'
+fi
 # Non-Android KMP targets for the overlay modules. These MUST match the targets :shared declares,
 # so :shared can depend on them. The Android target is added per-module by the AGP KMP plugin, so
 # it is NOT listed here. Always include jvm (desktop + host tests); add iOS / web from the
@@ -127,7 +170,8 @@ export KMP_TARGETS="<computed from selected platforms>"
 # Persist for later Bash calls (typeset -p quotes every value safely, in bash and zsh alike).
 typeset -p TARGET APP_NAME APP_NAME_LOWER APP_TAGLINE BASE_PACKAGE BASE_PACKAGE_PATH \
     SCAFFOLD_DATE PLATFORM_LIST BUILD_COMMANDS MODULE_LIST FEATURE_LIST OPTIONAL_LIBS \
-    FIGMA_URL PROJECT_OVERRIDES TIMELINE KMP_TARGETS > "${TMPDIR:-/tmp}/kmp-forge-init.env"
+    FIGMA_URL PROJECT_OVERRIDES TIMELINE KMP_TARGETS USE_OPENSPEC SPEC_WORKFLOW \
+    > "${TMPDIR:-/tmp}/kmp-forge-init.env"
 ```
 
 Every later Bash block starts with:
@@ -151,7 +195,8 @@ OVERLAY="${CLAUDE_PLUGIN_ROOT}/overlay"
 # Root files (CLAUDE.md, .gitignore, .editorconfig, detekt.yml, cliff.toml)
 bash "${CLAUDE_PLUGIN_ROOT}/scripts/apply-overlay.sh" render "$OVERLAY/root" "$TARGET"
 
-# CI workflows (.github/workflows/pr.yml, release.yml)
+# CI workflows (.github/workflows/pr.yml, release.yml, spec-link.yml — the latter skips itself
+# in projects without openspec/)
 mkdir -p "$TARGET/.github/workflows"
 bash "${CLAUDE_PLUGIN_ROOT}/scripts/apply-overlay.sh" render "$OVERLAY/ci" "$TARGET/.github/workflows"
 
@@ -166,6 +211,15 @@ chmod +x "$TARGET/.kmp-forge-pre-commit.sh"
 # Product docs (MVP_SPEC.md, DECISIONS/)
 mkdir -p "$TARGET/docs"
 bash "${CLAUDE_PLUGIN_ROOT}/scripts/apply-overlay.sh" render "$OVERLAY/product" "$TARGET/docs"
+
+# OpenSpec (if chosen): openspec/{specs,changes}/ + the /opsx:* commands and skills under .claude/,
+# then kmp-forge's project rules replace the generated openspec/config.yaml stub.
+if [[ "$USE_OPENSPEC" == yes ]]; then
+    openspec init --tools claude --no-animation "$TARGET"
+    bash "${CLAUDE_PLUGIN_ROOT}/scripts/apply-overlay.sh" render "$OVERLAY/openspec" "$TARGET/openspec"
+    ls "$TARGET/.claude/commands/opsx/propose.md" "$TARGET/.claude/commands/opsx/apply.md" >/dev/null \
+        || echo "✗ /opsx:* commands missing — openspec init did not set up Claude Code"
+fi
 
 # Modules (:ui, :domain, :data) + :testing (shared test doubles — TestDispatcherProvider; only
 # ever a commonTest dependency)
@@ -350,11 +404,13 @@ Then ask via `AskUserQuestion` whether to **create the GitHub repo now**. Defaul
 ```bash
 gh repo create "<APP_NAME>" --private --source=. --remote=origin
 git push -u origin main
+# Workflow labels the backlog relies on (ready, in-progress, epic, priority:high|low, no-spec, chore, adr)
+bash "${CLAUDE_PLUGIN_ROOT}/scripts/issues.sh" labels
 ```
 
 If `gh` is not authenticated, surface `gh auth login` instructions to the user instead of failing. Never push to a public repo by default — visibility flips require explicit user opt-in.
 
-If user declines: print the manual command for them to run later (`gh repo create ... --private --source=. --remote=origin && git push -u origin main`).
+If user declines: print the manual commands for them to run later (`gh repo create ... --private --source=. --remote=origin && git push -u origin main`, then `bash <plugin>/scripts/issues.sh labels` from the project root).
 
 ### 9. Report next steps
 
@@ -364,8 +420,10 @@ Print a checklist of what the user should do next:
 ✓ Project scaffolded at <path>
 ✓ Modules: :shared · :androidApp · :desktopApp · :ui · :domain · :data · :testing + build-logic/
 ✓ Composition root: shared/…/App.kt (Koin) + AppNavigation.kt (Nav 3) + AppModules.kt
-✓ CI workflows: .github/workflows/pr.yml + release.yml
+✓ CI workflows: .github/workflows/pr.yml + release.yml + spec-link.yml
 ✓ Product docs: docs/MVP_SPEC.md + docs/DECISIONS/{0001..0006}.md
+✓ Spec workflow: <OpenSpec (openspec/config.yaml with kmp-forge rules, /opsx:* commands) | plain docs>
+✓ Issue labels: <created | run issues.sh labels after pushing>
 ✓ CLAUDE.md generated
 
 Next:
@@ -376,7 +434,9 @@ Next:
        git push -u origin main
   4. Enable branch protection on main (see docs/git-conventions.md)
   5. Run /kmp-forge-spec to fill out docs/MVP_SPEC.md
-  6. Run /kmp-forge-add-feature <name> to add your first feature module
+  6. Run /kmp-forge-groom --gaps to draft the first backlog issues from the spec, then
+     approve the ones to build yourself: gh issue edit <n…> --add-label ready
+  7. Run /kmp-forge-add-feature <name> to add your first feature module
 
 Opt-in libraries you selected: <list>
   Wiring them up: see https://github.com/arthurnagy/kmp-forge/blob/main/docs/stack.md#opt-in-libraries
@@ -387,4 +447,6 @@ Opt-in libraries you selected: <list>
 - The plugin does NOT push to GitHub. The user opts into that themselves.
 - The plugin does NOT enable branch protection. Same reason.
 - Always quote paths with spaces (`"$TARGET"`) — the user's Personal projects directory has a space.
+- `openspec init` writes `.claude/commands/opsx/*` and `.claude/skills/openspec-*` into the project —
+  they are committed with it, like any project-level Claude Code command.
 - If `apply-overlay.sh` errors, surface the error verbatim and stop — do NOT try to clean up partially-applied overlay (let the user inspect).

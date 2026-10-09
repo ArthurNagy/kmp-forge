@@ -10,15 +10,30 @@ Installed by `/kmp-forge-add-autoloop` on ${SCAFFOLD_DATE}.
 /loop /kmp-forge-next-increment
 ```
 
-One invocation = one full increment: pop the top backlog slice → docs PR → spec gate → code PR → code gate → auto-merge both → tick the backlog. `/loop` provides the repetition; the loop stops when the queue is empty, when the kill-switch file exists, or on escalation.
+One invocation = one full increment: take the next `ready` GitHub issue → docs PR → spec gate → code PR → code gate (correctness + conventions + QA) → auto-merge both → close the issue. `/loop` provides the repetition; the loop stops when the queue is empty, when the kill-switch file exists, or on escalation.
+
+## Work queue: GitHub issues
+
+The queue is this repo's open issues labeled **`ready`** — nothing else. Ordered `priority:high` → unlabeled → `priority:low`, then oldest first; `epic` issues are skipped (split them into slice issues). An issue is worked only when its **author and whoever applied `ready`** are the loop's own GitHub account or listed in `ready-approvers` below, and nothing in its **Depends on** section (or GitHub's "blocked by") is still open. Selection is code — `scripts/issues.sh next` in the kmp-forge plugin — not model judgment.
+
+**Only a human applies `ready`.** The loop files follow-up issues (and, with `queue-empty-groom: on`, up to 3 drafted next slices when the queue empties) and moves `in-progress`, but never approves work (the merge guard denies it in `enforce`). An issue filed by someone outside the approvers is raw intake: re-file it as your own (groomed) issue to queue it.
+
+Each increment's change is named `<issue>-<kebab>` (branches `spec/<name>`, `feat/<name>`); the docs PR says `Refs #<issue>`, the code PR `Fixes #<issue>`.
 
 ## Loop configuration
 <!-- Read by /kmp-forge-next-increment at Phase 0. Keep the keys verbatim; edit the values. -->
 
 - local-gate: `./gradlew spotlessApply detekt build -x test jvmTest koverVerify`
 - spec-workflow: opsx
-- backlog: openspec/backlog.md
+- ready-approvers: ${READY_APPROVERS}
+- queue-empty-groom: on
+- qa: ${AUTOLOOP_QA}
+- qa-device: auto
 - kill-switch: openspec/STOP
+<!-- ready-approvers: comma-separated GitHub logins, besides the loop's own account, whose issues and `ready` labels the loop trusts. Empty = the loop's account only. -->
+<!-- queue-empty-groom: on = when no ready issue is left, the kmp-product-owner agent drafts up to 3 next slices from MVP-spec gaps and the loop files them WITHOUT `ready` before stopping; off = just stop. -->
+<!-- qa: device = the code gate's kmp-qa reviewer checks scenario-tagged tests AND runs user-visible scenarios as journeys on an Android device; tests-only = tagged-test coverage only; off = no QA reviewer.
+     qa-device: auto = a running emulator, else a connected (unlocked) physical device, else boot an AVD; or pin a serial / AVD name. On a phone QA touches only the app under test and never removes a differently-signed (e.g. store) install. -->
 <!-- If you change kill-switch, add the new path to .gitignore too (a worker's commit must never pick it up). -->
 
 ### Queue-empty handoff
@@ -28,13 +43,14 @@ ${AUTOLOOP_HANDOFF}
 
 ## Steering (no need to interrupt)
 
-- **Reorder / edit / insert work:** edit the backlog (`backlog:` above). The loop always takes the topmost unchecked `- [ ]` on its next iteration, and commits your uncommitted backlog / runbook / guard-mode edits to `main` at its next Phase 0 — you don't need to commit them yourself.
+- **Add work:** file an issue (the Feature / backlog item form) and label it `ready`. **Reorder:** `priority:high` / `priority:low`. **Pause one:** remove `ready`. On the `in-progress` issue that pauses the whole loop (`⏸ LOOP PAUSED` — it never starts another slice meanwhile); relabel it to resume, or remove `in-progress` to drop it. **Hold an epic:** `epic`. The loop re-reads the queue at every iteration.
+- **Edit this runbook or the guard mode** while the loop runs: it commits your uncommitted `openspec/AUTOLOOP.md` / guard-mode edits to `main` at its next Phase 0 — you don't need to commit them yourself.
 - **Emergency stop:** create the kill-switch file (`kill-switch:` above — by default `touch openspec/STOP`). The loop checks it before every phase and every merge, and halts leaving any open PRs as they are. Delete the file to resume.
 - **Hard stop now:** interrupt the running `/loop` (Esc), or tell it to stop.
 
 ## Merge guard
 
-`.claude/hooks/merge-guard.sh` runs as a `PreToolUse` hook on every Bash, Write/Edit and `mcp__*` call. It independently re-checks every merge (`gh pr merge` in any form, `gh api` merge endpoints, MCP merge tools): all checks on the head commit green, and the newest `### 🤖` gate review **posted by the loop's GitHub account** reads PASS **on the current head commit**. In `enforce` it also denies subagent merges and pushes to `main`, any push to `main` beyond loop bookkeeping (`openspec/**`, the backlog, the mode file), force-pushes, and a subagent editing the guard itself — and it fails closed when it can't reach GitHub. Mode lives in `.claude/hooks/merge-guard.mode` (`off | log | enforce-ci | enforce`), re-read on every invocation — no restart needed. Every decision is logged to `.claude/hooks/merge-guard.log`.
+`.claude/hooks/merge-guard.sh` runs as a `PreToolUse` hook on every Bash, Write/Edit and `mcp__*` call. It independently re-checks every merge (`gh pr merge` in any form, `gh api` merge endpoints, MCP merge tools): all checks on the head commit green, and the newest `### 🤖` gate review **posted by the loop's GitHub account** reads PASS **on the current head commit**. In `enforce` it also denies subagent merges and pushes to `main`, any push to `main` beyond loop bookkeeping (`openspec/**`, the mode file), force-pushes, applying the `ready` label (from anyone), and a subagent editing the guard itself — and it fails closed when it can't reach GitHub. Mode lives in `.claude/hooks/merge-guard.mode` (`off | log | enforce-ci | enforce`), re-read on every invocation — no restart needed. Every decision is logged to `.claude/hooks/merge-guard.log`.
 
 **Trust ramp.** It starts in `log` so it cannot block a real merge before you have seen it agree with the loop. After an increment or two:
 
@@ -50,4 +66,4 @@ From then on "never force-merge" is enforced by the harness rather than trusted 
 
 ## When it escalates
 
-The loop prints a `⛔ ESCALATION` block and stops when it can't safely proceed: CI still red after 2 fix cycles, a gate BLOCK, a gate still not PASS in round 3 (after two fix cycles), a code-review ERROR (the diff couldn't be established), a worker returning FAILED, an unmet `needs-human:` precondition, a merge-guard denial, a PR a human closed, or uncommitted changes other than your steering edits. Read the block, make the one decision it asks for, then relaunch `/loop /kmp-forge-next-increment`.
+The loop prints a `⛔ ESCALATION` block and stops when it can't safely proceed: CI still red after 2 fix cycles, a gate BLOCK, a gate still not PASS in round 3 (after two fix cycles), a code-review ERROR (the diff couldn't be established), a worker returning FAILED, an issue's unmet **Needs a human first** precondition, a merge-guard denial, a PR a human closed, two `in-progress` issues at once, or uncommitted changes other than your steering edits. Read the block, make the one decision it asks for, then relaunch `/loop /kmp-forge-next-increment`.

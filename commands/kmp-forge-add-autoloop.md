@@ -1,10 +1,10 @@
 ---
-description: Install the autonomous build loop into an existing kmp-forge project — OpenSpec workflow, backlog + runbook, merge-guard hook, and the /kmp-forge-next-increment entry point.
+description: Install the autonomous build loop into an existing kmp-forge project — OpenSpec workflow, GitHub-issue work queue + runbook, merge-guard hook, and the /kmp-forge-next-increment entry point.
 ---
 
 # /kmp-forge-add-autoloop
 
-Opt-in installer for the autonomous build loop described in [docs/autoloop.md](https://github.com/arthurnagy/kmp-forge/blob/main/docs/autoloop.md): `/loop /kmp-forge-next-increment` repeatedly pops a backlog slice, proposes it as an OpenSpec change (docs PR, spec-gated by `kmp-spec-critic`), implements it (code PR, gated by `kmp-loop-code-reviewer` + `kmp-reviewer`), and auto-merges only when CI is green AND the posted gate verdict reads PASS — with a `PreToolUse` merge-guard hook enforcing that as code.
+Opt-in installer for the autonomous build loop described in [docs/autoloop.md](https://github.com/arthurnagy/kmp-forge/blob/main/docs/autoloop.md): `/loop /kmp-forge-next-increment` repeatedly takes the next `ready` GitHub issue, proposes it as an OpenSpec change (docs PR, spec-gated by `kmp-spec-critic`), implements it (code PR, gated by `kmp-loop-code-reviewer` + `kmp-reviewer`), and auto-merges only when CI is green AND the posted gate verdict reads PASS — with a `PreToolUse` merge-guard hook enforcing that as code.
 
 Everything lands on a branch; the loop itself runs from `main` after you merge. Execute steps **in order**. Stop and ask if anything is unclear.
 
@@ -32,7 +32,16 @@ gh repo view "$(git -C "$TARGET" remote get-url origin 2>/dev/null)" --json name
   || echo "✗ origin is not a reachable GitHub repo — the loop opens and merges PRs there"
 [[ -f "$TARGET/.github/workflows/pr.yml" ]] \
   || echo "✗ no .github/workflows/pr.yml — the merge guard refuses PRs with no checks. Add the kmp-forge PR gate first (see below)"
-command -v openspec >/dev/null || echo "✗ openspec missing — npm install -g @fission-ai/openspec"
+command -v python3 >/dev/null || echo "✗ python3 missing — the issue queue (scripts/issues.sh) needs it"
+v="$(openspec --version 2>/dev/null || true)"
+[[ -n "$v" && "$(printf '%s\n' 1.14.0 "$v" | sort -V | head -1)" == 1.14.0 ]] \
+  || echo "✗ openspec >= 1.14 needed (found: ${v:-none}) — brew install openspec / brew upgrade openspec, or npm install -g @fission-ai/openspec@latest"
+# A legacy backlog file is migrated to issues in step 3 — but not mid-increment: its in-flight
+# branches (spec/<slug>, feat/<slug>) would not match the issue-numbered names.
+if [[ -f "$TARGET/openspec/backlog.md" ]]; then
+    gh pr list --state open --json number,headRefName \
+      --jq '.[] | select(.headRefName | test("^(spec|feat)/")) | "✗ loop PR #\(.number) (\(.headRefName)) still open — finish or close it before migrating the backlog"'
+fi
 ```
 
 **No `pr.yml`?** `/kmp-forge-init` ships it. For an adopted or hand-built project, render the plugin's PR gate and commit it (merge by hand if a differently-named workflow already runs the same gate — the loop only needs *some* required checks on every PR):
@@ -51,13 +60,15 @@ git -C "$TARGET" switch -c chore/add-autoloop
 
 ### 1. OpenSpec
 
-The loop's spec workflow is OpenSpec's `/opsx:*` commands (see `docs/product-workflow.md` — OpenSpec is opt-in, and this is the path that opts in).
+The loop's spec workflow is OpenSpec's `/opsx:*` commands plus kmp-forge's project rules in
+`openspec/config.yaml` (see `docs/product-workflow.md` — `/kmp-forge-init` sets this up by default;
+this is the path for a project that chose plain docs, or predates it).
 
 ```bash
 if [[ -d "$TARGET/openspec" ]]; then
     openspec list   # sanity: existing install responds
 else
-    (cd "$TARGET" && openspec init --tools claude)   # non-interactive
+    openspec init --tools claude --no-animation "$TARGET"   # non-interactive
 fi
 # The workers invoke these — verify they landed:
 ls "$TARGET/.claude/commands/opsx/propose.md" "$TARGET/.claude/commands/opsx/apply.md" \
@@ -66,11 +77,13 @@ ls "$TARGET/.claude/commands/opsx/propose.md" "$TARGET/.claude/commands/opsx/app
 
 ### 2. Choices
 
-Use `AskUserQuestion` to collect the following. Do NOT skip any:
+Use `AskUserQuestion` to collect the following (it takes up to 4 questions per call — ask in two). Do NOT skip any:
 
 1. **Merge-guard starting mode** — `log` (recommended: observe first, flip to `enforce` after the log agrees with the loop — the trust ramp), `enforce` (strict from the first merge), or `enforce-ci` (CI-green-only; for using the guard *without* the loop).
-2. **Queue-empty handoff** — what the loop should print when the backlog empties: the generic default ("Queue empty. Extend openspec/backlog.md with the next phase's slices, or stop here.") or a project-specific checkpoint the user dictates (e.g. "review the eval output and decide go/no-go before Phase 1"). This becomes `AUTOLOOP_HANDOFF`.
-3. **Seed the backlog** — template with the commented example only, or dictate the first real slices now (write them in the item format: `slug:` / `goal:` / `boundaries:` / optional `needs-human:`).
+2. **Queue-empty handoff** — what the loop should print when no `ready` issue is left: the generic default ("Queue empty. Approve the drafted issues (or run /kmp-forge-groom) by labeling them `ready`, or stop here.") or a project-specific checkpoint the user dictates (e.g. "review the eval output and decide go/no-go before Phase 1"). This becomes `AUTOLOOP_HANDOFF`.
+3. **Ready approvers** — whose issues and `ready` labels the loop trusts besides its own account: **just me** (default — empty) or a comma-separated list of GitHub logins (collaborators who triage). This becomes `READY_APPROVERS`.
+4. **QA in the code gate** — `device` (recommended when `android emulator list` shows an AVD or a phone is connected: the `kmp-qa` reviewer runs each user-visible scenario as a journey on a running emulator, a connected physical device, or an AVD it boots — pin one later with `qa-device:` in the runbook), `tests-only` (it only checks every scenario has a `// Scenario:`-tagged test), or `off`. This becomes `AUTOLOOP_QA`.
+5. **First work** — skip, or dictate the first slices now (filed as issues in step 3; the user labels them `ready`). If `openspec/backlog.md` exists, this question is instead: migrate its unchecked items to issues (recommended), or keep the file for reference and start fresh.
 
 ### 3. Render and install the overlay
 
@@ -81,22 +94,41 @@ SH="${CLAUDE_PLUGIN_ROOT}/scripts/apply-overlay.sh"
 export APP_NAME="<from the project CLAUDE.md Product section>"
 export SCAFFOLD_DATE="$(date -u +%Y-%m-%d)"
 export AUTOLOOP_HANDOFF="<from step 2>"
+export READY_APPROVERS="<from step 2 — empty for just the loop's account>"
+export AUTOLOOP_QA="<device | tests-only | off — from step 2>"
 
 bash "$SH" render "$OVERLAY/autoloop" /tmp/kmpf-autoloop
+bash "$SH" render "$OVERLAY/openspec" /tmp/kmpf-openspec     # kmp-forge's OpenSpec rules (needs APP_NAME)
 ```
+
+Bash tool calls don't share variables: start each block below with `TARGET="$PWD"` (step 0) and
+reuse only the rendered files under `/tmp/kmpf-*`.
 
 Place the rendered files — **diff + Edit-merge, never clobber, if a target already exists**:
 
 ```bash
-# Runbook + backlog → openspec/
-for f in AUTOLOOP.md backlog.md; do
-    if [[ -f "$TARGET/openspec/$f" ]]; then
-        git --no-pager diff --no-index "$TARGET/openspec/$f" "/tmp/kmpf-autoloop/$f" || true
-        # merge with the Edit tool — the ## Loop configuration section must end up present verbatim
-    else
-        cp "/tmp/kmpf-autoloop/$f" "$TARGET/openspec/$f" && echo "added: openspec/$f"
-    fi
-done
+TARGET="$PWD"
+# Runbook → openspec/
+if [[ -f "$TARGET/openspec/AUTOLOOP.md" ]]; then
+    git --no-pager diff --no-index "$TARGET/openspec/AUTOLOOP.md" /tmp/kmpf-autoloop/AUTOLOOP.md || true
+    # merge with the Edit tool — the ## Loop configuration section must end up present verbatim.
+    # A pre-0.5 runbook has `- backlog: …`: replace that line with `- ready-approvers: …`.
+else
+    cp /tmp/kmpf-autoloop/AUTOLOOP.md "$TARGET/openspec/AUTOLOOP.md" && echo "added: openspec/AUTOLOOP.md"
+fi
+
+# kmp-forge's OpenSpec project rules (absent → add; present → diff, merge by hand)
+if grep -q "kmp-forge project rules" "$TARGET/openspec/config.yaml" 2>/dev/null; then
+    git --no-pager diff --no-index "$TARGET/openspec/config.yaml" /tmp/kmpf-openspec/config.yaml || true
+elif [[ -f "$TARGET/openspec/config.yaml" ]] && grep -qvE '^[[:space:]]*(#|$|schema:)' "$TARGET/openspec/config.yaml"; then
+    git --no-pager diff --no-index "$TARGET/openspec/config.yaml" /tmp/kmpf-openspec/config.yaml || true
+    # the project has its own rules: merge ours in with the Edit tool
+else
+    cp /tmp/kmpf-openspec/config.yaml "$TARGET/openspec/config.yaml" && echo "added: openspec/config.yaml"
+fi
+
+# The work queue's labels (ready, in-progress, epic, priority:*, no-spec, chore, adr) — idempotent
+(cd "$TARGET" && bash "${CLAUDE_PLUGIN_ROOT}/scripts/issues.sh" labels)
 
 # Merge guard → .claude/hooks/
 mkdir -p "$TARGET/.claude/hooks"
@@ -119,7 +151,27 @@ for ignore in ".claude/hooks/merge-guard.log" "openspec/STOP"; do
 done
 ```
 
-If the user dictated backlog slices in step 2, write them into `openspec/backlog.md`'s `## Queue` now (Edit tool, item format).
+**First work / backlog migration** (step 2, question 5). File each slice as an issue shaped like
+the **Feature / backlog item** form — `### Problem`, `### Acceptance criteria` (WHEN … THEN …
+lines; write them from the slice's goal), `### Out of scope`, `### Depends on`,
+`### Needs a human first`, `### Change name`, `### Notes` — in queue order (issue numbers then
+preserve it), and **without** the `ready` label:
+
+```bash
+gh issue create --title "<what the slice delivers>" --label enhancement --body-file <body.md>
+```
+
+Migrating a legacy `openspec/backlog.md`: one issue per **unchecked** item, top to bottom —
+`goal:` → Problem (and the acceptance criteria you derive from it), `boundaries:` → Out of scope,
+`needs-human:` → Needs a human first, `slug:` → Change name, `carried-over:` → Notes. Checked
+items stay in git history only. Then `git rm "$TARGET/openspec/backlog.md"`.
+
+Either way, finish by printing the one command that queues them — the user runs it; you never
+apply `ready`:
+
+```
+gh issue edit <n1> <n2> … --add-label ready
+```
 
 ### 4. Hook wiring — settings.json
 
@@ -140,8 +192,9 @@ Append an `## Autonomous build loop` section to the project's `CLAUDE.md` via th
 
 ```markdown
 ## Autonomous build loop
-Launch: `/loop /kmp-forge-next-increment`. Work queue + stop condition: `openspec/backlog.md`
-(loop stops when empty). Runbook (config, gates, kill switch, escalation): `openspec/AUTOLOOP.md`.
+Launch: `/loop /kmp-forge-next-increment`. Work queue + stop condition: open GitHub issues labeled
+`ready` (only a human applies it; the loop stops when none is left). Runbook (config, gates, queue
+rules, kill switch, escalation): `openspec/AUTOLOOP.md`.
 Each increment auto-merges to `main` only when CI is green **and** its gate passes — spec gate =
 `kmp-spec-critic`, code gate = `kmp-loop-code-reviewer` + `kmp-reviewer`; otherwise it stops and
 escalates. Emergency stop: create the kill-switch file named in `openspec/AUTOLOOP.md`
@@ -183,8 +236,10 @@ Expect `exit=0` twice, no output from (1), and two new log lines (`caller=main`,
 ```
 ✓ Branch: chore/add-autoloop
 ✓ OpenSpec: <initialized | already present> (/opsx:propose, /opsx:apply verified)
-✓ openspec/AUTOLOOP.md: loop configuration + queue-empty handoff
-✓ openspec/backlog.md: <template | N slices seeded>
+✓ openspec/AUTOLOOP.md: loop configuration + queue-empty handoff + ready-approvers
+✓ openspec/config.yaml: kmp-forge project rules <added | merged | already present>
+✓ Issue labels: ready, in-progress, epic, priority:high|low, no-spec, chore, adr
+✓ Work queue: <N issues filed | N backlog items migrated, backlog.md removed | none yet>
 ✓ Merge guard: .claude/hooks/merge-guard.sh, mode=<mode>, audit line verified
 ✓ Hook wiring: .claude/settings.json <created | merged> (jq-valid)
 ✓ CLAUDE.md: Autonomous build loop section
@@ -192,7 +247,7 @@ Expect `exit=0` twice, no output from (1), and two new log lines (`caller=main`,
 Next:
   1. Review the diff, commit, open a PR from chore/add-autoloop, merge it.
   2. Restart Claude Code — hooks register at session start.
-  3. Fill openspec/backlog.md's Queue with real slices.
+  3. Label the issues to build `ready` (gh issue edit <n…> --add-label ready).
   4. Launch: /loop /kmp-forge-next-increment
   5. After 1–2 increments: cut -f2,5,6 .claude/hooks/merge-guard.log — every loop
      merge should show ALLOW. Then switch on enforcement and commit it (the mode is tracked):

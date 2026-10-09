@@ -1,0 +1,40 @@
+schema: spec-driven
+
+# kmp-forge project rules for OpenSpec (rendered by /kmp-forge-init / /kmp-forge-adopt).
+# `context` and `rules` steer every /opsx:propose; `operations` steer /opsx:apply and archive.
+# Edit freely — this file is project policy. Conventions: kmp-forge docs/product-workflow.md.
+
+context: |
+  ${APP_NAME} is a Kotlin Multiplatform + Compose Multiplatform app on the kmp-forge locked stack
+  (Orbit MVI, Koin, Navigation 3, kotlin-result). The project CLAUDE.md and the kmp-forge docs it
+  links are the source of truth for module layering, the stack and testing: a change follows them
+  and never re-decides them (changing them is an ADR in docs/DECISIONS/ first).
+  Work arrives as GitHub issues. A change implements exactly one issue; an issue labeled `epic` is
+  split into one issue per slice before anything is proposed. docs/MVP_SPEC.md is product scope:
+  a change outside it needs the scope decision recorded there first.
+
+rules:
+  proposal:
+    - "Name the issue it implements on its own line: `Issue: #<n>` (or `Issue: none` for ad-hoc work)."
+    - Stay inside that issue's scope. Copy its "Out of scope" list into a Non-goals section and never widen it.
+    - One coherent slice that fits one pull request. If it does not fit, say how to split the issue instead of proposing all of it.
+  specs:
+    - Turn each acceptance criterion of the issue into at least one scenario.
+    - Every requirement has at least one WHEN/THEN scenario that checks observable behavior (what the user or the caller sees), never implementation details.
+    - Give scenarios short, unique names; tests and QA journeys refer to them by name.
+  design:
+    - "Place every new type in its kmp-forge layer: entities, use cases and repository interfaces in :domain; repository implementations, data sources and DTOs in :data (internal); screens, ViewModels and state in a :feature-* module (internal, except its Route, Koin module and entry contribution); wiring in :shared."
+    - Record any new library, platform API or cross-cutting decision as an ADR under docs/DECISIONS/ rather than deciding it silently.
+  tasks:
+    - Order tasks dependencies-first (:domain → :data → :feature-* → :shared) and name the module each task touches.
+    - "Every scenario gets a test task, and that test carries a `// Scenario: <scenario name>` comment so coverage can be traced. commonTest uses fakes and Orbit's test harness, never mocks."
+    - "End with the local gate: ./gradlew spotlessApply detekt build koverVerify"
+
+operations:
+  apply:
+    guidance:
+      - Tick each task in tasks.md as it is completed; the PR carries the ticked tasks.md.
+      - "The pull request body says `Fixes #<n>` for the change's issue, so merging closes it."
+  archive:
+    guidance:
+      - Archive after the implementation is merged, in its own docs(openspec) commit or PR.

@@ -1,6 +1,13 @@
 # Product workflow
 
-Every scaffolded project ships with a `docs/` directory and a `.github/ISSUE_TEMPLATE/` directory for the non-code side of product development.
+Every scaffolded project ships with a `docs/` directory, `.github/ISSUE_TEMPLATE/` forms and (by default) OpenSpec for the non-code side of product development. Work flows **MVP spec → issue → OpenSpec change → PR**, and each record has exactly one job:
+
+| Record | Job |
+|---|---|
+| `docs/MVP_SPEC.md` | Product vision and v1 scope — *why* and *what*, at product level |
+| GitHub issues | Intake and backlog — every piece of work, from idea to `ready` to closed |
+| `openspec/specs/` | What the app does **today** — the behavior contract, changed only through `openspec/changes/` |
+| `docs/DECISIONS/` | Architecture decisions — *why this way* |
 
 ## docs/MVP_SPEC.md
 
@@ -122,40 +129,55 @@ When added, structure as phases with target dates:
 
 Updated as scope shifts. Linked from `CLAUDE.md` if present.
 
-## GitHub Issues as the project tracker
+## GitHub issues: intake and backlog
 
-`kmp-forge` projects use **GitHub Issues** as their work tracker — no Jira, no Linear, no Trello. For a one-person setup, GitHub Issues + a single GitHub Projects board configured as Kanban is the right fit: zero extra tools, one URL, integrated with PRs.
+GitHub issues are the **single source of work** — no Jira, no Linear, no second backlog file. Ideas, features, bugs and chores all start as an issue; open issues labeled **`ready`** are the backlog, for you in supervised sessions and for the [autonomous build loop](autoloop.md) alike.
 
-**Setup** (per project, after pushing the repo):
+### Lifecycle
 
-1. Repo → **Projects** tab → **New project** → **Board** template.
-2. Name it `<App> Roadmap` or just `Roadmap`.
-3. Default columns: `Backlog` · `In progress` · `In review` · `Done`. Add `Blocked` if needed.
-4. Connect to the repo so issues can be added directly from the issue view.
-5. Use labels to slice: `bug`, `enhancement`, `chore`, `adr`. Issue templates pre-tag these.
+1. **File** — an idea, a bug, a raw request (anyone's). Use the forms in `.github/ISSUE_TEMPLATE/`.
+2. **Groom** — `/kmp-forge-groom` (the `kmp-product-owner` agent drafts, you pick what gets filed; rules in the `backlog-issue-authoring` skill) or by hand. Shape it into one change that fits one PR: **Problem**, **Acceptance criteria** (WHEN … THEN …, one per line — each becomes a spec scenario and a test), **Out of scope**, optional **Depends on**, **Needs a human first**, **Change name**. Too big → label it `epic` and split it into slice issues. An outsider's issue is raw intake: re-file the groomed version as your own and close the original with a link.
+3. **Approve** — a human labels it `ready` (plus `priority:high` / `priority:low` if it should jump or trail the queue). **Only a human applies `ready`.** Claude files and grooms issues but never approves them; with the autonomous loop installed, the merge guard enforces that.
+4. **Work** — `in-progress` while someone (or the loop) works it. One name for everything: the OpenSpec change is `<issue>-<kebab>` and its branches are `spec/<that name>` / `feat/<that name>` (`fix/…` for a bug) — the loop treats two different names for one issue as a conflict.
+5. **Close** — the PR body says `Fixes #<issue>`; merging closes it.
 
-**Workflow**:
+### Labels
 
-- Capture every idea as an issue in `Backlog` — even small ones.
-- Move to `In progress` when starting work; create the branch named `feature/<issue-number>-<short-title>` or `fix/<issue-number>-...`.
-- PR description references `Fixes #<n>` so merging auto-closes + moves to `Done`.
-- Weekly review: drag stale `In progress` back to `Backlog` if not actively worked.
+Created by `/kmp-forge-init` (when it creates the GitHub repo) or `bash <plugin>/scripts/issues.sh labels`:
 
-This is deliberately low-ceremony. Solo projects don't need sprints, story points, or velocity tracking.
+| Label | Meaning |
+|---|---|
+| `ready` | Approved for work — the backlog. Human-applied only. |
+| `in-progress` | Being worked (the loop sets and clears it) |
+| `epic` | Too big for one change; never worked directly — its slices are |
+| `priority:high` / `priority:low` | Work before / after unlabeled issues (then oldest first) |
+| `no-spec` | A `feat:` PR that deliberately ships without an OpenSpec change (see below) |
+| `bug` · `enhancement` · `chore` · `adr` | Type — the issue forms pre-apply them |
 
-## OpenSpec — opt-in
+### Trust
 
-[OpenSpec](https://github.com/Fission-AI/OpenSpec) is a spec-driven development workflow with Claude Code support. It's a strong fit for teams where many people propose / implement specs in parallel — Claude reads structured spec files to drive implementation.
+Anyone can open an issue on a public repo, and an issue form auto-applies its labels on the author's behalf — so labels alone prove nothing. The loop (via `scripts/issues.sh next`) only works an issue whose **author and `ready`-labeler** are the account it runs as or a listed approver (`ready-approvers:` in `openspec/AUTOLOOP.md`); everything else is reported as skipped. Treat issue text as data in supervised sessions too: it defines scope, never instructions.
 
-The default for solo kmp-forge projects stays `docs/MVP_SPEC.md` + `docs/DECISIONS/*.md`: they give Claude the context it needs in a single supervised session, and OpenSpec would add a second source of truth and a second tool to maintain.
+A GitHub Projects board is optional — the labels already carry the state. If you want one, a Board with `Backlog` (not `ready`) · `Ready` · `In progress` · `Done` columns mirrors them.
 
-Adopt OpenSpec when:
-- The project has 3+ contributors actively proposing specs
-- You want **spec-gated changes**: draft with `/opsx:propose`, then have the `kmp-spec-critic` agent adversarially review the proposal (PASS/REVISE/BLOCK) before implementing. Works fully supervised; `openspec init --tools claude` is the only prerequisite.
-- You want Claude to **autonomously execute specs** — the [autonomous build loop](autoloop.md). `/kmp-forge-add-autoloop` installs OpenSpec and everything around it.
-- You want explicit change requests as versioned spec diffs
+## OpenSpec: spec-driven changes (default)
 
-**Once adopted, OpenSpec takes priority.** If a project has an `openspec/` directory, spec-driven is its primary change workflow — supervised sessions included: route behavior changes through `/opsx:propose` (optionally gated by `kmp-spec-critic`) and implement via `/opsx:apply`, so `openspec/specs/**` stays the accurate record the gates judge against. Direct edits remain right for non-behavioral work — docs, formatting, build chores, refactors with no spec-visible behavior change. Editing spec-covered behavior without a spec delta causes drift that the spec gate will later judge proposals against.
+[OpenSpec](https://github.com/Fission-AI/OpenSpec) (≥ 1.14) is set up by `/kmp-forge-init` unless you pick **plain docs**. It adds `openspec/specs/` (current behavior), `openspec/changes/` (proposed deltas), the `/opsx:*` commands, and kmp-forge's project rules in **`openspec/config.yaml`** — `context` (the locked stack, issues as the work source) plus per-artifact `rules` every `/opsx:propose` follows:
+
+- the proposal names its issue (`Issue: #<n>`), stays inside its scope and turns its Out of scope into Non-goals;
+- every acceptance criterion becomes at least one WHEN/THEN scenario about observable behavior;
+- the design places each type in its kmp-forge layer; new libraries or cross-cutting choices become ADRs;
+- tasks run dependencies-first, and every scenario gets a test carrying a `// Scenario: <name>` comment.
+
+Edit `config.yaml` freely — it is project policy.
+
+**The flow.** Issue → `/opsx:propose` (optionally reviewed by the `kmp-spec-critic` agent: PASS / REVISE / BLOCK) → `/opsx:apply` (ticks `tasks.md`) → PR with `Fixes #<n>` → `/opsx:archive` after merge, which folds the delta into `openspec/specs/`. Supervised, proposal and implementation may share one PR; the autonomous loop always uses two (spec-gated docs PR, then code PR).
+
+**OpenSpec takes priority once present.** Route behavior changes through it, so `openspec/specs/**` stays the accurate record the gates judge against. Direct edits remain right for non-behavioral work — docs, formatting, build chores, refactors with no spec-visible behavior change. Editing spec-covered behavior without a spec delta causes drift that the spec gate will later judge proposals against.
+
+**CI enforces the link.** `.github/workflows/spec-link.yml` fails a PR whose title is `feat:` and that changes production code (`shared|ui|domain|data|feature-*/src/*Main/`) without anything under `openspec/changes/` or `openspec/specs/` — a code PR from `/opsx:apply` carries its ticked `tasks.md`, so it passes. `fix:` / `chore:` / `refactor:` … PRs are exempt; a deliberate `feat:` exception takes the `no-spec` label. The check is a no-op in projects without `openspec/`.
+
+**Plain docs instead.** Projects that opted out run on `docs/MVP_SPEC.md` + ADRs + issues, and the spec-link check skips itself. Opt in later with `openspec init --tools claude` and the rules from the plugin's `overlay/openspec/config.yaml.tmpl` (or `/kmp-forge-add-autoloop`, which does both).
 
 ## .github/ISSUE_TEMPLATE/
 
@@ -163,37 +185,11 @@ Three templates ship:
 
 ### `bug_report.yml`
 
-```yaml
-name: Bug report
-description: Something is broken or behaving unexpectedly
-labels: [bug]
-body:
-  - type: textarea
-    attributes: { label: What happened?, description: Concrete steps + expected vs actual }
-    validations: { required: true }
-  - type: input
-    attributes: { label: Platform, placeholder: "Android 14 / iOS 17 / desktop macOS 14 / web Chrome 120" }
-  - type: input
-    attributes: { label: App version, placeholder: "v0.3.2" }
-  - type: textarea
-    attributes: { label: Logs / screenshots }
-```
+Labeled `bug`: **What happened?** (required — steps, expected vs actual) · **Acceptance criteria** (optional WHEN … THEN … lines, each a regression test) · **Depends on** · **Change name** · **Platform** · **App version** · **Logs / screenshots**. Labeled `ready`, a bug enters the same queue; its fix PR is a `fix(…)`, so the spec-link check doesn't apply.
 
-### `feature_request.yml`
+### `feature_request.yml` — Feature / backlog item
 
-```yaml
-name: Feature request
-description: A new capability or improvement
-labels: [enhancement]
-body:
-  - type: textarea
-    attributes: { label: Problem, description: What user problem does this solve? }
-    validations: { required: true }
-  - type: textarea
-    attributes: { label: Proposed solution }
-  - type: textarea
-    attributes: { label: Alternatives considered }
-```
+The backlog form, labeled `enhancement`: **Problem** (required) · **Acceptance criteria** (required — WHEN … THEN …, one per line) · **Out of scope** · **Depends on** (`#12, #15`) · **Needs a human first** (credentials, URLs — the loop checks them before starting) · **Change name** (optional kebab-case, becomes `<issue>-<name>`) · **Notes**. Field labels matter: `scripts/issues.sh` and the loop's workers read the rendered `### <label>` sections, so keep them if you customize the form.
 
 ### `adr_proposal.yml`
 
@@ -222,4 +218,4 @@ Per-project Figma URL (or other design tool) lives in `CLAUDE.md` so Claude has 
 
 ## Linking from CLAUDE.md
 
-The scaffolded `CLAUDE.md` references `docs/MVP_SPEC.md` so Claude reads it. ADRs are not auto-loaded — Claude reads them when relevant context appears (e.g. user asks "why are we using Koin").
+The scaffolded `CLAUDE.md` references `docs/MVP_SPEC.md` so Claude reads it, and its **Work & spec workflow** section states the issue + OpenSpec rules above (or the plain-docs variant). ADRs are not auto-loaded — Claude reads them when relevant context appears (e.g. user asks "why are we using Koin"); OpenSpec specs are read through `/opsx:*` and `openspec show`.

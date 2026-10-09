@@ -99,7 +99,7 @@ bash "${CLAUDE_PLUGIN_ROOT}/scripts/apply-overlay.sh" patch-settings \
 3. `AppNavigation.kt`:
    - imports: `${BASE_PACKAGE}.feature.${FEATURE_NAME_PKG}.${FEATURE_NAME_PASCAL}Route` and `${BASE_PACKAGE}.feature.${FEATURE_NAME_PKG}.add${FEATURE_NAME_PASCAL}Entries`
    - above `// kmp-forge:nav-routes`: `            subclass(${FEATURE_NAME_PASCAL}Route::class, ${FEATURE_NAME_PASCAL}Route.serializer())` — **required**: off Android, `rememberNavBackStack` can only save routes registered in this `SerializersModule`; a missing one throws `SerializationException` the first time the back stack is saved.
-   - above `// kmp-forge:nav-entries`: `            add${FEATURE_NAME_PASCAL}Entries(onNavigateBack = navigateBack)` — never reference the `internal` screen directly, never add a `when` branch.
+   - above `// kmp-forge:nav-entries`: `            add${FEATURE_NAME_PASCAL}Entries(onNavigateBack = navigateBack)` — never reference the `internal` screen directly, never add a `when` branch. The parameter is nullable: the start destination is wired with `onNavigateBack = null` (nothing to go back to, so its screen shows no Back control).
 
 Use the Edit tool. Be defensive: if a marker is missing (a project scaffolded before the composition root existed, or one the user restructured), find the equivalent `modules(...)` list / `polymorphic(NavKey::class) { … }` block / `entryProvider { … }` block; if there is none, surface the exact lines for the user to apply rather than guessing.
 
@@ -128,7 +128,8 @@ If green, the feature is wired. Surface the result to the user.
 ✓ Build: green | red (with output)
 
 Next: implement the use case in :domain, add fakes/tests, build the UI.
-The app still launches on HomeRoute — to start on this feature, pass <Name>Route to rememberNavBackStack(...) in AppNavigation.kt.
+The app still launches on HomeRoute — to start on this feature, pass <Name>Route to rememberNavBackStack(...) in AppNavigation.kt and wire add<Name>Entries(onNavigateBack = null).
+The screen renders a placeholder line (TODO(kmp-forge)) — replace it with the real content.
 ```
 
 ## Notes
@@ -137,3 +138,4 @@ The app still launches on HomeRoute — to start on this feature, pass <Name>Rou
 - The Gradle module name keeps dashes (`feature-photo-detail`) — `settings.gradle.kts` accepts them.
 - Never reuse a feature name. If the module already exists, surface the conflict and stop.
 - If `:domain` doesn't expose a use case relevant to the feature yet, the generated ViewModel carries a comment showing where to call it — that's intentional (not a `TODO:`, which detekt's `ForbiddenComment` rejects).
+- The generated screen's content is a placeholder string (`placeholder_content`) marked `// TODO(kmp-forge):` so neither QA nor a reviewer mistakes it for shipped UI; `kmp-reviewer` flags a feature that still renders it.

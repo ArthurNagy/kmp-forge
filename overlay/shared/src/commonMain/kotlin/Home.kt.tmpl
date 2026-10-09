@@ -17,8 +17,9 @@ import org.jetbrains.compose.resources.stringResource
 
 /**
  * Placeholder start destination until the first feature exists. Once a feature should
- * own the launch screen, pass its Route to `rememberNavBackStack(...)` in AppNavigation.kt
- * and delete this file plus its `HomeRoute` registrations there.
+ * own the launch screen, pass its Route to `rememberNavBackStack(...)` in AppNavigation.kt,
+ * wire its entries with `onNavigateBack = null` (the root has nothing to go back to), and
+ * delete this file plus its `HomeRoute` registrations there.
  */
 @Serializable
 internal data object HomeRoute : NavKey

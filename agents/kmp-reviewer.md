@@ -93,6 +93,7 @@ cat <path>
 - 🔴 Untyped nav (string keys, `Bundle`, etc). Use typed `@Serializable` route classes.
 - 🟡 The composition host (`:shared`, which owns `App.kt` + the `NavDisplay` back stack) references a feature's `Screen`/`ViewModel` directly (e.g. a `NavDisplay { when }` calling `FooScreen(...)`). Features should expose `EntryProviderScope<NavKey>.addFooEntries(...)`; `:shared` composes them in `entryProvider { addFooEntries(...) }` so screens stay `internal`.
 - 🟡 Feature imports another feature's `Route`. Pass outgoing navigation as a callback (`onOpenX: (Arg) -> Unit`); the app owns target routes.
+- 🟡 The start destination (the route passed to `rememberNavBackStack(...)`) wired with a non-null `onNavigateBack` (`addFooEntries(onNavigateBack = navigateBack)`): its Back control shows and does nothing, because `navigateBack` never pops the root. Pass `onNavigateBack = null` (the template's screen then shows no Back control).
 - 🔴 A `NavKey` route not registered in `:shared`'s `SavedStateConfiguration` `SerializersModule` (`subclass(FooRoute::class, FooRoute.serializer())` in AppNavigation.kt), or `rememberNavBackStack(...)` called without a configuration in common code. Off Android the back stack can't be saved — `SerializationException` at runtime (the no-config overload doesn't even compile in `commonMain`).
 
 ### Visibility (warn)
@@ -141,6 +142,7 @@ Note: use-case **constructors stay public** — feature tests build them with fa
 - 🟡 New `:feature-*` module not declared as a `:shared` dependency, or its Koin module not added to `appModules` in `:shared`'s AppModules.kt (the list `App()` passes to `KoinApplication`).
 - 🟡 New feature's `addFooEntries(...)` not added to `:shared`'s `NavDisplay(entryProvider = entryProvider { ... })` (AppNavigation.kt), or a new route not contributed via `entry<FooRoute> { ... }`.
 - 🟡 New library added to module's `build.gradle.kts` without matching entry in `gradle/libs.versions.toml`.
+- 🟡 A feature still renders the add-feature template placeholder (`Res.string.placeholder_content` / the `// TODO(kmp-forge): replace this placeholder` line in `*Screen.kt`). Replace it with the screen's real content and delete the string.
 
 ## What you don't do
 

@@ -19,7 +19,7 @@ import androidx.compose.ui.Modifier
 import ${BASE_PACKAGE}.feature.${FEATURE_NAME_PKG}.resources.Res
 import ${BASE_PACKAGE}.feature.${FEATURE_NAME_PKG}.resources.error_generic
 import ${BASE_PACKAGE}.feature.${FEATURE_NAME_PKG}.resources.navigate_back
-import ${BASE_PACKAGE}.feature.${FEATURE_NAME_PKG}.resources.ready
+import ${BASE_PACKAGE}.feature.${FEATURE_NAME_PKG}.resources.placeholder_content
 import ${BASE_PACKAGE}.ui.AppSpacing
 import org.jetbrains.compose.resources.stringResource
 import org.koin.compose.viewmodel.koinViewModel
@@ -32,9 +32,12 @@ import org.orbitmvi.orbit.compose.collectAsState
  *
  * `internal`: the app never calls this directly — it composes the feature via
  * `add${FEATURE_NAME_PASCAL}Entries(...)` inside its `entryProvider { }` (see ${FEATURE_NAME_PASCAL}NavEntry.kt).
+ *
+ * [onNavigateBack] is `null` when this screen is the app's start destination: there is
+ * nothing to go back to, so no Back control is shown.
  */
 @Composable
-internal fun ${FEATURE_NAME_PASCAL}Screen(onNavigateBack: () -> Unit) {
+internal fun ${FEATURE_NAME_PASCAL}Screen(onNavigateBack: (() -> Unit)?) {
     val viewModel = koinViewModel<${FEATURE_NAME_PASCAL}ViewModel>()
     val state by viewModel.collectAsState()
     val snackbarHostState = remember { SnackbarHostState() }
@@ -58,7 +61,7 @@ internal fun ${FEATURE_NAME_PASCAL}Screen(onNavigateBack: () -> Unit) {
 private fun ${FEATURE_NAME_PASCAL}Content(
     state: ${FEATURE_NAME_PASCAL}State,
     snackbarHostState: SnackbarHostState,
-    onNavigateBack: () -> Unit,
+    onNavigateBack: (() -> Unit)?,
 ) {
     // The SnackbarHost must be in the tree: showSnackbar() suspends until a host shows it.
     Scaffold(snackbarHost = { SnackbarHost(snackbarHostState) }) { innerPadding ->
@@ -73,10 +76,14 @@ private fun ${FEATURE_NAME_PASCAL}Content(
             when {
                 state.loading -> CircularProgressIndicator()
                 state.error != null -> Text(stringResource(Res.string.error_generic))
-                else -> Text(stringResource(Res.string.ready))
+                // TODO(kmp-forge): replace this placeholder with the real screen content (and drop
+                // the placeholder_content string). kmp-reviewer flags a feature that still renders it.
+                else -> Text(stringResource(Res.string.placeholder_content))
             }
-            TextButton(onClick = onNavigateBack) {
-                Text(stringResource(Res.string.navigate_back))
+            if (onNavigateBack != null) {
+                TextButton(onClick = onNavigateBack) {
+                    Text(stringResource(Res.string.navigate_back))
+                }
             }
         }
     }

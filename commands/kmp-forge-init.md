@@ -143,7 +143,7 @@ export USE_OPENSPEC="<yes|no — from step 1 question 7>"
 if [[ "$USE_OPENSPEC" == yes ]]; then
 export SPEC_WORKFLOW='Work starts as a GitHub issue (forms in `.github/ISSUE_TEMPLATE/`). Open issues labeled `ready`
 are the backlog, ordered `priority:high` → unlabeled → `priority:low`. **Only a human applies
-`ready`**: Claude may file and groom issues (`/kmp-forge-groom`) but never approves them.
+`ready`**: Claude may file and refine issues (`/kmp-forge-refine`) but never approves them.
 
 Behavior changes go through OpenSpec: `/opsx:propose` (naming the issue: `Issue: #<n>`) →
 optionally the `kmp-spec-critic` agent → `/opsx:apply` → a PR whose body says `Fixes #<n>` →
@@ -434,7 +434,7 @@ Next:
        git push -u origin main
   4. Enable branch protection on main (see docs/git-conventions.md)
   5. Run /kmp-forge-spec to fill out docs/MVP_SPEC.md
-  6. Run /kmp-forge-groom --gaps to draft the first backlog issues from the spec, then
+  6. Run /kmp-forge-refine --gaps to draft the first backlog issues from the spec, then
      approve the ones to build yourself: gh issue edit <n…> --add-label ready
   7. Run /kmp-forge-add-feature <name> to add your first feature module
 

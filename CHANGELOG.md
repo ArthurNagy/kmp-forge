@@ -7,6 +7,9 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Changed
+- **`/kmp-forge-groom` is now `/kmp-forge-refine`**, and the docs, the `kmp-product-owner` agent and the `backlog-issue-authoring` skill say *refine* throughout. The autonomous loop's runbook key `queue-empty-groom` is now `queue-empty-refine`; the loop still reads the old key, and re-running `/kmp-forge-add-autoloop` renames it.
+
 ### Fixed
 - **Feature template: no dead Back button on the start destination.** `add<Name>Entries(onNavigateBack)` and the generated screen take a nullable `(() -> Unit)?`; the screen shows its Back control only when it is non-null. The app's start destination is wired with `onNavigateBack = null`, because `navigateBack` never pops the root and the button did nothing. Pushed destinations keep `onNavigateBack = navigateBack` (the add-feature wiring is unchanged). `Home.kt`, the add-feature/add-screen recipes and the canonical nav examples in `docs/architecture.md` / `docs/stack.md` (whose start destination had the same bug) say so. kmp-reviewer warns when the start destination gets a non-null back.
 - **Feature template: the placeholder no longer looks like shipped UI.** The screen's content branch rendered "`<Name>` ready"; it now renders the `placeholder_content` string ("`<Name>`: replace this placeholder with the real screen content") under a `// TODO(kmp-forge):` marker, so QA and reviewers can tell template from product. kmp-reviewer warns about a feature that still renders it.

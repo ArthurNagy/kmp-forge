@@ -51,7 +51,7 @@ Substitute:
   docs: author MVP spec
   ```
 - Suggest the user also update CLAUDE.md's `One-liner` field to match the spec's tagline (use Edit tool)
-- Suggest `/kmp-forge-groom --gaps` next: the product-owner agent drafts the first backlog issues from the spec's Must-haves and flows (the user approves them with the `ready` label)
+- Suggest `/kmp-forge-refine --gaps` next: the product-owner agent drafts the first backlog issues from the spec's Must-haves and flows (the user approves them with the `ready` label)
 
 ## Notes
 

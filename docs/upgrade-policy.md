@@ -9,7 +9,7 @@ It does **not** retroactively migrate existing scaffolded projects to match a ne
 ## What you get automatically
 
 - `/kmp-forge-bump-stack` — refreshes `libs.versions.toml` against latest stable lib versions. Reviewer sees the diff before commit.
-- `/kmp-forge-add-feature`, `/kmp-forge-add-screen`, `/kmp-forge-add-platform`, `/kmp-forge-add-library`, `/kmp-forge-add-module` — keep producing modern, current overlay-style outputs as the plugin evolves.
+- `/kmp-forge-add-feature`, `/kmp-forge-add-screen`, `/kmp-forge-add-platform`, `/kmp-forge-add-library` — keep producing modern, current overlay-style outputs as the plugin evolves.
 - `kmp-reviewer` agent — applies the **latest** rules in the plugin to your diffs, even if your scaffold structure is older.
 
 ## What requires manual work

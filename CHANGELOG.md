@@ -5,6 +5,11 @@ All notable changes to `kmp-forge` will be documented in this file.
 Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Fixed
+- **Docs no longer point at a `/kmp-forge-add-module` command** — it never existed. `docs/upgrade-policy.md` drops it from the list of commands, and `docs/architecture.md` § When to extract a new shared module says how to add a module by hand (apply `kmp-forge.kmp.library`, `include` it in `settings.gradle.kts`).
+
 ## [0.5.1] - 2026-10-09
 
 Feature-template fixes from the first QA run, and the backlog command now says *refine*.

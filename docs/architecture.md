@@ -116,7 +116,7 @@ Defaults are enough for projects up to ~10 features. Extract when:
 - **`:network`** splits off `:data` when network configuration (Ktor client + interceptors + Sentry hooks + retry policy) grows beyond a single file.
 - **`:persistence`** splits off `:data` when you have multiple SQLDelight databases or share a single database across many repos.
 
-Add via `/kmp-forge-add-module <name>`. New modules follow the same dependency rules (pure-Kotlin or Compose-aware as appropriate).
+There is no command for this — create the module by hand: a `build.gradle.kts` that applies `id("kmp-forge.kmp.library")` (copy an existing layer module's as the starting point) and an `include(":<name>")` in `settings.gradle.kts`. New modules follow the same dependency rules (pure-Kotlin or Compose-aware as appropriate).
 
 ## ViewModel + Orbit pattern (state-only)
 

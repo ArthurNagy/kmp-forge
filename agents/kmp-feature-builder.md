@@ -109,7 +109,7 @@ These are non-negotiable. Surface a clear error and stop if any conflict with th
    ```
 
 5. **Inject use-case wiring** (if you found one in step 2). Use `Edit` to:
-   - Add the use case to `<Name>ViewModel`'s constructor: `internal class <Name>ViewModel(private val getX: GetXUseCase) : ViewModel(), ContainerHost<...>`
+   - Add the use case to `<Name>ViewModel`'s constructor: `internal class <Name>ViewModel(private val getX: GetXUseCase) : ViewModel(), OrbitContainerHost<...>`
    - Replace the "Replace with a use case from :domain" comment block in `load()` with a real call (kotlin-result — add explicit imports `com.github.michaelbull.result.onOk` + `com.github.michaelbull.result.onErr`; no wildcard imports, ktlint rejects them; `onSuccess`/`onFailure` are deprecated in kotlin-result 2.x; `state.error` is a `DomainError?`, carried as-is and mapped to a string resource in the Composable):
      ```kotlin
      getX().onOk { data -> reduce { state.copy(loading = false, items = data) } }
@@ -144,7 +144,7 @@ These are non-negotiable. Surface a clear error and stop if any conflict with th
     - Edits applied (file + line)
     - Use case wired (yes/no, which one)
     - Build status (green/red + last 10 lines of output if red)
-    - Next steps for the user
+    - Next steps for the user — replacing the placeholder content follows the plugin's `presentation-layer` skill (`${claude_plugin_root}/skills/presentation-layer/SKILL.md`; it loads automatically in the project)
 
 ## What you do NOT do
 

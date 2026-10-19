@@ -70,7 +70,8 @@ agents/                      Subagents invoked by commands (kmp-feature-builder,
 skills/                      Workflow skills auto-triggered in scaffolded projects
                              (conventional-commits, git-cliff-changelog,
                               github-release-artifacts, mvp-spec-authoring, adr-authoring,
-                              backlog-issue-authoring, driving-ci-green)
+                              backlog-issue-authoring, driving-ci-green,
+                              domain-layer / data-layer / presentation-layer — per-layer coding recipes)
 scripts/                     Bash renderers/patchers invoked by commands
   apply-overlay.sh             render | render-module | patch-settings | patch-libs | pin-toolchain
   kmp-new.sh                   download a project from kmp.jetbrains.com's generator | print pre-filled wizard URL
@@ -123,7 +124,7 @@ docs/                        Source-of-truth conventions linked from every scaff
 
 ## Locked-stack rules the agents/templates enforce in code
 
-Full stack table lives in `README.md`. The rules below are the ones literally encoded across `agents/kmp-reviewer.md` (audit), `agents/kmp-feature-builder.md` (generation), `agents/kmp-migrator.md` (refactor existing code onto the rules), and `overlay/modules/feature/`. Change one → change all four (plus the canonical `docs/<area>.md`).
+Full stack table lives in `README.md`. The rules below are the ones literally encoded across `agents/kmp-reviewer.md` (audit), `agents/kmp-feature-builder.md` (generation), `agents/kmp-migrator.md` (refactor existing code onto the rules), and `overlay/modules/feature/` — and taught, as recipes, by `skills/{domain,data,presentation}-layer/`. Change one → change them all (plus the canonical `docs/<area>.md`).
 
 - **State-only events**: `OrbitContainerHost<State, State, Nothing>` (Orbit 12; the `ContainerHost<State, Nothing>` alias is deprecated). `postSideEffect` forbidden. One-shot events (nav, toasts) → consumable state slots (`pendingNavigation: Route?`) cleared by `onXxxConsumed()` intents the UI calls after `LaunchedEffect`.
 - **No raw dispatchers**: `Dispatchers.IO/Default/Main` forbidden in `:domain`/`:data`/`:feature-*`. Inject `DispatcherProvider`.
@@ -163,7 +164,7 @@ There is no build system here. Work is:
 
 - Conventional Commits (see `docs/git-conventions.md`). Releases tagged from `main`, changelog rendered by git-cliff (see `cliff.toml` analogue if added).
 - When adding a new overlay variable, update all three: (a) the `.tmpl` that uses it, (b) `OVERLAY_VARS` in `scripts/apply-overlay.sh` (anything not listed there is left verbatim), and (c) the `commands/kmp-forge-init.md` step 4 `export` block (or the add-feature/add-autoloop export for those templates). Unset envsubst vars silently become empty strings — easy footgun.
-- When changing a locked-stack rule, update **all four** in lockstep: `docs/<area>.md` (canonical), `agents/kmp-reviewer.md` (enforcement), `agents/kmp-feature-builder.md` (generation), `agents/kmp-migrator.md` (refactor recipe — detect/transform/verify for that rule), plus the relevant template under `overlay/modules/feature/` if shape changes. The v0.2 release in `CHANGELOG.md` is the example: state-only events touched 6 surfaces.
+- When changing a locked-stack rule, update **all four** in lockstep: `docs/<area>.md` (canonical), `agents/kmp-reviewer.md` (enforcement), `agents/kmp-feature-builder.md` (generation), `agents/kmp-migrator.md` (refactor recipe — detect/transform/verify for that rule), plus the layer skill that teaches it (`skills/{domain,data,presentation}-layer/SKILL.md` — its examples must keep compiling against the rule) and the relevant template under `overlay/modules/feature/` if shape changes. The v0.2 release in `CHANGELOG.md` is the example: state-only events touched 6 surfaces.
 - When changing autonomous-loop material, update in lockstep: `commands/kmp-forge-next-increment.md` (orchestrator), the worker agents (`agents/kmp-loop-*.md`, `agents/kmp-spec-critic.md`), `overlay/autoloop/` (merge-guard.sh + templates), `scripts/issues.sh` (queue selection), and `docs/autoloop.md` (canonical).
 - The issue form's field labels are a contract: `overlay/git/ISSUE_TEMPLATE/feature_request.yml` renders `### <label>` sections that `scripts/issues.sh` (`Depends on`, `Needs a human first`, `Change name`) and the loop workers (`Problem`, `Acceptance criteria`, `Out of scope`) parse. Rename one → change all three, plus `docs/product-workflow.md`. Likewise the `ready` label name is shared by `issues.sh`, `merge-guard.sh` (denies applying it) and the docs. **Only a human applies `ready`** — no command or agent may add it. The `### 🤖 <gate> — round r/3 — <VERDICT>` review header is a contract between the orchestrator (posts it), its Phase-0 resume jq (parses it), and `merge-guard.sh` (checks the last ` — ` field is `PASS`, the author is the loop account, and the review's commit is the PR head) — change all three together or the guard denies every merge. The hook command in `overlay/autoloop/settings.json` must stay quoted (`bash "${CLAUDE_PROJECT_DIR}/…"`) — unquoted, it splits on paths with spaces and the guard silently never runs. Bump the `# version:` line in `merge-guard.sh` whenever the script changes so `/kmp-forge-add-autoloop` re-runs can detect stale project copies.
 - Plugin docs (`docs/*.md`) are the source of truth — scaffolded `CLAUDE.md.tmpl` links to them on GitHub `main`, so docs ship with the plugin via the repo, not via copy.

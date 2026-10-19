@@ -348,6 +348,7 @@ targets the project has (`jvmMain` always; `iosMain` with iOS; `webMain` with we
   jvmMain.dependencies { implementation(libs.ktor.client.okhttp) }
   iosMain.dependencies { implementation(libs.ktor.client.darwin) }   // iOS only
   webMain.dependencies { implementation(libs.ktor.client.js) }       // web only
+  commonTest.dependencies { implementation(libs.ktor.client.mock) }  // MockEngine for data source tests
   ```
   and in `dataModule.kt`, bind the client inside `module { … }`: `single { createHttpClient() }`.
 - **SQLDelight** (relational DB):

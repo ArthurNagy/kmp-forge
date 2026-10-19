@@ -52,6 +52,10 @@ agent after `/opsx:apply` — it may use a connected phone, touching only the ap
 Prefer kmp-forge slash commands over hand-rolled scaffolding:
 `/kmp-forge-add-feature`, `/kmp-forge-add-screen`, `/kmp-forge-add-platform`, `/kmp-forge-add-library`, `/kmp-forge-bump-stack`, `/kmp-forge-spec`, `/kmp-forge-refine`, `/kmp-forge-doctor`, `/kmp-forge-add-autoloop`.
 
+Writing code inside a layer follows the plugin's `domain-layer`, `data-layer` and `presentation-layer` skills
+(use cases and errors · repositories and the exception boundary · ViewModels, screens and navigation, each with
+the tests the gates expect) — they load when you work in that layer.
+
 ## Project-specific overrides
 ${PROJECT_OVERRIDES}
 

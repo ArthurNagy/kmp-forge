@@ -28,6 +28,15 @@ A Claude Code plugin that scaffolds and guides Kotlin Multiplatform + Compose Mu
 - `/kmp-forge-add-autoloop` — install the autonomous build loop (OpenSpec workflow, GitHub-issue queue, merge-guard hook) into a project
 - `/kmp-forge-next-increment` — run ONE autonomous increment on the next `ready` issue (propose → gate → implement → gate → merge); wrap with `/loop` to work the queue down
 
+## Skills
+
+Loaded automatically in a kmp-forge project when the work matches:
+
+- `domain-layer` · `data-layer` · `presentation-layer` — how to write each layer's code on the locked stack: use cases, entities and errors · repositories, data sources and the exception → `DomainError` boundary · ViewModels, state, screens and navigation — each with the tests the gates expect
+- `backlog-issue-authoring` · `mvp-spec-authoring` · `adr-authoring` — workable issues, the MVP spec, architecture decisions
+- `conventional-commits` · `git-cliff-changelog` · `github-release-artifacts` — commits, changelog and release plumbing
+- `driving-ci-green` — watch and fix a PR's checks without flooding the context
+
 ## Locked stack
 
 | Concern | Choice |

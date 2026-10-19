@@ -1,6 +1,7 @@
 package ${BASE_PACKAGE}.data
 
 import io.ktor.client.HttpClient
+import io.ktor.client.HttpClientConfig
 import io.ktor.client.plugins.contentnegotiation.ContentNegotiation
 import io.ktor.serialization.kotlinx.json.json
 import kotlinx.serialization.json.Json
@@ -11,7 +12,18 @@ import kotlinx.serialization.json.Json
  * on each target's classpath (see :data's build.gradle.kts): OkHttp on Android/JVM, Darwin on iOS,
  * Js on web. `internal`: nothing outside :data talks HTTP.
  */
-internal fun createHttpClient(): HttpClient = HttpClient {
+internal fun createHttpClient(): HttpClient = HttpClient { configureDefaults() }
+
+/**
+ * The app-wide client setup — shared with tests, which build the same client over Ktor's fake engine:
+ * `HttpClient(MockEngine { request -> respond(...) }) { configureDefaults() }`.
+ *
+ * `expectSuccess = true`: a non-2xx response throws a `ResponseException` (4xx → `ClientRequestException`,
+ * 5xx → `ServerResponseException`) that the repository maps to its `DomainError` — instead of `body()`
+ * failing later on an error payload it can't deserialize.
+ */
+internal fun HttpClientConfig<*>.configureDefaults() {
+    expectSuccess = true
     install(ContentNegotiation) {
         json(Json { ignoreUnknownKeys = true })
     }

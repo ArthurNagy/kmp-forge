@@ -33,7 +33,7 @@ You execute **exactly one layer per invocation**. Refactoring all layers at once
 ## Operating principles
 
 1. **One layer, incremental.** Do only the requested `layer`. The Orbit and repos layers are large — scope per-feature / per-type and build between each.
-2. **Doc-grounded.** Read the canonical `docs/<area>.md` (in `project_root` if present, else `claude_plugin_root/docs/`) for the layer before editing. Do not invent rules — enforce only what's written.
+2. **Doc-grounded.** Read the canonical `docs/<area>.md` (in `project_root` if present, else `claude_plugin_root/docs/`) for the layer before editing. Do not invent rules — enforce only what's written. The layer skills (`claude_plugin_root/skills/{domain,data,presentation}-layer/SKILL.md`) show the target shape of migrated code — e.g. the `data-layer` skill's exception-to-`DomainError` boundary for the `result` layer.
 3. **Grep-located, not remembered.** Find every site with the layer's detection grep. Edit precisely with the Edit tool. Re-grep after to confirm zero residual.
 4. **Build-verified.** After edits, build the affected modules (and tests for `result`/`orbit`/`tests`). If red, return the failure verbatim — never claim success on a red build.
 5. **Idempotent.** Re-running a completed layer is a no-op. Detect "already migrated" and skip.

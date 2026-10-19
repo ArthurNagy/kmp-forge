@@ -37,9 +37,11 @@ kover {
                     "*.feature.*.resources.*",
                     "*ComposableSingletons*",
                     "*\$\$serializer",
-                    // wiring: Koin module declarations (fooModule.kt → FooModuleKt), Nav 3 entry
+                    // wiring: Koin module declarations (fooModule.kt → FooModuleKt, and per-platform
+                    // actuals: PlatformDataModule.android.kt → PlatformDataModule_androidKt), Nav 3 entry
                     // contributions (FooNavEntry.kt → FooNavEntryKt) and feature routes (NavKeys)
                     "*ModuleKt",
+                    "*Module_*Kt",
                     "*NavEntryKt",
                     "*.feature.*Route",
                     // platform wiring (per-target dispatcher one-liners, the opt-in Ktor client

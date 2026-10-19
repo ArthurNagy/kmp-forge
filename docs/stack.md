@@ -125,7 +125,8 @@ The foundation. Compose Multiplatform 1.10+ for Material 3 + multi-platform UI.
 ### Ktor Client
 - **When**: project needs HTTP.
 - **Engines**: OkHttp (Android + desktop JVM), Darwin (iOS), Js (js + wasmJs) — one per source set in `:data`'s build script; `HttpClient { }` without an engine argument picks the one on the target's classpath.
-- **Wiring** (init, when selected): `overlay/optional/ktor/` renders `HttpClientFactory.kt` (`internal fun createHttpClient()` with `ContentNegotiation` + kotlinx-json) into `:data`, bound once in `dataModule` as `single { createHttpClient() }`. Add `install(Logging) { … }` with a Kermit-backed logger when you need request logs.
+- **Wiring** (init, when selected): `overlay/optional/ktor/` renders `HttpClientFactory.kt` into `:data` — `internal fun createHttpClient()` over `HttpClientConfig<*>.configureDefaults()` (`ContentNegotiation` + kotlinx-json, `expectSuccess = true`) — bound once in `dataModule` as `single { createHttpClient() }`, plus `ktor-client-mock` in `:data`'s `commonTest`. Tests build the same client over the fake engine: `HttpClient(MockEngine { … }) { configureDefaults() }`. Add `install(Logging) { … }` with a Kermit-backed logger to `configureDefaults()` when you need request logs.
+- **Errors**: with `expectSuccess = true` a non-2xx response throws `ResponseException`; network failures are `kotlinx.io.IOException`; a body that doesn't deserialize is `ContentConvertException`, and a 2xx response that isn't JSON at all (a captive portal's HTML) is `NoTransformationFoundException`. The repository catches exactly those (rethrowing `CancellationException` first) and returns its `DomainError` — see the `data-layer` skill.
 
 ### SQLDelight
 - **When**: project needs relational storage. Choose over Exposed for mobile-first KMP work (mobile-proven, lightweight drivers, type-safe SQL from `.sq` files).

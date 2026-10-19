@@ -43,6 +43,8 @@ Rules:
 
 ## What goes where
 
+Step-by-step recipes for writing each layer's code — with the test patterns the gates expect — are the plugin's `domain-layer`, `data-layer` and `presentation-layer` skills (`skills/<name>/SKILL.md`); they load automatically in a kmp-forge project. This document stays the source of truth for the rules.
+
 ### `:domain`
 - Use cases as `class GetUserUseCase(private val repo: UserRepository, private val dispatchers: DispatcherProvider) { suspend operator fun invoke(id: UserId): Result<User, DomainError> }` — public class, public constructor (the type flows to `:feature-*`, and feature tests build it with a fake repo).
 - Domain entities (`User`, `Order`, value classes) — **no default values**. Construct explicitly: `data class User(val id: UserId, val name: String, val email: String?)`, not `... = null`. Defaults hide intent at call sites and silently absorb newly-added fields; explicit construction forces every site to be revisited.

@@ -42,11 +42,12 @@ Loaded automatically in a kmp-forge project when the work matches:
 | Concern | Choice |
 |---|---|
 | MVI | Orbit MVI |
-| DI | Koin |
+| DI | Koin, started once at app launch (`startAppKoin()`) so services share the screens' graph |
+| Errors | kotlin-result `Result<T, DomainError>` — one app-wide sealed `DomainError`, rendered by `:ui`'s `toMessage()` |
 | Navigation | Navigation 3 — the JetBrains Compose Multiplatform port only |
 | Image loading | Coil 3 |
 | HTTP (opt-in) | Ktor Client |
-| Persistence: prefs | DataStore (KMP) |
+| Persistence: prefs | DataStore (KMP) for observed / structured preferences; a small `KeyValueStore` (SharedPreferences / NSUserDefaults) for a few plain values |
 | Persistence: relational (opt-in) | SQLDelight |
 | Serialization | KotlinX Serialization |
 | Logging | Kermit |

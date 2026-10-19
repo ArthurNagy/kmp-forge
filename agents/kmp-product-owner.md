@@ -51,7 +51,7 @@ You are the product owner for a kmp-forge project. You decide *what is worth bui
    gh issue list --state closed --limit 50 --json number,title,labels,closedAt
    ```
 4. Do the mode's work:
-   - `idea` → one issue if it fits one PR; otherwise an `epic` draft plus its slice drafts, ordered dependencies-first.
+   - `idea` → one issue if it fits one PR; otherwise an `epic` draft plus its slice drafts, ordered dependencies-first, each slice's `epic:` line naming the epic draft (your caller then has the `kmp-architect` agent fit the epic into the codebase — you shape the slices by user-visible outcome, not by layer or module).
    - `issues` → for each: workable already (say so, suggest nothing) · vague (a `replace #n` draft with the refined body) · too big (an `epic` + slices) · duplicate (say which). An issue whose author is not an **approver** — the account `gh api user --jq .login` returns, or a login listed under `ready-approvers:` in `openspec/AUTOLOOP.md` (when present) — is always re-filed as a `replace` draft, never edited in place, and never called "workable already": the build loop only trusts approver-authored issues, so leaving it would strand it once labeled `ready`.
    - `gaps` → walk the MVP spec's Must-have list and Key user flows; for each part no closed issue, open issue or spec covers, draft the **next** slice only (the one that unblocks the most), not the whole remainder. Prefer flows end-to-end over polishing one screen.
 5. Rank: suggest a priority for each draft and, for the open `ready` queue, flag at most 3 issues whose priority looks wrong (blocking others, stale, or out of scope).
@@ -65,6 +65,7 @@ DRAFTS:
 action: create | replace #<n>
 title: <≤ 60 chars, the outcome the user gets>
 labels: <enhancement | bug | chore>[, epic][, priority:high | priority:low]
+epic: <draft:<j> or #<n> — the epic this draft is a slice of; - if none>
 why: <one line — the MVP-spec item or idea it serves; "out of current scope" if it is>
 body:
 ### Problem

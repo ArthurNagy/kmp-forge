@@ -41,7 +41,7 @@ When you "STOP + escalate": leave the repo in a safe state (no half-merged branc
 | 2b / 4b · Fix | `kmp-forge:kmp-loop-fixer` | `RESULT / CI / APPLIED / UNADDRESSED` |
 | 0b · Queue empty | `kmp-forge:kmp-product-owner` | `RESULT` + drafted issues (filed by you, never `ready`) |
 
-Pass each worker the `issue` number and the `slug`, plus `claude_plugin_root` = `${CLAUDE_PLUGIN_ROOT}` — the workers read the issue themselves (`gh issue view <issue> --json title,body,labels`); its Problem / Acceptance criteria / Out of scope sections (a bug report: What happened? / Acceptance criteria) are the slice's goal and binding boundaries. Pass `local-gate` (from the loop configuration) to the implementer and the fixer; pass `pr`, `branch`, and `round` to the gates and the fixer. If a worker returns `RESULT: FAILED`, its `FAILURE:` line is your escalation cause — do not retry it blind.
+Pass each worker the `issue` number and the `slug`, plus `claude_plugin_root` = `${CLAUDE_PLUGIN_ROOT}` — the workers read the issue themselves (`gh issue view <issue> --json title,body,labels`); its Problem / Acceptance criteria / Out of scope sections (a bug report: What happened? / Acceptance criteria) are the slice's goal and binding boundaries, and its Notes are design guidance (an epic's slices carry the architect's technical notes from `/kmp-forge-refine`). Pass `local-gate` (from the loop configuration) to the implementer and the fixer; pass `pr`, `branch`, and `round` to the gates and the fixer. If a worker returns `RESULT: FAILED`, its `FAILURE:` line is your escalation cause — do not retry it blind.
 
 ## Flow
 
@@ -75,7 +75,7 @@ Pass each worker the `issue` number and the `slug`, plus `claude_plugin_root` = 
      openspec archive <name> --yes          # once per finished change
      git add -- openspec && git commit -m "docs(openspec): archive <name…>" && git push origin main
      ```
-     **Queue-empty refinement** (only when `queue-empty-refine: on`): spawn `kmp-forge:kmp-product-owner` with `mode: gaps`, `max: 3`, `claude_plugin_root`. On `RESULT: OK`, file each `action: create` draft in its listed order (skip `replace` drafts — re-filing someone's issue is the human's call), replacing every `draft:<j>` with the number draft *j* got, and strip `ready` from the labels should it ever appear:
+     **Queue-empty refinement** (only when `queue-empty-refine: on`): spawn `kmp-forge:kmp-product-owner` with `mode: gaps`, `max: 3`, `claude_plugin_root`. On `RESULT: OK`, file each `action: create` draft in its listed order (skip `replace` drafts — re-filing someone's issue is the human's call), replacing every `draft:<j>` with the number draft *j* got, giving a draft with an `epic:` line a first **Notes** line `Part of #<epic number>` (as `/kmp-forge-refine` does — never put the epic in Depends on), and strip `ready` from the labels should it ever appear:
      ```bash
      gh issue create --title "<title>" --label "<labels>" --body-file <scratch file with the draft body>
      ```

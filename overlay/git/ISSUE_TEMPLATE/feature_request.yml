@@ -49,4 +49,4 @@ body:
     id: notes
     attributes:
       label: Notes
-      description: Design links (Figma), hints, prior art.
+      description: Design links (Figma), hints, prior art, technical notes (an epic's slices get the architect's from /kmp-forge-refine). Guidance for the design, not scope.

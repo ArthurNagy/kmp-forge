@@ -5,9 +5,9 @@ All notable changes to `kmp-forge` will be documented in this file.
 Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [0.6.0] - 2026-10-19
 
-Per-layer coding skills, and the plugin's patterns lined up with a real kmp-forge app (PanaRemix): a sealed `DomainError` with built-in cases worded once plus typed per-area errors, a `:data` exception boundary that classifies failures and rethrows cancellation, screens that load once per back-stack entry, and Koin started at app launch.
+Per-layer coding skills, an architect for epics, and the plugin's patterns lined up with a real kmp-forge app (PanaRemix): a sealed `DomainError` with built-in cases worded once plus typed per-area errors, a `:data` exception boundary that classifies failures and rethrows cancellation, screens that load once per back-stack entry, and Koin started at app launch.
 
 **Upgrading a project scaffolded with ≤ 0.5.1** — nothing changes by itself. To follow the new shape: replace `DomainError` with the template's sealed interface (built-in `Network.Connectivity` / `Network.Http` / `NotFound` / `Unknown` + `DomainError.Typed`; per-area error types extend `Typed`) and add `:ui`'s `DomainErrorMessage.kt` + strings (copy from `overlay/modules/ui/`, with `compose.resources { packageOfResClass }` and `androidResources { enable = true }` in `ui/build.gradle.kts`); move each screen's `LaunchedEffect(Unit) { viewModel.load() }` into its ViewModel's `orbitContainer(Initial) { load() }`; with Ktor, give `HttpClientFactory.kt` the `configureDefaults()` split, add `CatchNetwork.kt` / `HttpStatusException.kt` (+ `CatchNetworkTest.kt`) from `overlay/optional/ktor/`, and the `INTERNET` permission; start Koin at launch — add `AppKoin.kt` / `AppKoin.android.kt` from `overlay/shared/` (+ `libs.koin.android` in `:shared`'s `androidMain`), `overlay/android-app`'s `MainApplication` (registered as `android:name` in the manifest), `startAppKoin()` first in iOS `MainViewController()` and desktop/web `main()`, and drop the `KoinApplication { }` wrapper from `App()`. `kmp-reviewer` flags the old patterns; the `kmp-migrator` `koin` / `result` / `orbit` layers apply them.
 

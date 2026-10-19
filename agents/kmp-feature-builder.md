@@ -58,7 +58,8 @@ These are non-negotiable. Surface a clear error and stop if any conflict with th
 7. Test **must** use the Orbit 12 harness `vm.testWithInternalState(this, <Name>State.Initial) { containerHost.x(); expectInternalState { copy(...) } }` (initial state is auto-asserted; the old `test()` / `expectInitialState()` / `expectState` are deprecated) — never raw Turbine for the happy path; never a no-arg `<Name>State()`. Name tests in camelCase (backticked names with spaces don't compile for every Kotlin/Native and JS target).
 8. No `Dispatchers.IO`/`Default`/`Main` references — use injected `DispatcherProvider` via use cases.
 9. No hardcoded `.sp` in the Composable. Use `MaterialTheme.typography`.
-10. Every user-facing string (`Text(...)`, `contentDescription`) is `stringResource(Res.string.foo)` from the feature's own `composeResources/values/strings.xml` (the unqualified default table — never only `values-en/`, see docs/i18n-a11y.md). A `DomainError` is mapped to a string resource in the Composable, never rendered directly.
+10. Every user-facing string (`Text(...)`, `contentDescription`) is `stringResource(Res.string.foo)` from the feature's own `composeResources/values/strings.xml` (the unqualified default table — never only `values-en/`, see docs/i18n-a11y.md). A `DomainError` is rendered with `:ui`'s `state.error.toMessage()` (the app's one exhaustive error → text mapping), never directly and never mapped again in the feature.
+11. Loading starts in the container's on-create block (`orbitContainer(<Name>State.Initial) { load() }`, runs once per back-stack entry), never in a `LaunchedEffect(Unit)` in the screen. A ViewModel that needs a route argument takes it as its first constructor parameter, through Koin parameters: `viewModel { (id: String) -> <Name>ViewModel(id, get()) }` in the module, `koinViewModel<<Name>ViewModel>(key = id, parameters = { parametersOf(id) })` in the entry.
 
 ## Process
 
@@ -110,7 +111,7 @@ These are non-negotiable. Surface a clear error and stop if any conflict with th
 
 5. **Inject use-case wiring** (if you found one in step 2). Use `Edit` to:
    - Add the use case to `<Name>ViewModel`'s constructor: `internal class <Name>ViewModel(private val getX: GetXUseCase) : ViewModel(), OrbitContainerHost<...>`
-   - Replace the "Replace with a use case from :domain" comment block in `load()` with a real call (kotlin-result — add explicit imports `com.github.michaelbull.result.onOk` + `com.github.michaelbull.result.onErr`; no wildcard imports, ktlint rejects them; `onSuccess`/`onFailure` are deprecated in kotlin-result 2.x; `state.error` is a `DomainError?`, carried as-is and mapped to a string resource in the Composable):
+   - Replace the "Replace with a use case from :domain" comment block in `load()` with a real call (kotlin-result — add explicit imports `com.github.michaelbull.result.onOk` + `com.github.michaelbull.result.onErr`; no wildcard imports, ktlint rejects them; `onSuccess`/`onFailure` are deprecated in kotlin-result 2.x; `state.error` is a `DomainError?`, carried as-is and rendered with `:ui`'s `toMessage()`; `load()` already runs from the container's on-create block):
      ```kotlin
      getX().onOk { data -> reduce { state.copy(loading = false, items = data) } }
            .onErr { err -> reduce { state.copy(loading = false, error = err) } }

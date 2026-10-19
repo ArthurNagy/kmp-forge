@@ -49,7 +49,7 @@ Step-by-step recipes for writing each layer's code — with the test patterns th
 - Use cases as `class GetUserUseCase(private val repo: UserRepository, private val dispatchers: DispatcherProvider) { suspend operator fun invoke(id: UserId): Result<User, DomainError> }` — public class, public constructor (the type flows to `:feature-*`, and feature tests build it with a fake repo).
 - Domain entities (`User`, `Order`, value classes) — **no default values**. Construct explicitly: `data class User(val id: UserId, val name: String, val email: String?)`, not `... = null`. Defaults hide intent at call sites and silently absorb newly-added fields; explicit construction forces every site to be revisited.
 - Repository **interfaces** (`UserRepository`)
-- `DomainError` sealed types per use case or per domain area
+- `DomainError` — **one app-wide `sealed interface`** (`NotFound`, `Network(cause)`, `Unknown(cause)`, plus a case whenever the user must be told something new); `:ui`'s exhaustive `DomainError.toMessage()` is the only place it becomes text
 - `DispatcherProvider` interface
 - Pure Kotlin only.
 
@@ -60,6 +60,7 @@ Step-by-step recipes for writing each layer's code — with the test patterns th
 - Data sources: `internal class UserRemoteDataSource` (Ktor), `internal class UserLocalDataSource` (DataStore/SQLDelight) — `internal`, same reasoning.
 - DTOs (`UserDto`) + mappers (`UserDto.toDomain()`) — `internal`. DTOs may keep default values where the wire format needs them (the no-default rule targets domain entities + State, not DTOs).
 - Koin module exposing implementations bound to `:domain` interfaces. The module is public; binding an `internal` impl works because the binding lives in the same module.
+- **The exception boundary.** Data sources may throw; repositories never do. A small boundary helper per data area (`catchNetwork { … }` — kotlin-result's `runCatching` + `mapError`, rethrowing `CancellationException`) turns every failure into a `DomainError`. See the `data-layer` skill.
 
 **Single-type rule** — one repository or data source per domain type. `UserRepository` handles only `User` operations. `OrderRepository` handles only `Order`. Never a single `AppRepository` aggregating multiple types — it inevitably grows into a god object. If two types are conceptually one (e.g. `User` and `UserProfile` are the same aggregate), model them as a single domain type, not split repos.
 
@@ -69,6 +70,7 @@ For offline-first multi-source data (remote + cache + db) consider Store ([stack
 - `AppTheme {}` wrapper around `MaterialTheme`
 - Design tokens: `AppColors`, `AppType`, `AppSpacing`, `AppDimens` as Kotlin objects
 - Reusable Composables (buttons, cards, dialogs) — strictly stateless, hoisted-state pattern
+- `DomainError.toMessage()` — the app's one error → text mapping (exhaustive over the sealed `DomainError`), with its strings in `:ui`'s own `values/strings.xml`
 - Compose Multiplatform Resources (`Res.string`, `Res.drawable`)
 
 ### `:feature-<name>`
@@ -180,7 +182,8 @@ LaunchedEffect(state.pendingNavigation) {
 
 Rules:
 - ViewModel never references `Dispatchers.IO` directly — use `dispatchers.io` from `DispatcherProvider` (injected into use cases, not ViewModels directly).
-- Use case returns `Result<T, DomainError>`. ViewModel uses `onOk` / `onErr` and updates state; the Composable maps `state.error` to a string resource.
+- Use case returns `Result<T, DomainError>`. ViewModel uses `onOk` / `onErr` and updates state; the Composable renders `state.error` with `:ui`'s `toMessage()`.
+- Loading and long-lived observation start in the container's on-create block — `orbitContainer(FooState.Initial) { load() }` — which runs once per ViewModel (once per back-stack entry), not in a `LaunchedEffect(Unit)` that re-runs whenever the screen comes back. Tests run it with `runOnCreate()`.
 - **No `postSideEffect`**. The Orbit host's side-effect type is `Nothing` (`OrbitContainerHost<State, State, Nothing>`). One-shot events (navigation, toasts, snackbars) live as **consumable state slots** (`pendingNavigation: Route?`, `pendingMessage: String?`). UI observes them with `LaunchedEffect(...)`, consumes, then calls a paired `onXxxConsumed()` intent to clear them. Reason: everything is state — easier to test, easier to inspect, easier to reason about restoration across config changes / process death.
 
 ### Sub-states via sealed interface

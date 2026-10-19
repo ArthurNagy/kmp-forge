@@ -31,10 +31,12 @@ kover {
                 // UI is covered by Compose UI / screenshot tests, not line coverage.
                 annotatedBy("androidx.compose.runtime.Composable")
                 classes(
-                    // generated code: Compose resources (default package and the features' pinned
-                    // `<base>.feature.<pkg>.resources` package), Compose singletons, serializers
+                    // generated code: Compose resources (default package, the features' pinned
+                    // `<base>.feature.<pkg>.resources` and :ui's `<base>.ui.resources`), Compose
+                    // singletons, serializers
                     "*.generated.resources.*",
                     "*.feature.*.resources.*",
+                    "*.ui.resources.*",
                     "*ComposableSingletons*",
                     "*\$\$serializer",
                     // wiring: Koin module declarations (fooModule.kt → FooModuleKt, and per-platform

@@ -6,12 +6,13 @@ import kotlin.test.Test
 
 class ${FEATURE_NAME_PASCAL}ViewModelTest {
     @Test
-    fun loadTogglesLoadingFlag() = runTest {
+    fun creatingTheViewModelLoads() = runTest {
         val vm = ${FEATURE_NAME_PASCAL}ViewModel()
 
-        // Orbit 12: the initial state is asserted automatically before this block runs.
+        // Orbit 12: the initial state is asserted automatically before this block runs; the
+        // container's on-create block only runs when the test asks for it.
         vm.testWithInternalState(this, ${FEATURE_NAME_PASCAL}State.Initial) {
-            containerHost.load()
+            runOnCreate()
             expectInternalState { copy(loading = true, error = null) }
             expectInternalState { copy(loading = false) }
         }

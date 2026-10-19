@@ -27,8 +27,8 @@ import ${BASE_PACKAGE}.domain.DomainError
  */
 internal data class ${FEATURE_NAME_PASCAL}State(
     val loading: Boolean,
-    // DomainError carried as-is; the UI maps it to a string resource at render time
-    // (domain stays free of presentation strings — see docs/i18n-a11y.md).
+    // DomainError carried as-is; the UI renders it with :ui's toMessage() (domain stays free of
+    // presentation strings — see docs/i18n-a11y.md).
     val error: DomainError?,
     // Consumable event slots — set inside intent {}, cleared by paired onXxxConsumed().
     val pendingMessage: String?,

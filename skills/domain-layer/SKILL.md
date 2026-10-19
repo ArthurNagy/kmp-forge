@@ -1,6 +1,6 @@
 ---
 name: domain-layer
-description: Write or change code in a kmp-forge project's :domain module — use cases returning kotlin-result's Result<V, E>, entities and value types without default values, one repository interface per domain type, per-area sealed DomainError types, DispatcherProvider, domainModule wiring, shared fakes in :testing, and use-case tests. Use when adding or changing a use case, entity, repository interface or error type, when an OpenSpec task touches :domain, or when deciding whether a piece of logic belongs in :domain.
+description: Write or change code in a kmp-forge project's :domain module — use cases returning kotlin-result's Result<T, DomainError>, entities and value types without default values, one repository interface per domain type, cases of the app-wide sealed DomainError, DispatcherProvider, domainModule wiring, shared fakes in :testing, and use-case tests. Use when adding or changing a use case, entity, repository interface or error case, when an OpenSpec task touches :domain, or when deciding whether a piece of logic belongs in :domain.
 ---
 
 # :domain — kmp-forge style
@@ -14,14 +14,14 @@ description: Write or change code in a kmp-forge project's :domain module — us
 | entities and value types (`Photo`, `PhotoId`) | DTOs and wire formats → `:data` |
 | use cases (`GetPhotosUseCase`) | ViewModels, state, strings → `:feature-*` |
 | repository **interfaces** (`PhotoRepository`) | their implementations, Ktor, DataStore, SQLDelight → `:data` |
-| per-area errors (`sealed interface PhotoError : DomainError`) | exceptions as control flow |
+| `DomainError` — one app-wide sealed interface | its user-facing text → `:ui`'s `DomainError.toMessage()` |
 | `DispatcherProvider` (interface) | `Dispatchers.IO` / `Default` / `Main` |
 
 Dependencies: Kotlin stdlib, kotlinx-coroutines, kotlinx-datetime, kotlinx-serialization, kotlin-result, koin-core (for `domainModule` only). Never Compose, Android, Ktor, DataStore, SQLDelight, Coil, Kermit or `java.*`. Package by area: `<base>.domain.photo`, `<base>.domain.settings`.
 
 ## Adding a slice — in this order
 
-Entity → error type → repository interface → use case → `domainModule` → fake in `:testing` → tests. Each step compiles on its own, and `:data` / `:feature-*` work can start once the interface exists.
+Entity → any new `DomainError` case → repository interface → use case → `domainModule` → fake in `:testing` → tests. Each step compiles on its own, and `:data` / `:feature-*` work can start once the interface exists.
 
 ### 1. Entities and value types
 
@@ -42,39 +42,42 @@ data class Photo(
 ```
 
 - **No default values.** Every call site states every field, and adding a field breaks every place that must decide its value. (`null` is a value you pass explicitly, not a default.)
-- Immutable: `val`s and read-only collections (`List`, not `MutableList`).
+- Immutable: `val`s and read-only collections (`List`, not `MutableList`). An invariant the type must always hold goes in `init { require(…) }`.
 - IDs as value classes (`PhotoId`), so a `PhotoId` can't be passed where a `UserId` is expected.
-- No presentation: no display strings, no formatting, no colors. Dates via kotlinx-datetime / `kotlin.time`, never `java.time`.
+- No presentation: no display strings, no formatting, no colors. Derived facts are fine as getters (`val isFavorite`, `val primaryFile`). Dates via kotlinx-datetime / `kotlin.time`, never `java.time`.
 - Public: entities are the cross-module vocabulary.
 
-### 2. Errors
+### 2. Errors: one app-wide `DomainError`
+
+The template ships `<base>.domain.DomainError`, and the app keeps exactly one:
 
 ```kotlin
-sealed interface PhotoError : DomainError {
-    data object NotFound : PhotoError
-    data object Offline : PhotoError
-    data object Unavailable : PhotoError        // the source failed or answered nonsense
-    data object TitleBlank : PhotoError
+sealed interface DomainError {
+    data object NotFound : DomainError
+    data class Network(val cause: String?) : DomainError      // cause: diagnostic detail for logs
+    data class Unknown(val cause: String?) : DomainError
+    data object TitleBlank : DomainError                      // added by the photo slice
 }
 ```
 
-- One sealed interface per area (or per use case when its failures are its own). Name cases after **what went wrong for the user's goal** (`Offline`, `NotFound`, `TitleBlank`), not after a library (`KtorTimeout`, `SqliteBusy`). `:data` translates library failures into these.
-- A value, never a `Throwable` / `Exception` subtype. No user-facing text: each `:feature-*` maps the cases to its own string resources.
-- Signatures use the narrowest error type: `Result<List<Photo>, PhotoError>`. kotlin-result's `Result<out V, out E>` is covariant, so it still fits wherever `Result<T, DomainError>` is expected, and the screen can `when` over it exhaustively.
+- **Add a case when the user must be told something new** (the server rejected the login, a name is blank, the card is full). Don't add one per library failure: transport problems are `Network(cause)` and anything unclassified is `Unknown(cause)`. Name a case after what the user must hear, not after what threw.
+- **Never a second hierarchy** (`PhotoError`, `sealed interface XError : DomainError`). Since it's sealed, a new case breaks `:ui`'s exhaustive `DomainError.toMessage()` until it has a message there, plus a string in `:ui`'s `values/strings.xml`. That is the point: no error reaches a screen without words.
+- A `cause` is for logs: `:data` fills it with the exception message, and the UI never shows it.
+- A value, never a `Throwable` / `Exception` subtype.
 
 ### 3. Repository interfaces
 
 ```kotlin
 interface PhotoRepository {
-    suspend fun photos(): Result<List<Photo>, PhotoError>
-    suspend fun photo(id: PhotoId): Result<Photo, PhotoError>
-    suspend fun setFavorite(id: PhotoId, favorite: Boolean): Result<Unit, PhotoError>
+    suspend fun photos(): Result<List<Photo>, DomainError>
+    suspend fun photo(id: PhotoId): Result<Photo, DomainError>
+    suspend fun setFavorite(id: PhotoId, favorite: Boolean): Result<Unit, DomainError>
     fun favorites(): Flow<List<Photo>>
 }
 ```
 
 - **One per domain type.** `PhotoRepository` handles `Photo` and nothing else. Never an `AppRepository` / `DataRepository`. Two types that are really one aggregate become one domain type, not two repos.
-- One-shot operations are `suspend` and return `Result<T, <Area>Error>`. Streams are `Flow<T>` and **never throw**: `:data` catches inside the flow, and a failure the UI must show goes into the emitted type.
+- One-shot operations are `suspend` and return `Result<T, DomainError>`. Streaming state is a `Flow` / `StateFlow` and **never throws**; a failure the UI must show goes into the emitted value (e.g. an `error: DomainError?` field of the state the repository publishes).
 - Domain types only in signatures: no DTOs, no `HttpResponse`, no `Preferences`.
 - Only the interface lives here. Its `internal` implementation lives in `:data` (see the `data-layer` skill).
 
@@ -84,6 +87,7 @@ interface PhotoRepository {
 package <base>.domain.photo
 
 import <base>.domain.DispatcherProvider
+import <base>.domain.DomainError
 import com.github.michaelbull.result.Result
 import com.github.michaelbull.result.map
 import kotlinx.coroutines.withContext
@@ -92,7 +96,7 @@ class GetPhotosUseCase(
     private val photos: PhotoRepository,
     private val dispatchers: DispatcherProvider,
 ) {
-    suspend operator fun invoke(): Result<List<Photo>, PhotoError> =
+    suspend operator fun invoke(): Result<List<Photo>, DomainError> =
         withContext(dispatchers.default) {
             photos.photos().map { list -> list.sortedBy { it.title.lowercase() } }
         }
@@ -100,24 +104,23 @@ class GetPhotosUseCase(
 ```
 
 - **Public class, public constructor.** `:feature-*` tests build real use cases with fakes. In production only `domainModule` constructs them.
-- One `operator fun invoke`. ViewModels depend on use cases, never on repositories, so even a pass-through operation gets one. Write a use case when a screen needs the operation, not for every repository method in advance.
-- Business rules live here: validation, ordering, combining repositories, choosing which error applies. Validate before calling the repository: `if (title.isBlank()) return Err(PhotoError.TitleBlank)`.
+- One `operator fun invoke`. ViewModels depend on use cases, never on repositories, so a pass-through gets one too (`class GetPhotoUseCase(private val photos: PhotoRepository) { suspend operator fun invoke(id: PhotoId) = photos.photo(id) }`). Write a use case when a screen needs the operation, not for every repository method in advance.
+- Business rules live here: validation, ordering, combining repositories, choosing which error applies. Validate before calling the repository: `if (title.isBlank()) return Err(DomainError.TitleBlank)`.
 - Take `DispatcherProvider` when the use case does CPU-heavy work, and switch with `withContext(dispatchers.default)`. Repository implementations move their own I/O to `dispatchers.io`. Never `Dispatchers.*` here.
-- **Failures are values.** No `throw`, no `try/catch`, no `!!` / `getOrThrow()` / `unwrap()`. Not `kotlin.Result` or `runCatching`, which are the stdlib's single-parameter type.
+- **Failures are values.** No `throw`, no `try/catch`, no `!!` / `getOrThrow()` / `unwrap()`. Not `kotlin.Result` or the stdlib's `runCatching`.
 - Several steps: `coroutineBinding` stops at the first `Err`.
 
   ```kotlin
   import com.github.michaelbull.result.coroutines.coroutineBinding
 
   class ToggleFavoriteUseCase(private val photos: PhotoRepository) {
-      suspend operator fun invoke(id: PhotoId): Result<Photo, PhotoError> = coroutineBinding {
+      suspend operator fun invoke(id: PhotoId): Result<Photo, DomainError> = coroutineBinding {
           val photo = photos.photo(id).bind()
           photos.setFavorite(id, !photo.favorite).bind()
           photo.copy(favorite = !photo.favorite)
       }
   }
   ```
-- Crossing areas: translate the other area's error with `mapError { … }` into a case of this use case's own error type.
 - kotlin-result members are imported one by one (`Result`, `Ok`, `Err`, `map`, `mapError`, `andThen`, …): ktlint and detekt reject wildcard imports. Its Gradle coordinate (`com.michael-bull.kotlin-result`) differs from its package (`com.github.michaelbull.result`).
 
 ### 5. Wire it
@@ -125,6 +128,7 @@ class GetPhotosUseCase(
 ```kotlin
 val domainModule = module {
     factoryOf(::GetPhotosUseCase)       // org.koin.core.module.dsl.factoryOf
+    factoryOf(::ToggleFavoriteUseCase)
 }
 ```
 
@@ -132,24 +136,24 @@ Use cases are stateless, so register them with `factoryOf`. Repository interface
 
 ### 6. Fake in `:testing`
 
-Fakes of `:domain` interfaces go in `:testing/src/commonMain`, because `:domain`'s use-case tests **and** `:feature-*`'s ViewModel tests both use them. A fake only one module's tests need may stay in that module's `commonTest`.
+Fakes of `:domain` interfaces go in `:testing/src/commonMain`, because `:domain`'s use-case tests **and** `:feature-*`'s ViewModel tests both use them, so one copy serves both. A fake only one module's tests need may stay in that module's `commonTest`.
 
 ```kotlin
 package <base>.testing
 
 class FakePhotoRepository : PhotoRepository {
     private val store = MutableStateFlow<Map<PhotoId, Photo>>(emptyMap())
-    var nextError: PhotoError? = null
+    var nextError: DomainError? = null
 
     fun seed(vararg photos: Photo) = store.update { current -> current + photos.associateBy { it.id } }
 
-    override suspend fun photos(): Result<List<Photo>, PhotoError> =
+    override suspend fun photos(): Result<List<Photo>, DomainError> =
         nextError?.let { Err(it) } ?: Ok(store.value.values.toList())
 
-    override suspend fun photo(id: PhotoId): Result<Photo, PhotoError> =
-        nextError?.let { Err(it) } ?: store.value[id]?.let { Ok(it) } ?: Err(PhotoError.NotFound)
+    override suspend fun photo(id: PhotoId): Result<Photo, DomainError> =
+        nextError?.let { Err(it) } ?: store.value[id]?.let { Ok(it) } ?: Err(DomainError.NotFound)
 
-    override suspend fun setFavorite(id: PhotoId, favorite: Boolean): Result<Unit, PhotoError> =
+    override suspend fun setFavorite(id: PhotoId, favorite: Boolean): Result<Unit, DomainError> =
         photo(id).map { photo -> store.update { it + (id to photo.copy(favorite = favorite)) } }
 
     override fun favorites(): Flow<List<Photo>> = store.map { photos -> photos.values.filter { it.favorite } }
@@ -170,14 +174,14 @@ class GetPhotosUseCaseTest {
 
         val result = GetPhotosUseCase(repo, TestDispatcherProvider(testScheduler))()
 
-        assertEquals(listOf("a", "b"), result.get()?.map { it.title })
+        assertEquals(listOf("a", "b"), result.get()?.map { it.title })      // import com.github.michaelbull.result.get
     }
 
     @Test
-    fun surfacesOffline() = runTest {
-        val repo = FakePhotoRepository().apply { nextError = PhotoError.Offline }
+    fun surfacesNetworkFailure() = runTest {
+        val repo = FakePhotoRepository().apply { nextError = DomainError.Network("offline") }
 
-        assertEquals(Err(PhotoError.Offline), GetPhotosUseCase(repo, TestDispatcherProvider(testScheduler))())
+        assertEquals(Err(DomainError.Network("offline")), GetPhotosUseCase(repo, TestDispatcherProvider(testScheduler))())
     }
 }
 ```
@@ -187,7 +191,8 @@ Always `TestDispatcherProvider(testScheduler)`, the `runTest` scheduler. A dispa
 ## Before you hand it on
 
 - `:domain` imports nothing outside the allowed list above, and nothing references `Dispatchers.*`.
-- Entities and errors have no default values. Use cases are public with public constructors.
-- Each new use case is in `domainModule` and has tests for success and every error branch.
+- Entities have no default values. Use cases are public with public constructors.
+- Errors are cases of the one `DomainError`, and each new case has its message in `:ui`'s `toMessage()`.
+- Each new use case is in `domainModule` and has tests for success and every error it can return.
 - Each fake matches its interface's latest shape.
 - `./gradlew :domain:jvmTest` while iterating. Before pushing, run `./gradlew spotlessApply` (the samples here are compact, and ktlint_official reflows signatures and comments), then the CI gate: `./gradlew spotlessCheck detekt build koverVerify` (75% line coverage).

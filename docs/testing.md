@@ -37,17 +37,17 @@ class FakeUserRepository : UserRepository {
     override suspend fun getUser(id: UserId): Result<User, DomainError> =
         nextError?.let { Err(it) }
             ?: users[id]?.let { Ok(it) }
-            ?: Err(UserError.NotFound)
+            ?: Err(DomainError.NotFound)
 
     fun seed(user: User) { users[user.id] = user }
 }
 ```
 
-`Result`/`Ok`/`Err` are [kotlin-result](https://github.com/michaelbull/kotlin-result) (package `com.github.michaelbull.result`), not `kotlin.Result`. `UserError.NotFound` is a `sealed interface UserError : DomainError` case.
+`Result`/`Ok`/`Err` are [kotlin-result](https://github.com/michaelbull/kotlin-result) (package `com.github.michaelbull.result`), not `kotlin.Result`. `DomainError` is the app-wide sealed interface (`NotFound`, `Network(cause)`, `Unknown(cause)`, …).
 
 ## When MockK is allowed
 
-MockK is JVM-only and **cannot** appear in `commonTest`. It is allowed in `jvmTest` or `androidTest` for **platform/third-party dependencies whose interfaces you do not own** — e.g. a complex Ktor engine response, an Android `Context`, an iOS `NSURLSession`.
+MockK is JVM-only and **cannot** appear in `commonTest`. It is allowed in `jvmTest` or `androidTest` for **platform/third-party dependencies whose interfaces you do not own** — e.g. an Android `Context`, an iOS `NSURLSession`. (HTTP needs no mock: Ktor's multiplatform `MockEngine`, `ktor-client-mock`, runs in `commonTest`.)
 
 Rules:
 - Never mock an interface you authored — write a fake.
@@ -65,9 +65,10 @@ class GalleryViewModelTest {
         val vm = GalleryViewModel(GetPhotosUseCase(repo, TestDispatcherProvider(testScheduler)))
 
         // Orbit 12 (`org.orbitmvi.orbit.test.testWithInternalState`): the initial state is
-        // asserted automatically; then consume every emitted state in order.
+        // asserted automatically; runOnCreate() runs the container's on-create block (where
+        // load() starts), then consume every emitted state in order.
         vm.testWithInternalState(this, GalleryState.Initial) {
-            containerHost.load()
+            runOnCreate()
             expectInternalState { copy(loading = true) }
             expectInternalState { copy(loading = false, photos = listOf(samplePhoto)) }
         }
@@ -75,13 +76,13 @@ class GalleryViewModelTest {
 
     @Test
     fun loadSurfacesErrorOnFailure() = runTest {
-        val repo = FakeUserRepository().apply { nextError = DomainError.NetworkUnavailable }
+        val repo = FakeUserRepository().apply { nextError = DomainError.Network("offline") }
         val vm = GalleryViewModel(GetPhotosUseCase(repo, TestDispatcherProvider(testScheduler)))
 
         vm.testWithInternalState(this, GalleryState.Initial) {
             containerHost.load()
             expectInternalState { copy(loading = true) }
-            expectInternalState { copy(loading = false, error = DomainError.NetworkUnavailable) }
+            expectInternalState { copy(loading = false, error = DomainError.Network("offline")) }
         }
     }
 }
@@ -156,7 +157,7 @@ class GetPhotosUseCaseTest {
         val repo = FakeUserRepository()
         val useCase = GetPhotosUseCase(repo, TestDispatcherProvider(testScheduler))
         val result = useCase()
-        assertEquals(Err(PhotosError.NotFound), result)
+        assertEquals(Err(DomainError.NotFound), result)
     }
 }
 ```

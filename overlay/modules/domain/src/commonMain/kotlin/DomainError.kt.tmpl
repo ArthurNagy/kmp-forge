@@ -1,15 +1,22 @@
 package ${BASE_PACKAGE}.domain
 
 /**
- * Base for sealed error types per use case or domain area.
- * Each feature/area defines its own sealed children:
+ * Every way a domain operation can fail, app-wide (ADR 0005). A plain value, NOT a [Throwable]: use
+ * cases and repositories return `Result<T, DomainError>` (kotlin-result), and the UI turns it into
+ * text in exactly one place — `:ui`'s `DomainError.toMessage()`.
  *
- *   sealed interface GalleryError : DomainError {
- *       data object NetworkUnavailable : GalleryError
- *       data object Unauthorized : GalleryError
- *       data class Unknown(val cause: Throwable) : GalleryError
- *   }
- *
- * Use cases return `Result<T, DomainError>`; UI maps exhaustively in state.
+ * Add a case here when the user must be told something these don't cover (the server rejected a
+ * login, the disk is full, a name is blank). It's sealed, so every `when` over it — the message
+ * mapping first — stops compiling until the new case is handled. A `cause` is diagnostic detail for
+ * logs, never shown to the user. Streaming state stays a `Flow`, not a `Result`.
  */
-interface DomainError
+sealed interface DomainError {
+    /** The requested thing doesn't exist (any more). */
+    data object NotFound : DomainError
+
+    /** A connection or HTTP failure. [cause] is diagnostic detail for logs, not for the UI. */
+    data class Network(val cause: String?) : DomainError
+
+    /** An unclassified failure. [cause] is diagnostic detail for logs, not for the UI. */
+    data class Unknown(val cause: String?) : DomainError
+}

@@ -15,15 +15,15 @@ import kotlinx.serialization.json.Json
 internal fun createHttpClient(): HttpClient = HttpClient { configureDefaults() }
 
 /**
- * The app-wide client setup — shared with tests, which build the same client over Ktor's fake engine:
- * `HttpClient(MockEngine { request -> respond(...) }) { configureDefaults() }`.
+ * The app-wide client setup (base URL, auth, timeouts, logging go here) — shared with tests, which
+ * build the same client over Ktor's fake engine: `HttpClient(MockEngine { request -> respond(...) }) {
+ * configureDefaults() }`.
  *
- * `expectSuccess = true`: a non-2xx response throws a `ResponseException` (4xx → `ClientRequestException`,
- * 5xx → `ServerResponseException`) that the repository maps to its `DomainError` — instead of `body()`
- * failing later on an error payload it can't deserialize.
+ * A non-2xx response does not throw by itself: a data source checks `response.status`, turning the
+ * statuses that mean something (404 → "not there") into values and failing on the rest with
+ * `check(response.status.isSuccess())`; the repository's boundary maps that to a `DomainError`.
  */
 internal fun HttpClientConfig<*>.configureDefaults() {
-    expectSuccess = true
     install(ContentNegotiation) {
         json(Json { ignoreUnknownKeys = true })
     }

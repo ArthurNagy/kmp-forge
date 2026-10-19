@@ -1,0 +1,23 @@
+package ${BASE_PACKAGE}.ui
+
+import androidx.compose.runtime.Composable
+import ${BASE_PACKAGE}.domain.DomainError
+import ${BASE_PACKAGE}.ui.resources.Res
+import ${BASE_PACKAGE}.ui.resources.error_network
+import ${BASE_PACKAGE}.ui.resources.error_not_found
+import ${BASE_PACKAGE}.ui.resources.error_unknown
+import org.jetbrains.compose.resources.stringResource
+
+/**
+ * The one place a [DomainError] becomes user-facing text; every feature renders `state.error` through it.
+ * Exhaustive on purpose: a new `DomainError` case doesn't compile until it has a message here (and a string
+ * in `:ui`'s `values/strings.xml`). A `cause` is for logs and is never shown.
+ */
+@Composable
+fun DomainError.toMessage(): String = stringResource(
+    when (this) {
+        DomainError.NotFound -> Res.string.error_not_found
+        is DomainError.Network -> Res.string.error_network
+        is DomainError.Unknown -> Res.string.error_unknown
+    },
+)

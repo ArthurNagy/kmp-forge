@@ -1,6 +1,6 @@
 ---
 name: domain-layer
-description: Write or change code in a kmp-forge project's :domain module — use cases returning kotlin-result's Result<T, DomainError>, entities and value types without default values, one repository interface per domain type, the sealed DomainError (built-in cases plus an area's own DomainError.Typed errors), DispatcherProvider, domainModule wiring, shared fakes in :testing, and use-case tests. Use when adding or changing a use case, entity, repository interface or error case, when an OpenSpec task touches :domain, or when deciding whether a piece of logic belongs in :domain.
+description: Write or change code in a kmp-forge project's :domain module — use cases returning kotlin-result's Result<T, DomainError>, entities and value types without default values, one repository interface per domain type, the sealed DomainError (built-in cases plus an area's own DomainError.Typed errors), DispatcherProvider, domainModule wiring, shared fakes in :testing, and use-case tests. Use in a kmp-forge project (its CLAUDE.md links kmp-forge's docs as its rules) when adding or changing a use case, entity, repository interface or error case, when an OpenSpec task touches :domain, or when deciding whether a piece of logic belongs in :domain.
 ---
 
 # :domain — kmp-forge style

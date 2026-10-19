@@ -444,7 +444,7 @@ git add -A
 git commit -q -m "chore: scaffold project via kmp-forge"
 ```
 
-Then ask via `AskUserQuestion` whether to **create the GitHub repo now**. Default: yes, private. If yes:
+Then ask via `AskUserQuestion` whether to **create the GitHub repo and push now** (default: yes, private). Only on an explicit yes:
 
 ```bash
 gh repo create "<APP_NAME>" --private --source=. --remote=origin
@@ -459,7 +459,7 @@ If user declines: print the manual commands for them to run later (`gh repo crea
 
 ### 9. Report next steps
 
-Print a checklist of what the user should do next:
+Print a checklist of what the user should do next. Leave out the push item (3) when step 8 created and pushed the repo; when the user declined git init, start it with `git init -b main && git add -A && git commit -m "chore: scaffold project via kmp-forge"`.
 
 ```
 ✓ Project scaffolded at <path>
@@ -489,8 +489,8 @@ Opt-in libraries you selected: <list>
 
 ## Notes
 
-- The plugin does NOT push to GitHub. The user opts into that themselves.
-- The plugin does NOT enable branch protection. Same reason.
+- The plugin never pushes or creates a remote without an explicit yes in this session (step 8's question).
+- The plugin never enables branch protection — the user sets it up themselves.
 - Always quote paths with spaces (`"$TARGET"`) — the user's Personal projects directory has a space.
 - `openspec init` writes `.claude/commands/opsx/*` and `.claude/skills/openspec-*` into the project —
   they are committed with it, like any project-level Claude Code command.

@@ -1,6 +1,6 @@
 ---
 name: adr-authoring
-description: Author Architecture Decision Records (ADRs) for kmp-forge projects following the Michael Nygard format. Use when documenting a stack or architecture decision, adopting an opt-in library, superseding a prior decision, or when /kmp-forge-init asks about adding a non-default lib.
+description: Author Architecture Decision Records (ADRs) in docs/DECISIONS/ following the Michael Nygard format. Use in a kmp-forge project (its CLAUDE.md links kmp-forge's docs as its rules) when documenting a stack or architecture decision, adopting an opt-in library, superseding a prior decision, or when /kmp-forge-add-library, /kmp-forge-refine or the kmp-architect agent calls for an ADR.
 ---
 
 # ADR authoring — kmp-forge style

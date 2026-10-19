@@ -1,6 +1,6 @@
 ---
 name: backlog-issue-authoring
-description: Write or refine a GitHub issue for a kmp-forge project so it can enter the backlog — Problem, WHEN/THEN acceptance criteria, Out of scope, Depends on, Needs a human first, Change name; slicing epics into one-PR issues; priority labels. Use when filing a feature, bug or chore issue, turning an idea or a vague issue into a workable one, splitting an epic, or when /kmp-forge-refine or the kmp-product-owner agent drafts issues. Never applies the `ready` label.
+description: Write or refine a GitHub issue for a kmp-forge project so it can enter the backlog — Problem, WHEN/THEN acceptance criteria, Out of scope, Depends on, Needs a human first, Change name; slicing epics into one-PR issues; priority labels. Use in a kmp-forge project (its CLAUDE.md links kmp-forge's docs as its rules) when filing a feature, bug or chore issue, turning an idea or a vague issue into a workable one, splitting an epic, or when /kmp-forge-refine or the kmp-product-owner agent drafts issues. Never applies the `ready` label.
 ---
 
 # Backlog issue authoring — kmp-forge style

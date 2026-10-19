@@ -12,7 +12,7 @@ Everything lands on a branch; the loop itself runs from `main` after you merge. 
 
 - **Always quote paths** (`"$TARGET"`) — the user's Personal projects directory contains a space.
 - **Never blind-overwrite** an existing file. If a target exists, render to scratch, `git diff --no-index`, and merge with the Edit tool after showing the user.
-- The plugin does NOT push to GitHub or enable branch protection. The user opts into both manually.
+- This command does NOT push to GitHub or enable branch protection. The user does both themselves.
 
 ---
 

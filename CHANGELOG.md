@@ -5,6 +5,13 @@ All notable changes to `kmp-forge` will be documented in this file.
 Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Fixed
+- **kmp-forge's skills stay out of other projects.** Every skill's description now says to use it in a kmp-forge project (its `CLAUDE.md` links kmp-forge's docs as its rules — scaffolded and adopted projects do), so with android-forge also installed — it ships skills with the same names — `domain-layer`, `github-release-artifacts`, `adr-authoring` and the rest no longer compete in an android-forge project. `mvp-spec-authoring` gains a real "use when" clause.
+- **`/kmp-forge-spec` loads `mvp-spec-authoring` first** (its section templates and good-vs-vague checklist) instead of relying on the skill to trigger, and reads the spec template from the plugin (`${CLAUDE_PLUGIN_ROOT}/overlay/product/MVP_SPEC.md.tmpl`) rather than a path that doesn't exist in the project.
+- **The push rule matches what init does.** `/kmp-forge-init` asks before it creates the GitHub repo *and pushes* and runs it only on an explicit yes; its notes and this repo's `CLAUDE.md` no longer claim the plugin never pushes. The rule is now "never push or create a remote without the user's explicit yes in that session" (branch protection stays manual); `/kmp-forge-adopt` and `/kmp-forge-add-autoloop` now say *this command* doesn't push. The 'Next' checklist suggests pushing only when init didn't (with `git init` + a first commit when you skipped git init).
+
 ## [0.6.0] - 2026-10-19
 
 Per-layer coding skills, an architect for epics, and the plugin's patterns lined up with a real kmp-forge app (PanaRemix): a sealed `DomainError` with built-in cases worded once plus typed per-area errors, a `:data` exception boundary that classifies failures and rethrows cancellation, screens that load once per back-stack entry, and Koin started at app launch.

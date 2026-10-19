@@ -1,6 +1,6 @@
 ---
 name: github-release-artifacts
-description: Configure and ship release artifacts (APK/AAB, .ipa, desktop installers, web bundle) via GitHub Releases on v* tag push for kmp-forge projects. Use when setting up release CI, debugging release uploads, or planning artifact naming.
+description: Configure and ship release artifacts (APK/AAB, .ipa, desktop installers, web bundle) via GitHub Releases on v* tag push. Use in a kmp-forge project (its CLAUDE.md links kmp-forge's docs as its rules) when setting up release CI, debugging release uploads, or planning artifact naming.
 ---
 
 # GitHub Release artifacts — kmp-forge default distribution

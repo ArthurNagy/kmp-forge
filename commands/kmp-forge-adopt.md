@@ -17,7 +17,7 @@ Execute steps **in order**. Stop and ask if anything is unclear. Everything happ
 
 - **Always quote paths** (`"$TARGET"`) — the user's Personal projects directory contains a space.
 - **Never blind-overwrite** an existing file. If a target exists, render to scratch, `git --no-index diff`, and merge with the Edit tool after showing the user.
-- The plugin does NOT push to GitHub or enable branch protection. The user opts into both manually.
+- This command does NOT push to GitHub or enable branch protection. The user does both themselves.
 - Canonical rules live in `docs/<area>.md` on GitHub `main` (linked below). Re-read them when refactoring — do not invent rules.
 
 ---

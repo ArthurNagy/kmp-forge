@@ -1,0 +1,15 @@
+package ${BASE_PACKAGE}
+
+import android.app.Application
+
+/**
+ * Starts Koin before any Android component runs, so the activity's screens and the app's services
+ * (a foreground service, a WorkManager worker, a broadcast receiver) share one graph. Registered as
+ * `android:name=".MainApplication"` in the manifest.
+ */
+class MainApplication : Application() {
+    override fun onCreate() {
+        super.onCreate()
+        initKoin(this)
+    }
+}

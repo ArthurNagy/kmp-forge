@@ -14,10 +14,11 @@ sample `App()` composable) plus thin per-platform app modules **`:androidApp`** 
 consuming the `Shared` framework. Every entry point just renders `App()`. The wizard does **not**
 generate any DI or navigation — the overlay supplies them: it adds the locked-stack shared modules
 **`:ui` · `:domain` · `:data`** (and later `:feature-*`), installs `build-logic/`, and replaces the
-sample `App.kt` with the kmp-forge **composition root** from `overlay/shared/` (`App.kt` starts
-Koin, `AppModules.kt` lists the Koin modules, `AppNavigation.kt` owns the Nav 3 back stack,
-`Home.kt` is a placeholder start destination). `:shared` is the app's composition root; the app
-modules are just platform entry points.
+sample `App.kt` with the kmp-forge **composition root** from `overlay/shared/` (`AppKoin.kt`'s
+`startAppKoin()` starts Koin at app launch with `AppModules.kt`'s list, `App.kt` hosts the theme,
+`AppNavigation.kt` owns the Nav 3 back stack, `Home.kt` is a placeholder start destination).
+`:shared` is the app's composition root; the app modules are platform entry points that start
+Koin first (Android through a `MainApplication`) and then render `App()`.
 
 > Earlier kmp.new revisions emitted a single `:composeApp`; the current wizard splits it into
 > `:shared` + per-platform app modules. The overlay + build-logic target the current shape:
@@ -315,8 +316,36 @@ implementation(libs.androidx.lifecycle.viewmodel.navigation3)
 implementation(libs.kotlinx.serialization.json)
 ```
 
+3. `kotlin { sourceSets { androidMain.dependencies { … } } }` — add `implementation(libs.koin.android)`
+   (`initKoin(context)` registers the Android context with `androidContext`).
+
 Use `project(":x")`, not `projects.x`: type-safe project accessors need
 `enableFeaturePreview("TYPESAFE_PROJECT_ACCESSORS")`, which current kmp.new output no longer sets.
+
+**Start Koin at app launch.** Koin starts once per process, before any UI, so screens, services and
+background work share one graph — `startAppKoin()` (rendered into `:shared` as `AppKoin.kt`, with
+`initKoin(context)` in `androidMain`). Make every entry point call it first:
+
+```bash
+source "${TMPDIR:-/tmp}/kmp-forge-init.env"; : "${TARGET:?}" "${BASE_PACKAGE_PATH:?}"
+# Android: an Application class that calls initKoin(this) — androidApp/src/main/kotlin/<base>/MainApplication.kt
+bash "${CLAUDE_PLUGIN_ROOT}/scripts/apply-overlay.sh" render-module \
+    "" "${CLAUDE_PLUGIN_ROOT}/overlay/android-app" "$TARGET/androidApp" "$BASE_PACKAGE_PATH"
+```
+
+Then, with the Edit tool:
+- `androidApp/src/main/AndroidManifest.xml` — add `android:name=".MainApplication"` to the `<application …>` tag.
+  In `MainActivity.kt`, delete kmp.new's `AppAndroidPreview` (it renders `App()`, which now needs a
+  running Koin; previews belong on stateless content composables) and its now-unused imports.
+- iOS — `shared/src/iosMain/…/MainViewController.kt`:
+  ```kotlin
+  fun MainViewController(): UIViewController {   // import platform.UIKit.UIViewController
+      startAppKoin()
+      return ComposeUIViewController { App() }
+  }
+  ```
+- Desktop — `desktopApp/…/main.kt`: `fun main() { startAppKoin(); application { … } }` (keep kmp.new's `application { Window(…) { App() } }` body).
+- Web — `webApp/…/main.kt`: `startAppKoin()` as the first line of `main()`, before `ComposeViewport { App() }`.
 
 (`:feature-*` modules are added later by `/kmp-forge-add-feature`, which wires each into
 `:shared`'s deps plus the `// kmp-forge:` markers in `AppModules.kt` and `AppNavigation.kt`.)
@@ -420,7 +449,7 @@ Print a checklist of what the user should do next:
 ```
 ✓ Project scaffolded at <path>
 ✓ Modules: :shared · :androidApp · :desktopApp · :ui · :domain · :data · :testing + build-logic/
-✓ Composition root: shared/…/App.kt (Koin) + AppNavigation.kt (Nav 3) + AppModules.kt
+✓ Composition root: shared/…/AppKoin.kt (Koin at launch) + App.kt + AppNavigation.kt (Nav 3) + AppModules.kt; entry points start Koin first (androidApp/…/MainApplication.kt)
 ✓ CI workflows: .github/workflows/pr.yml + release.yml + spec-link.yml
 ✓ Product docs: docs/MVP_SPEC.md + docs/DECISIONS/{0001..0006}.md
 ✓ Spec workflow: <OpenSpec (openspec/config.yaml with kmp-forge rules, /opsx:* commands) | plain docs>

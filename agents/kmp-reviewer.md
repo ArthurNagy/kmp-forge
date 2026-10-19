@@ -115,6 +115,8 @@ Note: use-case **constructors stay public** — feature tests build them with fa
 
 - 🔴 `GlobalContext.get()` or `KoinComponent` service locator pattern. Inject via constructor.
 - 🔴 `ViewModel()` directly instantiated. Use `koinViewModel<T>()`.
+- 🟡 Koin started inside composition (`KoinApplication { }` / `startKoin` in a composable). Koin starts once per process at app launch — `:shared`'s `startAppKoin()`, called first by every entry point (Android's `MainApplication` via `initKoin(context)`) — so services and background work share the graph.
+- 🟡 A new platform entry point (an `Application`, `MainViewController()`, a `main()`) that renders `App()` or starts a service without calling `startAppKoin()` / `initKoin(context)` first.
 
 ### Testing (blocking)
 
@@ -144,7 +146,7 @@ Note: use-case **constructors stay public** — feature tests build them with fa
 
 ### Module / build (warn)
 
-- 🟡 New `:feature-*` module not declared as a `:shared` dependency, or its Koin module not added to `appModules` in `:shared`'s AppModules.kt (the list `App()` passes to `KoinApplication`).
+- 🟡 New `:feature-*` module not declared as a `:shared` dependency, or its Koin module not added to `appModules` in `:shared`'s AppModules.kt (the list `startAppKoin()` starts Koin with).
 - 🟡 New feature's `addFooEntries(...)` not added to `:shared`'s `NavDisplay(entryProvider = entryProvider { ... })` (AppNavigation.kt), or a new route not contributed via `entry<FooRoute> { ... }`.
 - 🟡 New library added to module's `build.gradle.kts` without matching entry in `gradle/libs.versions.toml`.
 - 🟡 A feature still renders the add-feature template placeholder (`Res.string.placeholder_content` / the `// TODO(kmp-forge): replace this placeholder` line in `*Screen.kt`). Replace it with the screen's real content and delete the string.

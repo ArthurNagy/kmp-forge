@@ -5,7 +5,7 @@
 ## Module map
 
 ```
-:shared                  composition root — App.kt (KoinApplication), AppModules.kt, AppNavigation.kt (Nav 3 back stack); emits the iOS `Shared` framework. Depends on :ui/:domain/:data/:feature-*
+:shared                  composition root — AppKoin.kt (startAppKoin), App.kt, AppModules.kt, AppNavigation.kt (Nav 3 back stack); emits the iOS `Shared` framework. Depends on :ui/:domain/:data/:feature-*
 :androidApp              thin Android application — MainActivity, manifest, signing, AAB/APK; depends on :shared
 :desktopApp              thin desktop JVM app — main(), native packaging (dmg/msi/deb); depends on :shared
 iosApp/                  Xcode project consuming the Shared framework
@@ -89,10 +89,10 @@ The feature's **public surface is exactly three things**: its `Route`, its Koin 
 - Feature-owned navigation contribution: the feature exposes `addFooEntries(...)` (and its `FooRoute`) for the app to compose into `NavDisplay`'s `entryProvider { }`. Outgoing navigation is passed in as callbacks so the feature stays decoupled — the app owns the back stack and any target routes; a feature never imports another feature's Route.
 
 ### `:shared` (composition host) + `:androidApp` / `:desktopApp` / `iosApp`
-- The composition root in `:shared/commonMain` is rendered by `/kmp-forge-init` from `overlay/shared/`: `App.kt` wraps everything in `KoinApplication` + `AppTheme {}`; `AppNavigation.kt` owns the back stack, registers every route for state saving, and builds the nav graph by calling each feature's `addFooEntries(...)` inside `NavDisplay(entryProvider = entryProvider { ... })`. The app supplies cross-feature navigation as callbacks (e.g. `onOpenPhoto = { backStack.add(PhotoDetailRoute(it)) }`) — this is the one place that knows about more than one feature's routes.
-- Koin bootstrap in `:shared`: `App()` calls `KoinApplication(configuration = koinConfiguration { modules(appModules) })`, where `AppModules.kt` lists `uiModule + domainModule + dataModule + every featureModule`. It starts Koin on first composition and re-attaches on Android Activity recreation, so platform entry points need no `startKoin` call. `/kmp-forge-add-feature` appends at the `// kmp-forge:` markers in `AppModules.kt` / `AppNavigation.kt`.
+- The composition root in `:shared/commonMain` is rendered by `/kmp-forge-init` from `overlay/shared/`: `AppKoin.kt` starts Koin, `App.kt` wraps everything in `AppTheme {}`; `AppNavigation.kt` owns the back stack, registers every route for state saving, and builds the nav graph by calling each feature's `addFooEntries(...)` inside `NavDisplay(entryProvider = entryProvider { ... })`. The app supplies cross-feature navigation as callbacks (e.g. `onOpenPhoto = { backStack.add(PhotoDetailRoute(it)) }`) — this is the one place that knows about more than one feature's routes.
+- **Koin starts at app launch, not inside composition**: `AppKoin.kt`'s `startAppKoin()` calls `startKoin { modules(appModules) }` once per process (a second call is a no-op), where `AppModules.kt` lists `uiModule + domainModule + dataModule + every featureModule`. Every entry point calls it before any UI — Android's `MainApplication.onCreate` through `initKoin(context)` (adds `androidContext`), iOS's `MainViewController()`, desktop/web `main()` — so a foreground service, a worker or a receiver resolves from the same graph as the screens. There is no `KoinApplication` composable. `/kmp-forge-add-feature` appends at the `// kmp-forge:` markers in `AppModules.kt` / `AppNavigation.kt`.
 - `AppBuildConfig` (generated build config) + crash-reporter / Sentry init (when opted in, before `App()`) live in `:shared`.
-- The per-platform **entry points are thin and live in the app modules**: `MainActivity` in `:androidApp`, `main()` in `:desktopApp`, `MainViewController` + the Xcode project in `iosApp/` — each just renders `:shared`'s `App()`.
+- The per-platform **entry points are thin and live in the app modules**: `MainApplication` + `MainActivity` in `:androidApp`, `main()` in `:desktopApp`, `MainViewController` + the Xcode project in `iosApp/` — each starts Koin (`startAppKoin()` / `initKoin(context)`) and renders `:shared`'s `App()`.
 
 ## Visibility
 

@@ -103,8 +103,9 @@ For each: read the doc, run **detect**, apply **transform**, run **verify** (res
 ### `koin` — constructor injection only
 - Doc: `stack.md` DI rules, reviewer DI section.
 - **Detect:** `grep -rnE "GlobalContext\.get\(\)|: KoinComponent|by inject\(\)|get<" "$project_root"/{domain,data,ui}/src "$project_root"/feature-*/src`; direct `ViewModel()` construction in Composables.
-- **Transform:** convert service-locator lookups to constructor parameters wired via `singleOf`/`factoryOf`/`viewModelOf`. Remove `: KoinComponent`. In Composables, `val vm = koinViewModel<XViewModel>()`. `:domain` must never touch Koin.
-- **Verify:** residual grep empty; build.
+- **Detect (start):** where Koin starts — `grep -rnE "KoinApplication\(|startKoin" "$project_root"/*/src`. Inside composition (`KoinApplication { }` in `App()`) is the old shape.
+- **Transform:** convert service-locator lookups to constructor parameters wired via `singleOf`/`factoryOf`/`viewModelOf`. Remove `: KoinComponent`. In Composables, `val vm = koinViewModel<XViewModel>()`. `:domain` must never touch Koin. **Start Koin at app launch:** replace the `KoinApplication { … }` wrapper with `startAppKoin()` (render `claude_plugin_root/overlay/shared/src/*/kotlin/AppKoin*.kt.tmpl` to scratch and lift them; `initKoin(context)` needs `libs.koin.android` in the composition module's `androidMain`), and call it first from every entry point: an Android `Application` (`overlay/android-app`'s `MainApplication`, registered as `android:name` in the manifest — or `initKoin(this)` in an existing `Application.onCreate`), iOS `MainViewController()`, desktop/web `main()`.
+- **Verify:** residual grep empty (no `KoinApplication(` left); build; launch the app once (the Android CLI, emulator) — a missing `startAppKoin()` call crashes on the first `koinViewModel()`.
 
 ### `orbit` — state-only events (largest; per-feature)
 - Doc: `architecture.md` § ViewModel + Orbit pattern.

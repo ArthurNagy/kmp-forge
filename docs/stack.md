@@ -17,7 +17,7 @@ The foundation. Compose Multiplatform 1.10+ for Material 3 + multi-platform UI.
 
 ### Koin
 - **Why**: pure-Kotlin DI, KMP-native, runtime registration, low ceremony, easy to test.
-- **Where**: each module exposes a `<moduleName>Module: Module`. `:shared`'s `App()` owns the bootstrap — `KoinApplication(configuration = koinConfiguration { modules(appModules) })`, with `appModules` (AppModules.kt) listing `uiModule, domainModule, dataModule, galleryModule, ...`. It starts Koin on first composition (wiring the Android context automatically) and re-attaches on Activity recreation, so the platform entry points (`:androidApp`, `:desktopApp`, `iosApp/`) only render `App()`.
+- **Where**: each module exposes a `<moduleName>Module: Module`. Koin starts **once per process at app launch**, before any UI: `:shared`'s `startAppKoin()` (AppKoin.kt) runs `startKoin { modules(appModules) }` with `appModules` (AppModules.kt) listing `uiModule, domainModule, dataModule, galleryModule, ...`; Android's `MainApplication.onCreate` calls it through `initKoin(context)` (adds `androidContext`), iOS's `MainViewController()` and desktop/web `main()` call it directly. Services and background work then resolve from the same graph as the screens; composables use the global context (`koinViewModel()`, `koinInject()`).
 - **Idiom**: `val galleryModule = module { viewModelOf(::GalleryViewModel) }`; in Composables, `val vm = koinViewModel<GalleryViewModel>()`.
 - **Anti-patterns**: global service locator calls (`GlobalContext.get()`); constructing classes directly inside ViewModels instead of injecting.
 - **Note**: Hilt is Android-only and cannot live in `commonMain` — Koin is the right call for any KMP project.
@@ -137,7 +137,7 @@ The foundation. Compose Multiplatform 1.10+ for Material 3 + multi-platform UI.
   ```kotlin
   // commonMain
   internal expect class DriverFactory { fun create(): SqlDriver }
-  // androidMain — needs a Context: Koin's androidContext() is set by KoinApplication on Android
+  // androidMain — needs a Context: initKoin(context) registers it (androidContext) at app launch
   internal actual class DriverFactory(private val context: Context) {
       actual fun create(): SqlDriver = AndroidSqliteDriver(AppDatabase.Schema, context, "app.db")
   }

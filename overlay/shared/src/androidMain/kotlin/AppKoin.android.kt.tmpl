@@ -1,0 +1,7 @@
+package ${BASE_PACKAGE}
+
+import android.content.Context
+import org.koin.android.ext.koin.androidContext
+
+/** Starts Koin for the process ([startAppKoin]) with the app's context; `MainApplication.onCreate` calls it. */
+fun initKoin(context: Context) = startAppKoin { androidContext(context.applicationContext) }

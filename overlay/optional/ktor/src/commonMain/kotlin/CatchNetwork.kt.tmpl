@@ -1,0 +1,27 @@
+package ${BASE_PACKAGE}.data
+
+import co.touchlab.kermit.Logger
+import ${BASE_PACKAGE}.domain.DomainError
+import com.github.michaelbull.result.Result
+import com.github.michaelbull.result.mapError
+import com.github.michaelbull.result.runCatching
+import kotlinx.coroutines.CancellationException
+import kotlinx.io.IOException
+
+/**
+ * The `:data` network boundary: data sources may throw, repositories run every network call through
+ * this and never do. Turns every failure into a [DomainError]: no connection, a drop or a timeout →
+ * [DomainError.Network.Connectivity]; an error status ([HttpStatusException]) →
+ * [DomainError.Network.Http]; anything else (a body that doesn't parse) → [DomainError.Unknown].
+ * Rethrows [CancellationException] so coroutine cancellation propagates (kotlin-result's
+ * `runCatching` would otherwise swallow it).
+ */
+internal suspend fun <T> catchNetwork(block: suspend () -> T): Result<T, DomainError> = runCatching { block() }.mapError { e ->
+    if (e is CancellationException) throw e
+    Logger.w(e) { "network call failed" }
+    when (e) {
+        is HttpStatusException -> DomainError.Network.Http(e.status, e.code)
+        is IOException -> DomainError.Network.Connectivity
+        else -> DomainError.Unknown(e.message)
+    }
+}

@@ -1,0 +1,19 @@
+package ${BASE_PACKAGE}.data
+
+import io.ktor.client.statement.HttpResponse
+import io.ktor.http.isSuccess
+
+/** The server answered with a non-2xx status: thrown by [requireSuccess], mapped by `catchNetwork { }`. */
+internal class HttpStatusException(
+    val status: Int,
+    val code: String?,
+) : IllegalStateException("HTTP $status${code?.let { " ($it)" }.orEmpty()}")
+
+/**
+ * Fails on a non-2xx response. A data source turns the statuses that mean something into values
+ * first (`if (response.status == HttpStatusCode.NotFound) return null`), then calls this. One that
+ * can read the API's own error code from the body throws [HttpStatusException] with it instead.
+ */
+internal fun HttpResponse.requireSuccess() {
+    if (!status.isSuccess()) throw HttpStatusException(status.value, code = null)
+}

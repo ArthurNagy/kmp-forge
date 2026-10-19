@@ -51,14 +51,15 @@ These are non-negotiable. Surface a clear error and stop if any conflict with th
 
 1. ViewModel **must** extend `androidx.lifecycle.ViewModel` and implement `OrbitContainerHost<State, State, Nothing>` (Orbit 12 — the old `ContainerHost<State, Nothing>` alias and `container(...)` factory are deprecated; use `orbitContainer(...)`), and **must** be `internal`. Never plain `ViewModel`, never custom base classes. **Effect type is always `Nothing`** — the locked stack uses state-only events.
 2. State **must** be a single `internal data class` with **no constructor defaults** and a `companion object { val Initial = <Name>State(...) }` (the single starting-state source used by `orbitContainer(...)` and tests) — or an `internal sealed interface` with `data object`/`data class` children when mutually-exclusive page-level sub-states warrant it (Loading/Loaded/Error; its initial is an explicit object like `Loading`, not a no-arg ctor). Mutations only via `intent { reduce { ... } }`.
-3. One-shot events **must** be modeled as consumable state slots, declared **without defaults** (`val pendingNavigation: Route?`, `val pendingMessage: String?`) and initialized to `null` in `Initial`. UI consumes via `LaunchedEffect(state.pendingX) { ...; viewModel.onXConsumed() }`. **Never `postSideEffect`** — that's the previous Orbit idiom; the locked stack rejects it.
+3. One-shot events **must** be modeled as consumable state slots, declared **without defaults** (`val pendingNavigation: Route?`, `val pendingMessage: StringResource?` — which message, resolved by the screen with `getString(...)`, never literal text in the ViewModel) and initialized to `null` in `Initial`. UI consumes via `LaunchedEffect(state.pendingX) { ...; viewModel.onXConsumed() }`. **Never `postSideEffect`** — that's the previous Orbit idiom; the locked stack rejects it.
 4. Composables **must** be stateless. The top-level `<Name>Screen` is `internal` and resolves `val viewModel = koinViewModel<<Name>ViewModel>()` in its body (no `viewModel =` parameter — a public param would leak the internal type, and the `:shared` host never calls `<Name>Screen` directly), then hoists `state` to a `private <Name>Content`. The `:shared` host composes the feature via `add<Name>Entries(...)`, never by referencing the screen.
 5. Nav 3 route **must** be `@Serializable` and implement `NavKey` (public). The feature **must** expose a public `fun EntryProviderScope<NavKey>.add<Name>Entries(onNavigateBack: (() -> Unit)?, ...)` (nullable: the start destination has nothing to go back to, and the screen shows its Back control only when it is non-null) that contributes `entry<<Name>Route> { <Name>Screen(...) }` (`entry` is a member of `EntryProviderScope` — no import); outgoing navigation to other features is taken as `onOpenX` callbacks — never import another feature's Route. Every Route must also be registered in `:shared`'s navigation `SerializersModule` (step 7).
 6. Koin module **must** declare `viewModelOf(::<Name>ViewModel)`.
 7. Test **must** use the Orbit 12 harness `vm.testWithInternalState(this, <Name>State.Initial) { containerHost.x(); expectInternalState { copy(...) } }` (initial state is auto-asserted; the old `test()` / `expectInitialState()` / `expectState` are deprecated) — never raw Turbine for the happy path; never a no-arg `<Name>State()`. Name tests in camelCase (backticked names with spaces don't compile for every Kotlin/Native and JS target).
 8. No `Dispatchers.IO`/`Default`/`Main` references — use injected `DispatcherProvider` via use cases.
 9. No hardcoded `.sp` in the Composable. Use `MaterialTheme.typography`.
-10. Every user-facing string (`Text(...)`, `contentDescription`) is `stringResource(Res.string.foo)` from the feature's own `composeResources/values/strings.xml` (the unqualified default table — never only `values-en/`, see docs/i18n-a11y.md). A `DomainError` is mapped to a string resource in the Composable, never rendered directly.
+10. Every user-facing string (`Text(...)`, `contentDescription`) is `stringResource(Res.string.foo)` from the feature's own `composeResources/values/strings.xml` (the unqualified default table — never only `values-en/`, see docs/i18n-a11y.md). A `DomainError` is rendered with `:ui`'s `state.error.toMessage()` (the app's one wording of the built-in cases), never directly; the feature words only its own typed errors (`DomainError.Typed`) and falls back to `toMessage()`.
+11. Loading starts in the container's on-create block (`orbitContainer(<Name>State.Initial) { load() }`, runs once per back-stack entry), never in a `LaunchedEffect(Unit)` in the screen. A ViewModel that needs a route argument takes it as its first constructor parameter, through Koin parameters: `viewModel { (id: String) -> <Name>ViewModel(id, get()) }` in the module, `koinViewModel<<Name>ViewModel>(key = id, parameters = { parametersOf(id) })` in the entry.
 
 ## Process
 
@@ -109,8 +110,8 @@ These are non-negotiable. Surface a clear error and stop if any conflict with th
    ```
 
 5. **Inject use-case wiring** (if you found one in step 2). Use `Edit` to:
-   - Add the use case to `<Name>ViewModel`'s constructor: `internal class <Name>ViewModel(private val getX: GetXUseCase) : ViewModel(), ContainerHost<...>`
-   - Replace the "Replace with a use case from :domain" comment block in `load()` with a real call (kotlin-result — add explicit imports `com.github.michaelbull.result.onOk` + `com.github.michaelbull.result.onErr`; no wildcard imports, ktlint rejects them; `onSuccess`/`onFailure` are deprecated in kotlin-result 2.x; `state.error` is a `DomainError?`, carried as-is and mapped to a string resource in the Composable):
+   - Add the use case to `<Name>ViewModel`'s constructor: `internal class <Name>ViewModel(private val getX: GetXUseCase) : ViewModel(), OrbitContainerHost<...>`
+   - Replace the "Replace with a use case from :domain" comment block in `load()` with a real call (kotlin-result — add explicit imports `com.github.michaelbull.result.onOk` + `com.github.michaelbull.result.onErr`; no wildcard imports, ktlint rejects them; `onSuccess`/`onFailure` are deprecated in kotlin-result 2.x; `state.error` is a `DomainError?`, carried as-is and rendered with `:ui`'s `toMessage()`; `load()` already runs from the container's on-create block):
      ```kotlin
      getX().onOk { data -> reduce { state.copy(loading = false, items = data) } }
            .onErr { err -> reduce { state.copy(loading = false, error = err) } }
@@ -123,7 +124,7 @@ These are non-negotiable. Surface a clear error and stop if any conflict with th
        "${project_root}" "feature-${feature_name}"
    ```
 
-7. **Wire into `:shared`** (the composition root rendered by `/kmp-forge-init` from `overlay/shared/` — `App.kt` starts Koin with `AppModules.kt`'s list, `AppNavigation.kt` owns the Nav 3 back stack; never a per-platform app module). Insert each line **directly above** its `// kmp-forge:` marker and keep the marker:
+7. **Wire into `:shared`** (the composition root rendered by `/kmp-forge-init` from `overlay/shared/` — `AppKoin.kt`'s `startAppKoin()` starts Koin at app launch with `AppModules.kt`'s list, `AppNavigation.kt` owns the Nav 3 back stack; never a per-platform app module). Insert each line **directly above** its `// kmp-forge:` marker and keep the marker:
    - `shared/build.gradle.kts` → `commonMain.dependencies`: `implementation(project(":feature-${feature_name}"))`.
    - `AppModules.kt`: import `<base_package>.feature.<pkg>.<camelName>Module`; add `<camelName>Module,` above `// kmp-forge:feature-modules`.
    - `AppNavigation.kt`: import `<Name>Route` + `add<Name>Entries` from the feature package; add `subclass(<Name>Route::class, <Name>Route.serializer())` above `// kmp-forge:nav-routes` (**required** — off Android an unregistered route throws `SerializationException` when the back stack is saved); add `add<Name>Entries(onNavigateBack = navigateBack)` above `// kmp-forge:nav-entries` (if the user asked for this feature to be the start destination, pass its Route to `rememberNavBackStack(...)` and wire `onNavigateBack = null` instead). Do **not** add a `when` branch or reference `<Name>Screen` directly — the screen is `internal`.
@@ -144,7 +145,7 @@ These are non-negotiable. Surface a clear error and stop if any conflict with th
     - Edits applied (file + line)
     - Use case wired (yes/no, which one)
     - Build status (green/red + last 10 lines of output if red)
-    - Next steps for the user
+    - Next steps for the user — replacing the placeholder content follows the plugin's `presentation-layer` skill (`${claude_plugin_root}/skills/presentation-layer/SKILL.md`; it loads automatically in the project)
 
 ## What you do NOT do
 

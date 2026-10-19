@@ -1,0 +1,20 @@
+package ${BASE_PACKAGE}
+
+import org.koin.core.KoinApplication
+import org.koin.core.context.startKoin
+import org.koin.mp.KoinPlatform
+
+/**
+ * Starts Koin for the process, before any UI, so screens, services and background work share one
+ * graph (ADR 0002). Every platform entry point calls it first: Android's `MainApplication.onCreate`
+ * (through `initKoin(context)`, which adds the context), iOS's `MainViewController()`, desktop and web
+ * `main()`. A second call is a no-op (iOS asks for a controller per scene). [platform] adds the
+ * platform's own setup.
+ */
+fun startAppKoin(platform: KoinApplication.() -> Unit = {}) {
+    if (KoinPlatform.getKoinOrNull() != null) return
+    startKoin {
+        platform()
+        modules(appModules)
+    }
+}

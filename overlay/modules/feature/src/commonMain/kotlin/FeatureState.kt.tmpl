@@ -1,6 +1,7 @@
 package ${BASE_PACKAGE}.feature.${FEATURE_NAME_PKG}
 
 import ${BASE_PACKAGE}.domain.DomainError
+import org.jetbrains.compose.resources.StringResource
 
 /**
  * UI state for [${FEATURE_NAME_PASCAL}Screen]. Immutable; mutated only inside
@@ -27,11 +28,13 @@ import ${BASE_PACKAGE}.domain.DomainError
  */
 internal data class ${FEATURE_NAME_PASCAL}State(
     val loading: Boolean,
-    // DomainError carried as-is; the UI maps it to a string resource at render time
-    // (domain stays free of presentation strings — see docs/i18n-a11y.md).
+    // DomainError carried as-is; the UI renders it with :ui's toMessage() (domain stays free of
+    // presentation strings — see docs/i18n-a11y.md).
     val error: DomainError?,
-    // Consumable event slots — set inside intent {}, cleared by paired onXxxConsumed().
-    val pendingMessage: String?,
+    // Consumable event slots — set inside intent {}, cleared by paired onXxxConsumed(). A message slot
+    // holds WHICH message (a StringResource from this feature's strings.xml), never resolved text:
+    // the screen turns it into words, so no literal text sits in the ViewModel.
+    val pendingMessage: StringResource?,
 ) {
     companion object {
         /** Starting state. Used by the ViewModel's `orbitContainer(...)` and by tests. */
@@ -48,7 +51,7 @@ internal data class ${FEATURE_NAME_PASCAL}State(
 //
 //   sealed interface ${FEATURE_NAME_PASCAL}State {
 //       data object Loading : ${FEATURE_NAME_PASCAL}State
-//       data class Loaded(val items: List<Item>, val pendingMessage: String?) : ${FEATURE_NAME_PASCAL}State
+//       data class Loaded(val items: List<Item>, val pendingMessage: StringResource?) : ${FEATURE_NAME_PASCAL}State
 //       data class Error(val cause: DomainError) : ${FEATURE_NAME_PASCAL}State
 //   }
 //   // orbitContainer<${FEATURE_NAME_PASCAL}State, Nothing>(${FEATURE_NAME_PASCAL}State.Loading)

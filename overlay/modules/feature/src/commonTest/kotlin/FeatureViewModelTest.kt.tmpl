@@ -1,17 +1,20 @@
 package ${BASE_PACKAGE}.feature.${FEATURE_NAME_PKG}
 
+import ${BASE_PACKAGE}.feature.${FEATURE_NAME_PKG}.resources.Res
+import ${BASE_PACKAGE}.feature.${FEATURE_NAME_PKG}.resources.navigate_back
 import kotlinx.coroutines.test.runTest
 import org.orbitmvi.orbit.test.testWithInternalState
 import kotlin.test.Test
 
 class ${FEATURE_NAME_PASCAL}ViewModelTest {
     @Test
-    fun loadTogglesLoadingFlag() = runTest {
+    fun creatingTheViewModelLoads() = runTest {
         val vm = ${FEATURE_NAME_PASCAL}ViewModel()
 
-        // Orbit 12: the initial state is asserted automatically before this block runs.
+        // Orbit 12: the initial state is asserted automatically before this block runs; the
+        // container's on-create block only runs when the test asks for it.
         vm.testWithInternalState(this, ${FEATURE_NAME_PASCAL}State.Initial) {
-            containerHost.load()
+            runOnCreate()
             expectInternalState { copy(loading = true, error = null) }
             expectInternalState { copy(loading = false) }
         }
@@ -21,7 +24,7 @@ class ${FEATURE_NAME_PASCAL}ViewModelTest {
     fun pendingMessageClearsAfterConsumed() = runTest {
         val vm = ${FEATURE_NAME_PASCAL}ViewModel()
 
-        vm.testWithInternalState(this, ${FEATURE_NAME_PASCAL}State.Initial.copy(pendingMessage = "Hi")) {
+        vm.testWithInternalState(this, ${FEATURE_NAME_PASCAL}State.Initial.copy(pendingMessage = Res.string.navigate_back)) {
             containerHost.onPendingMessageConsumed()
             expectInternalState { copy(pendingMessage = null) }
         }

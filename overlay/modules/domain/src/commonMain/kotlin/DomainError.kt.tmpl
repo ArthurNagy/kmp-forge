@@ -1,15 +1,44 @@
 package ${BASE_PACKAGE}.domain
 
 /**
- * Base for sealed error types per use case or domain area.
- * Each feature/area defines its own sealed children:
+ * Every way a domain operation can fail (ADR 0005). A plain value, NOT a [Throwable]: use cases and
+ * repositories return `Result<T, DomainError>` (kotlin-result).
  *
- *   sealed interface GalleryError : DomainError {
- *       data object NetworkUnavailable : GalleryError
- *       data object Unauthorized : GalleryError
- *       data class Unknown(val cause: Throwable) : GalleryError
- *   }
+ * The built-in cases cover what every app hits, and `:ui`'s exhaustive `DomainError.toMessage()`
+ * words them once for the whole app. A domain area's own failures — a rule it enforces, a refusal
+ * that carries details — implement [Typed], with the payload a screen needs to react:
  *
- * Use cases return `Result<T, DomainError>`; UI maps exhaustively in state.
+ *     sealed interface PhotoError : DomainError.Typed {
+ *         data object TitleBlank : PhotoError
+ *         data class AlbumFull(val limit: Int) : PhotoError
+ *     }
+ *
+ * Screens handle the typed errors they can react to and let `toMessage()` word the rest.
  */
-interface DomainError
+sealed interface DomainError {
+    /** Talking to a server or device failed. */
+    sealed interface Network : DomainError {
+        /** No connection, or it dropped or timed out. */
+        data object Connectivity : Network
+
+        /** The server answered with an error status; [code] is the API's own error code, when it sends one. */
+        data class Http(
+            val status: Int,
+            val code: String?,
+        ) : Network
+    }
+
+    /** The requested thing doesn't exist (any more). */
+    data object NotFound : DomainError
+
+    /** A failure nothing above classifies. [cause] is diagnostic detail for logs, never shown to the user. */
+    data class Unknown(
+        val cause: String?,
+    ) : DomainError
+
+    /**
+     * Extension point for a domain area's own errors. Not sealed: an area declares its errors in its
+     * own `:domain` package as a sealed interface extending this.
+     */
+    interface Typed : DomainError
+}

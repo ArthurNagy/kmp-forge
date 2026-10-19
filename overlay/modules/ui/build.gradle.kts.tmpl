@@ -15,6 +15,11 @@ kotlin {
         compilerOptions {
             jvmTarget = JvmTarget.JVM_17
         }
+        // Required for Compose resources under the AGP KMP library plugin: without it :ui's strings
+        // (DomainError.toMessage()) are not packaged into the APK and stringResource() crashes on Android.
+        androidResources {
+            enable = true
+        }
     }
 
     sourceSets {
@@ -32,4 +37,10 @@ kotlin {
             implementation(libs.compose.uiTest)
         }
     }
+}
+
+// :ui's strings live in src/commonMain/composeResources/values/strings.xml (the unqualified default
+// table). Pin the generated Res class to a stable package; it stays `internal` (the default).
+compose.resources {
+    packageOfResClass = "${BASE_PACKAGE}.ui.resources"
 }

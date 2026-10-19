@@ -50,9 +50,9 @@ download fails with exit 2, `kmp-new.sh url …` prints the wizard URL for a man
 
 | Platform | Copy from `$REF` | Also |
 |---|---|---|
-| `desktop` | `desktopApp/` | `include(":desktopApp")`; entry point `main()` renders `:shared`'s `App()` |
-| `web` | `webApp/` | `include(":webApp")`; `webMain/kotlin/main.kt` → `ComposeViewport { App() }`; `apply-overlay.sh pin-toolchain . --web` (Kotlin daemon heap for the js/wasm executables) |
-| `ios` | `iosApp/` (Xcode project consuming the `Shared` framework) + `shared/src/iosMain/…/MainViewController.kt` | `apply-overlay.sh pin-toolchain . --ios` (daemon heap for framework links) |
+| `desktop` | `desktopApp/` | `include(":desktopApp")`; entry point `fun main() { startAppKoin(); application { … App() … } }` — Koin starts at launch, before the UI |
+| `web` | `webApp/` | `include(":webApp")`; `webMain/kotlin/main.kt` → `startAppKoin()` then `ComposeViewport { App() }`; `apply-overlay.sh pin-toolchain . --web` (Kotlin daemon heap for the js/wasm executables) |
+| `ios` | `iosApp/` (Xcode project consuming the `Shared` framework) + `shared/src/iosMain/…/MainViewController.kt` (calls `startAppKoin()` before returning `ComposeUIViewController { App() }`) | `apply-overlay.sh pin-toolchain . --ios` (daemon heap for framework links) |
 
 Use `apply-overlay.sh patch-settings` for the `include(...)` line. Never overwrite an existing
 file — diff and merge instead.

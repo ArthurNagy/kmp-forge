@@ -17,10 +17,11 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import ${BASE_PACKAGE}.feature.${FEATURE_NAME_PKG}.resources.Res
-import ${BASE_PACKAGE}.feature.${FEATURE_NAME_PKG}.resources.error_generic
 import ${BASE_PACKAGE}.feature.${FEATURE_NAME_PKG}.resources.navigate_back
 import ${BASE_PACKAGE}.feature.${FEATURE_NAME_PKG}.resources.placeholder_content
 import ${BASE_PACKAGE}.ui.AppSpacing
+import ${BASE_PACKAGE}.ui.toMessage
+import org.jetbrains.compose.resources.getString
 import org.jetbrains.compose.resources.stringResource
 import org.koin.compose.viewmodel.koinViewModel
 import org.orbitmvi.orbit.compose.collectAsState
@@ -28,7 +29,9 @@ import org.orbitmvi.orbit.compose.collectAsState
 /**
  * Entry point — wires the ViewModel + hoists state to the stateless [${FEATURE_NAME_PASCAL}Content].
  * Consumable event slots (pendingMessage, etc.) are observed via LaunchedEffect and
- * cleared by calling the matching onXxxConsumed() intent on the ViewModel.
+ * cleared by calling the matching onXxxConsumed() intent on the ViewModel. Loading is not
+ * started here: the ViewModel starts it once, in its `orbitContainer(...) { }` on-create block,
+ * so coming back to this screen doesn't reload it.
  *
  * `internal`: the app never calls this directly — it composes the feature via
  * `add${FEATURE_NAME_PASCAL}Entries(...)` inside its `entryProvider { }` (see ${FEATURE_NAME_PASCAL}NavEntry.kt).
@@ -42,11 +45,9 @@ internal fun ${FEATURE_NAME_PASCAL}Screen(onNavigateBack: (() -> Unit)?) {
     val state by viewModel.collectAsState()
     val snackbarHostState = remember { SnackbarHostState() }
 
-    LaunchedEffect(Unit) { viewModel.load() }
-
     LaunchedEffect(state.pendingMessage) {
-        val msg = state.pendingMessage ?: return@LaunchedEffect
-        snackbarHostState.showSnackbar(msg)
+        val message = state.pendingMessage ?: return@LaunchedEffect
+        snackbarHostState.showSnackbar(getString(message))
         viewModel.onPendingMessageConsumed()
     }
 
@@ -70,12 +71,10 @@ private fun ${FEATURE_NAME_PASCAL}Content(
             verticalArrangement = Arrangement.spacedBy(AppSpacing.md, Alignment.CenterVertically),
             horizontalAlignment = Alignment.CenterHorizontally,
         ) {
-            // DomainError → text happens here, in the UI layer. As the feature's sealed error
-            // type grows, map each child to its own resource:
-            //   when (state.error) { is XError.Offline -> stringResource(Res.string.error_offline) ... }
+            // DomainError → text through :ui's toMessage(), the one exhaustive mapping every feature shares.
             when {
                 state.loading -> CircularProgressIndicator()
-                state.error != null -> Text(stringResource(Res.string.error_generic))
+                state.error != null -> Text(state.error.toMessage())
                 // TODO(kmp-forge): replace this placeholder with the real screen content (and drop
                 // the placeholder_content string). kmp-reviewer flags a feature that still renders it.
                 else -> Text(stringResource(Res.string.placeholder_content))

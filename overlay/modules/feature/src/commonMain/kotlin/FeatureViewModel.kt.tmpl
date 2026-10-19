@@ -7,11 +7,17 @@ import org.orbitmvi.orbit.viewmodel.orbitContainer
 /**
  * State-only Orbit host: the side-effect type is always `Nothing` (one-shot events are
  * consumable slots on [${FEATURE_NAME_PASCAL}State], never `postSideEffect`).
+ *
+ * The on-create block runs once per ViewModel — once per back-stack entry — so the screen
+ * loads when it is first shown, not again every time the user comes back to it. Start
+ * loads and long-lived observations there; tests run it with `runOnCreate()`.
  */
 internal class ${FEATURE_NAME_PASCAL}ViewModel :
     ViewModel(),
     OrbitContainerHost<${FEATURE_NAME_PASCAL}State, ${FEATURE_NAME_PASCAL}State, Nothing> {
-    override val container = orbitContainer<${FEATURE_NAME_PASCAL}State, Nothing>(${FEATURE_NAME_PASCAL}State.Initial)
+    override val container = orbitContainer<${FEATURE_NAME_PASCAL}State, Nothing>(${FEATURE_NAME_PASCAL}State.Initial) {
+        load()
+    }
 
     fun load() = intent {
         reduce { state.copy(loading = true, error = null) }

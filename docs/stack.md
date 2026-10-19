@@ -11,13 +11,13 @@ The foundation. Compose Multiplatform 1.10+ for Material 3 + multi-platform UI.
 - **Why**: explicit MVI shape (intent → reduce → state), built-in `test()` harness (`orbit-test`), KMP-ready.
 - **Where**: every ViewModel in every `:feature-*` module.
 - **Idiom**: `internal class FooViewModel : ViewModel(), OrbitContainerHost<FooState, FooState, Nothing> { override val container = orbitContainer<FooState, Nothing>(FooState.Initial); fun load() = intent { reduce { state.copy(...) } } }` (Orbit 12: `OrbitContainerHost` + `orbitContainer(...)`; the older `ContainerHost<S, E>` alias and `container(...)` factory are deprecated). State is `internal`, has no constructor defaults, and exposes its starting value as `FooState.Initial` (see [architecture.md § Visibility](architecture.md#visibility)).
-- **State-only events** (no `postSideEffect`): one-shot events live as consumable state slots (`pendingNavigation: Route?`, `pendingMessage: String?`). UI observes via `LaunchedEffect`, consumes, calls paired `onXxxConsumed()` intent to clear. Rationale: everything is state — easier to test, easier to inspect, robust across config changes / process death.
+- **State-only events** (no `postSideEffect`): one-shot events live as consumable state slots (`pendingNavigation: Route?`, `pendingMessage: StringResource?` — never resolved text). UI observes via `LaunchedEffect`, consumes, calls paired `onXxxConsumed()` intent to clear. Rationale: everything is state — easier to test, easier to inspect, robust across config changes / process death.
 - **Sub-states via sealed interface** when a flat data class overcomplicates state management (mutually-exclusive page-level transitions like `Loading | Loaded | Error`). See [architecture.md](architecture.md#sub-states-via-sealed-interface).
 - **Anti-patterns**: mutating state outside `intent {}`; using `postSideEffect` (effect type is `Nothing`); throwing exceptions inside `intent {}` blocks (let use cases return `Result`); page-level sub-states modeled as booleans on a flat data class (promote to sealed interface).
 
 ### Koin
 - **Why**: pure-Kotlin DI, KMP-native, runtime registration, low ceremony, easy to test.
-- **Where**: each module exposes a `<moduleName>Module: Module`. `:shared`'s `App()` owns the bootstrap — `KoinApplication(configuration = koinConfiguration { modules(appModules) })`, with `appModules` (AppModules.kt) listing `uiModule, domainModule, dataModule, galleryModule, ...`. It starts Koin on first composition (wiring the Android context automatically) and re-attaches on Activity recreation, so the platform entry points (`:androidApp`, `:desktopApp`, `iosApp/`) only render `App()`.
+- **Where**: each module exposes a `<moduleName>Module: Module`. Koin starts **once per process at app launch**, before any UI: `:shared`'s `startAppKoin()` (AppKoin.kt) runs `startKoin { modules(appModules) }` with `appModules` (AppModules.kt) listing `uiModule, domainModule, dataModule, galleryModule, ...`; Android's `MainApplication.onCreate` calls it through `initKoin(context)` (adds `androidContext`), iOS's `MainViewController()` and desktop/web `main()` call it directly. Services and background work then resolve from the same graph as the screens; composables use the global context (`koinViewModel()`, `koinInject()`).
 - **Idiom**: `val galleryModule = module { viewModelOf(::GalleryViewModel) }`; in Composables, `val vm = koinViewModel<GalleryViewModel>()`.
 - **Anti-patterns**: global service locator calls (`GlobalContext.get()`); constructing classes directly inside ViewModels instead of injecting.
 - **Note**: Hilt is Android-only and cannot live in `commonMain` — Koin is the right call for any KMP project.
@@ -89,8 +89,9 @@ The foundation. Compose Multiplatform 1.10+ for Material 3 + multi-platform UI.
 - **Why**: a two-parameter `Result<V, E>` makes each use case's failure modes explicit in its signature, without Arrow's weight. Kotlin's stdlib `Result<T>` is single-param with a `Throwable`-only failure and can't carry a typed `DomainError`.
 - **Where**: every use case returns `Result<T, DomainError>`; ViewModels consume it with `onOk`/`onErr`; repositories return it from `:data`.
 - **Coordinates**: Gradle `com.michael-bull.kotlin-result:kotlin-result` (+ `kotlin-result-coroutines` for `coroutineBinding`). Kotlin import package is `com.github.michaelbull.result` (import members explicitly — ktlint rejects wildcard imports) — **note the coordinate and package differ**. Declared `api` in `:domain` so it flows transitively to `:data`/`:feature-*`.
-- **Idiom**: `repo.find(id)?.let { Ok(it) } ?: Err(UserError.NotFound)`; consume with `result.onOk { ... }.onErr { ... }` or `result.fold(success = { ... }, failure = { ... })` (2.x deprecates `onSuccess`/`onFailure`). Multi-step: `coroutineBinding { val a = stepA().bind(); val b = stepB(a).bind(); b }`.
-- **Anti-patterns**: importing `kotlin.Result` / using `runCatching` (returns the stdlib type — shadows this one); making `DomainError` extend `Throwable`; careless `.get()!!` / `unwrap()` instead of `fold`/`onOk`/`onErr`/`getOrElse`.
+- **Idiom**: `repo.find(id)?.let { Ok(it) } ?: Err(DomainError.NotFound)`; consume with `result.onOk { ... }.onErr { ... }` or `result.fold(success = { ... }, failure = { ... })` (2.x deprecates `onSuccess`/`onFailure`). Multi-step: `coroutineBinding { val a = stepA().bind(); val b = stepB(a).bind(); b }`. `DomainError` is a sealed interface — built-in cases (`Network.Connectivity`, `Network.Http`, `NotFound`, `Unknown`) worded by `:ui`'s `DomainError.toMessage()`, plus `DomainError.Typed` for an area's own errors.
+- **The `:data` boundary**: kotlin-result's own `runCatching` (import `com.github.michaelbull.result.runCatching`, returns `Result<V, Throwable>`) + `mapError`, rethrowing `CancellationException` first — `catchNetwork { … }` (Ktor opt-in, `CatchNetwork.kt`) classifies the failure: `IOException` → `Network.Connectivity`, `HttpStatusException` → `Network.Http`, anything else → `Unknown(cause)`.
+- **Anti-patterns**: importing `kotlin.Result` / using the **stdlib** `runCatching` (returns `kotlin.Result` — shadows this one); a `runCatching` / `catch` that doesn't rethrow `CancellationException`; making `DomainError` extend `Throwable`; careless `.get()!!` / `unwrap()` instead of `fold`/`onOk`/`onErr`/`getOrElse`.
 
 ### kotlinx-datetime
 - **Why**: KMP-native calendar types (`LocalDate`, `LocalDateTime`, `TimeZone`, formatting). Since 0.7, `Instant` and `Clock` are the stdlib's `kotlin.time.Instant` / `kotlin.time.Clock` — kotlinx-datetime's own copies are gone.
@@ -117,6 +118,7 @@ The foundation. Compose Multiplatform 1.10+ for Material 3 + multi-platform UI.
   suspend fun setThemeMode(mode: ThemeMode) { dataStore.edit { it[KEY_THEME] = mode.name } }
   ```
 - **Web**: DataStore 1.2.x has no `js` target (wasmJs only; js arrives in 1.3), so `/kmp-forge-init` drops it from `:data`'s `commonMain` when web is selected. Put preferences behind a `:domain` interface and implement it per platform (DataStore on android/iOS/jvm, `localStorage` in `webMain`).
+- **Or a `KeyValueStore`** for a handful of plain values read on demand (an install id, a remembered choice): an `internal interface KeyValueStore { fun get(key: String): String?; fun put(key: String, value: String) }` with SharedPreferences / NSUserDefaults / `java.util.prefs` (/ `localStorage`) implementations in `<base>.data.platform` (excluded from Kover as platform glue) bound in `platformDataModule`, and an in-memory fake for tests. Use DataStore when the UI observes the value as a `Flow` or the data is structured; the `data-layer` skill has both recipes.
 
 ## Opt-in libraries
 
@@ -125,7 +127,8 @@ The foundation. Compose Multiplatform 1.10+ for Material 3 + multi-platform UI.
 ### Ktor Client
 - **When**: project needs HTTP.
 - **Engines**: OkHttp (Android + desktop JVM), Darwin (iOS), Js (js + wasmJs) — one per source set in `:data`'s build script; `HttpClient { }` without an engine argument picks the one on the target's classpath.
-- **Wiring** (init, when selected): `overlay/optional/ktor/` renders `HttpClientFactory.kt` (`internal fun createHttpClient()` with `ContentNegotiation` + kotlinx-json) into `:data`, bound once in `dataModule` as `single { createHttpClient() }`. Add `install(Logging) { … }` with a Kermit-backed logger when you need request logs.
+- **Wiring** (init, when selected): `overlay/optional/ktor/` renders `HttpClientFactory.kt` into `:data` — `internal fun createHttpClient()` over `HttpClientConfig<*>.configureDefaults()` (`ContentNegotiation` + kotlinx-json; base URL, auth, timeouts go here too) — bound once in `dataModule` as `single { createHttpClient() }`, plus `CatchNetwork.kt` / `HttpStatusException.kt` (the network boundary, with tests), `ktor-client-mock` in `:data`'s `commonTest`, and the `INTERNET` permission in `:androidApp`'s manifest. Tests build the same client over the fake engine: `HttpClient(MockEngine { … }) { configureDefaults() }`. Add `install(Logging) { … }` with a Kermit-backed logger to `configureDefaults()` when you need request logs.
+- **Errors**: a non-2xx response doesn't throw by itself — the data source checks `response.status`, returns a value for statuses that mean something (404 → `null`) and fails on the rest with `response.requireSuccess()`. The repository wraps each call in `catchNetwork { … }`, which rethrows `CancellationException` and classifies everything else: no connection, a drop or a timeout → `DomainError.Network.Connectivity`; an error status → `DomainError.Network.Http(status, code)`; a body that doesn't deserialize → `DomainError.Unknown`. See the `data-layer` skill.
 
 ### SQLDelight
 - **When**: project needs relational storage. Choose over Exposed for mobile-first KMP work (mobile-proven, lightweight drivers, type-safe SQL from `.sq` files).
@@ -134,7 +137,7 @@ The foundation. Compose Multiplatform 1.10+ for Material 3 + multi-platform UI.
   ```kotlin
   // commonMain
   internal expect class DriverFactory { fun create(): SqlDriver }
-  // androidMain — needs a Context: Koin's androidContext() is set by KoinApplication on Android
+  // androidMain — needs a Context: initKoin(context) registers it (androidContext) at app launch
   internal actual class DriverFactory(private val context: Context) {
       actual fun create(): SqlDriver = AndroidSqliteDriver(AppDatabase.Schema, context, "app.db")
   }

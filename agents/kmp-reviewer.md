@@ -71,6 +71,7 @@ cat <path>
 - 🟡 Deprecated Orbit API: `ContainerHost<S, E>` alias or `container(...)` factory (Orbit 12). Use `OrbitContainerHost<S, S, Nothing>` + `orbitContainer<S, Nothing>(S.Initial)`.
 - 🟡 Dead `sealed interface <Name>Effect` declared but the ViewModel's side-effect type is already `Nothing`. The locked stack is state-only — delete the unused Effect type.
 - 🔴 ViewModel doesn't extend `androidx.lifecycle.ViewModel` + implement `OrbitContainerHost`. No custom base classes.
+- 🟡 Screen starts loading in `LaunchedEffect(Unit) { viewModel.load() }` — it re-runs every time the screen re-enters composition (coming back to it reloads). Start it in the container's on-create block: `orbitContainer(XState.Initial) { load() }`.
 - 🟡 Boolean spaghetti at page level (`if (loading && !error && items.isEmpty()) ...`). Promote to `sealed interface XState` with mutually-exclusive data object/class children.
 - 🟡 Stateful Composable (Composable holds `var` / `mutableStateOf` instead of taking hoisted state). Make stateless; hoist state.
 
@@ -83,8 +84,14 @@ cat <path>
 
 - 🔴 Use case throws an exception. Use cases return `Result<T, DomainError>` (kotlin-result's two-param `Result<V, E>`, package `com.github.michaelbull.result`).
 - 🔴 `try/catch` inside `intent { ... }` block. Let the use case return `Result`; use `onOk` / `onErr`.
-- 🔴 `kotlin.Result` (stdlib) or `runCatching` used where a domain `Result<T, DomainError>` is expected. Stdlib `Result` is single-param / `Throwable`-only — import `com.github.michaelbull.result.Result` (and `Ok`/`Err`/`onOk`/… explicitly) instead.
+- 🔴 `kotlin.Result` (stdlib) or the **stdlib** `runCatching` used where a domain `Result<T, DomainError>` is expected. Stdlib `Result` is single-param / `Throwable`-only — import `com.github.michaelbull.result.Result` (and `Ok`/`Err`/`onOk`/… explicitly) instead. (kotlin-result's own `com.github.michaelbull.result.runCatching` + `mapError` is the `:data` boundary — fine there.)
+- 🔴 A `runCatching { … }.mapError { … }` or `catch (e: Exception/Throwable)` in `:data` that doesn't rethrow `CancellationException` first. Cancellation must propagate — rethrow it before mapping.
+- 🔴 An exception escaping a repository into `:domain`/`:feature-*` (a repository method that can throw). Wrap the call in `catchNetwork { … }` (or the area's storage helper) and return a `DomainError`.
 - 🟡 `DomainError` declared as a `Throwable`/`Exception` subtype. `DomainError` is a plain `sealed interface` — it's a value, not an exception.
+- 🟡 An error type that doesn't extend `DomainError` (an area's own errors are a `sealed interface XError : DomainError.Typed`), or a typed error that only renames a built-in case (`PhotoNetworkError` → use `DomainError.Network`).
+- 🟡 A feature re-wording the built-in `DomainError` cases instead of calling `:ui`'s `toMessage()` (wording its own `Typed` errors first, then falling back to `toMessage()`, is expected).
+- 🟡 `DomainError.Network.Http` built from a 404 that means "not there" — the data source should return `null` / the repository `DomainError.NotFound`.
+- 🟡 A `catch (e: Exception)` with `@Suppress("TooGenericExceptionCaught")` and no comment saying why a failure is a value there (a probe → `null`, a retry loop). Add the reason, or use the boundary helper.
 - 🟡 Careless `.get()!!` / `unwrap()` / `getOrThrow()` on a `Result`. Use `.fold` or `.onOk { ... }.onErr { ... }` / `getOrElse { ... }` for exhaustive handling. (`onSuccess`/`onFailure` are deprecated in kotlin-result 2.x — 🟢 nit to rename.)
 
 ### Navigation (blocking)
@@ -110,6 +117,8 @@ Note: use-case **constructors stay public** — feature tests build them with fa
 
 - 🔴 `GlobalContext.get()` or `KoinComponent` service locator pattern. Inject via constructor.
 - 🔴 `ViewModel()` directly instantiated. Use `koinViewModel<T>()`.
+- 🟡 Koin started inside composition (`KoinApplication { }` / `startKoin` in a composable). Koin starts once per process at app launch — `:shared`'s `startAppKoin()`, called first by every entry point (Android's `MainApplication` via `initKoin(context)`) — so services and background work share the graph.
+- 🟡 A new platform entry point (an `Application`, `MainViewController()`, a `main()`) that renders `App()` or starts a service without calling `startAppKoin()` / `initKoin(context)` first.
 
 ### Testing (blocking)
 
@@ -125,7 +134,8 @@ Note: use-case **constructors stay public** — feature tests build them with fa
 - 🟡 Clickable Composable smaller than `AppDimens.touchTargetMin`. Apply `.minimumInteractiveComponentSize()` or sized constraint.
 - 🟡 `Modifier.padding(left = ..., right = ...)`. Use `start = ..., end = ...`.
 - 🟡 `Alignment.Left` / `Alignment.Right`. Use `Alignment.Start` / `Alignment.End`.
-- 🟡 Hardcoded user-facing string in `Text(...)`, or a `DomainError` rendered directly. Move to `Res.string` (map errors to resources in the Composable).
+- 🟡 A consumable message slot typed `String?`, or set from literal text in a ViewModel. Hold a `StringResource` (or a domain value) and resolve it in the screen — `getString(...)` inside the `LaunchedEffect`.
+- 🟡 Hardcoded user-facing string in `Text(...)`, or a `DomainError` rendered directly (`toString()`, its `cause`). Move to `Res.string`; render errors with `:ui`'s `state.error?.toMessage()`.
 - 🔴 A string resource that exists only in a qualified table (`values-en/`, `values-xx/`) and not in the unqualified `composeResources/values/strings.xml`. Compose MP falls back only to `values/` — the app crashes ("Resource with ID='string:x' not found") on any device whose language has no table.
 
 ### Secrets (blocking)
@@ -139,7 +149,7 @@ Note: use-case **constructors stay public** — feature tests build them with fa
 
 ### Module / build (warn)
 
-- 🟡 New `:feature-*` module not declared as a `:shared` dependency, or its Koin module not added to `appModules` in `:shared`'s AppModules.kt (the list `App()` passes to `KoinApplication`).
+- 🟡 New `:feature-*` module not declared as a `:shared` dependency, or its Koin module not added to `appModules` in `:shared`'s AppModules.kt (the list `startAppKoin()` starts Koin with).
 - 🟡 New feature's `addFooEntries(...)` not added to `:shared`'s `NavDisplay(entryProvider = entryProvider { ... })` (AppNavigation.kt), or a new route not contributed via `entry<FooRoute> { ... }`.
 - 🟡 New library added to module's `build.gradle.kts` without matching entry in `gradle/libs.versions.toml`.
 - 🟡 A feature still renders the add-feature template placeholder (`Res.string.placeholder_content` / the `// TODO(kmp-forge): replace this placeholder` line in `*Screen.kt`). Replace it with the screen's real content and delete the string.

@@ -40,7 +40,7 @@ You exist so that the edit-build-fix churn never reaches the orchestrator. It ge
 ## Steps
 
 1. `git switch <branch> && git pull --ff-only`. Uncommitted human steering edits (e.g. `openspec/AUTOLOOP.md`) may be present — leave them alone; anything else dirty → `RESULT: FAILED`.
-2. Apply each finding. Keep a one-line record of what you changed for each.
+2. Apply each finding. Keep a one-line record of what you changed for each. A finding about a layer's code (`target: code`) is fixed the way that layer's skill shows — read `<claude_plugin_root>/skills/{domain,data,presentation}-layer/SKILL.md` for the layer you touch.
 3. Re-green locally:
    - `target: code` → run the `local-gate` command (piped, `2>&1 | tail -80`) until clean. A blocking finding that was "missing test for new behavior" is fixed by **writing the test**, and the test must actually exercise the behavior and fail without the fix. QA findings: "no test tagged `// Scenario: <name>`" → write that test with that comment; a failed emulator journey → fix the behavior *and* add (or repair) the scenario's tagged test so the failure is caught on the host next time — you cannot re-run the journey yourself; the QA reviewer re-checks in the next round.
    - `target: spec` → `openspec validate <slug> --json` until clean.

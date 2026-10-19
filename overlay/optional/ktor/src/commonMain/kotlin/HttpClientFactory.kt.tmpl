@@ -1,6 +1,7 @@
 package ${BASE_PACKAGE}.data
 
 import io.ktor.client.HttpClient
+import io.ktor.client.HttpClientConfig
 import io.ktor.client.plugins.contentnegotiation.ContentNegotiation
 import io.ktor.serialization.kotlinx.json.json
 import kotlinx.serialization.json.Json
@@ -11,7 +12,19 @@ import kotlinx.serialization.json.Json
  * on each target's classpath (see :data's build.gradle.kts): OkHttp on Android/JVM, Darwin on iOS,
  * Js on web. `internal`: nothing outside :data talks HTTP.
  */
-internal fun createHttpClient(): HttpClient = HttpClient {
+internal fun createHttpClient(): HttpClient = HttpClient { configureDefaults() }
+
+/**
+ * The app-wide client setup (base URL, auth, timeouts, logging go here) — shared with tests, which
+ * build the same client over Ktor's fake engine: `HttpClient(MockEngine { request -> respond(...) }) {
+ * configureDefaults() }`.
+ *
+ * A non-2xx response does not throw by itself: a data source checks `response.status`, turning the
+ * statuses that mean something (404 → "not there") into values and failing on the rest with
+ * `response.requireSuccess()`; the repository's `catchNetwork { }` maps that to a `DomainError`
+ * (CatchNetwork.kt).
+ */
+internal fun HttpClientConfig<*>.configureDefaults() {
     install(ContentNegotiation) {
         json(Json { ignoreUnknownKeys = true })
     }

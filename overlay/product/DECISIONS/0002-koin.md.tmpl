@@ -14,7 +14,9 @@ Alternatives considered:
 
 ## Decision
 
-Use [Koin](https://insert-koin.io/) with `koin-core`, `koin-compose`, and `koin-compose-viewmodel`. Each module defines a `<moduleName>Module: Module`. The composition root in `:shared` starts Koin inside `App.kt` via `KoinApplication(configuration = koinConfiguration { modules(appModules) })` (`appModules` lives in `AppModules.kt`), so every platform entry point (`:androidApp`, `:desktopApp`, `iosApp/`) gets DI wired by simply hosting `App()` — it re-attaches to the running Koin on Android Activity recreation.
+Use [Koin](https://insert-koin.io/) with `koin-core`, `koin-compose`, and `koin-compose-viewmodel`. Each module defines a `<moduleName>Module: Module`. Koin starts **once per process, at app launch, before any UI**: `:shared`'s `startAppKoin()` (AppKoin.kt) runs `startKoin { modules(appModules) }` (`appModules` lives in `AppModules.kt`; a second call is a no-op). Android's `MainApplication.onCreate` calls it through `initKoin(context)`, which adds `androidContext`; iOS's `MainViewController()` and desktop/web `main()` call it directly. Composables resolve from that global context (`koinViewModel()`, `koinInject()`).
+
+We considered starting Koin inside composition with the `KoinApplication { }` composable in `App()`. It needs no per-platform call, but nothing outside the UI can resolve from it: a foreground service, a WorkManager worker, a broadcast receiver or background work started without a screen has no graph.
 
 ## Consequences
 

@@ -5,7 +5,7 @@
 ## Module map
 
 ```
-:shared                  composition root — App.kt (KoinApplication), AppModules.kt, AppNavigation.kt (Nav 3 back stack); emits the iOS `Shared` framework. Depends on :ui/:domain/:data/:feature-*
+:shared                  composition root — AppKoin.kt (startAppKoin), App.kt, AppModules.kt, AppNavigation.kt (Nav 3 back stack); emits the iOS `Shared` framework. Depends on :ui/:domain/:data/:feature-*
 :androidApp              thin Android application — MainActivity, manifest, signing, AAB/APK; depends on :shared
 :desktopApp              thin desktop JVM app — main(), native packaging (dmg/msi/deb); depends on :shared
 iosApp/                  Xcode project consuming the Shared framework
@@ -43,11 +43,13 @@ Rules:
 
 ## What goes where
 
+Step-by-step recipes for writing each layer's code — with the test patterns the gates expect — are the plugin's `domain-layer`, `data-layer` and `presentation-layer` skills (`skills/<name>/SKILL.md`); they load automatically in a kmp-forge project. This document stays the source of truth for the rules.
+
 ### `:domain`
 - Use cases as `class GetUserUseCase(private val repo: UserRepository, private val dispatchers: DispatcherProvider) { suspend operator fun invoke(id: UserId): Result<User, DomainError> }` — public class, public constructor (the type flows to `:feature-*`, and feature tests build it with a fake repo).
 - Domain entities (`User`, `Order`, value classes) — **no default values**. Construct explicitly: `data class User(val id: UserId, val name: String, val email: String?)`, not `... = null`. Defaults hide intent at call sites and silently absorb newly-added fields; explicit construction forces every site to be revisited.
 - Repository **interfaces** (`UserRepository`)
-- `DomainError` sealed types per use case or per domain area
+- `DomainError` — a `sealed interface` with the built-in cases every app hits (`Network.Connectivity`, `Network.Http(status, code)`, `NotFound`, `Unknown(cause)`), worded once by `:ui`'s exhaustive `DomainError.toMessage()`, plus the extension point `DomainError.Typed`: a domain area declares its own errors (`sealed interface PhotoError : DomainError.Typed`) with the payload a screen needs to react
 - `DispatcherProvider` interface
 - Pure Kotlin only.
 
@@ -58,6 +60,7 @@ Rules:
 - Data sources: `internal class UserRemoteDataSource` (Ktor), `internal class UserLocalDataSource` (DataStore/SQLDelight) — `internal`, same reasoning.
 - DTOs (`UserDto`) + mappers (`UserDto.toDomain()`) — `internal`. DTOs may keep default values where the wire format needs them (the no-default rule targets domain entities + State, not DTOs).
 - Koin module exposing implementations bound to `:domain` interfaces. The module is public; binding an `internal` impl works because the binding lives in the same module.
+- **The exception boundary.** Data sources may throw; repositories never do. A boundary helper (`catchNetwork { … }`, shipped with the Ktor opt-in — kotlin-result's `runCatching` + `mapError`, rethrowing `CancellationException`) turns every failure into a `DomainError`: no connection → `Network.Connectivity`, an error status (`response.requireSuccess()`) → `Network.Http`, anything else → `Unknown`. See the `data-layer` skill.
 
 **Single-type rule** — one repository or data source per domain type. `UserRepository` handles only `User` operations. `OrderRepository` handles only `Order`. Never a single `AppRepository` aggregating multiple types — it inevitably grows into a god object. If two types are conceptually one (e.g. `User` and `UserProfile` are the same aggregate), model them as a single domain type, not split repos.
 
@@ -67,6 +70,7 @@ For offline-first multi-source data (remote + cache + db) consider Store ([stack
 - `AppTheme {}` wrapper around `MaterialTheme`
 - Design tokens: `AppColors`, `AppType`, `AppSpacing`, `AppDimens` as Kotlin objects
 - Reusable Composables (buttons, cards, dialogs) — strictly stateless, hoisted-state pattern
+- `DomainError.toMessage()` — the one wording of the built-in `DomainError` cases (exhaustive; a typed error a screen doesn't handle gets the generic message), with its strings in `:ui`'s own `values/strings.xml`
 - Compose Multiplatform Resources (`Res.string`, `Res.drawable`)
 
 ### `:feature-<name>`
@@ -85,10 +89,10 @@ The feature's **public surface is exactly three things**: its `Route`, its Koin 
 - Feature-owned navigation contribution: the feature exposes `addFooEntries(...)` (and its `FooRoute`) for the app to compose into `NavDisplay`'s `entryProvider { }`. Outgoing navigation is passed in as callbacks so the feature stays decoupled — the app owns the back stack and any target routes; a feature never imports another feature's Route.
 
 ### `:shared` (composition host) + `:androidApp` / `:desktopApp` / `iosApp`
-- The composition root in `:shared/commonMain` is rendered by `/kmp-forge-init` from `overlay/shared/`: `App.kt` wraps everything in `KoinApplication` + `AppTheme {}`; `AppNavigation.kt` owns the back stack, registers every route for state saving, and builds the nav graph by calling each feature's `addFooEntries(...)` inside `NavDisplay(entryProvider = entryProvider { ... })`. The app supplies cross-feature navigation as callbacks (e.g. `onOpenPhoto = { backStack.add(PhotoDetailRoute(it)) }`) — this is the one place that knows about more than one feature's routes.
-- Koin bootstrap in `:shared`: `App()` calls `KoinApplication(configuration = koinConfiguration { modules(appModules) })`, where `AppModules.kt` lists `uiModule + domainModule + dataModule + every featureModule`. It starts Koin on first composition and re-attaches on Android Activity recreation, so platform entry points need no `startKoin` call. `/kmp-forge-add-feature` appends at the `// kmp-forge:` markers in `AppModules.kt` / `AppNavigation.kt`.
+- The composition root in `:shared/commonMain` is rendered by `/kmp-forge-init` from `overlay/shared/`: `AppKoin.kt` starts Koin, `App.kt` wraps everything in `AppTheme {}`; `AppNavigation.kt` owns the back stack, registers every route for state saving, and builds the nav graph by calling each feature's `addFooEntries(...)` inside `NavDisplay(entryProvider = entryProvider { ... })`. The app supplies cross-feature navigation as callbacks (e.g. `onOpenPhoto = { backStack.add(PhotoDetailRoute(it)) }`) — this is the one place that knows about more than one feature's routes.
+- **Koin starts at app launch, not inside composition**: `AppKoin.kt`'s `startAppKoin()` calls `startKoin { modules(appModules) }` once per process (a second call is a no-op), where `AppModules.kt` lists `uiModule + domainModule + dataModule + every featureModule`. Every entry point calls it before any UI — Android's `MainApplication.onCreate` through `initKoin(context)` (adds `androidContext`), iOS's `MainViewController()`, desktop/web `main()` — so a foreground service, a worker or a receiver resolves from the same graph as the screens. There is no `KoinApplication` composable. `/kmp-forge-add-feature` appends at the `// kmp-forge:` markers in `AppModules.kt` / `AppNavigation.kt`.
 - `AppBuildConfig` (generated build config) + crash-reporter / Sentry init (when opted in, before `App()`) live in `:shared`.
-- The per-platform **entry points are thin and live in the app modules**: `MainActivity` in `:androidApp`, `main()` in `:desktopApp`, `MainViewController` + the Xcode project in `iosApp/` — each just renders `:shared`'s `App()`.
+- The per-platform **entry points are thin and live in the app modules**: `MainApplication` + `MainActivity` in `:androidApp`, `main()` in `:desktopApp`, the Xcode project in `iosApp/` around `:shared`'s `iosMain` `MainViewController()` — each starts Koin (`startAppKoin()` / `initKoin(context)`) and renders `:shared`'s `App()`.
 
 ## Visibility
 
@@ -128,7 +132,7 @@ internal data class GalleryState(
 
     // Consumable event slots — set inside intent {}, cleared by paired onXxxConsumed().
     val pendingNavigation: PhotoDetailRoute?,
-    val pendingMessage: String?,
+    val pendingMessage: StringResource?,   // which message; the screen resolves the text
 ) {
     companion object {
         // Single starting-state source — used by orbitContainer(...) and by tests.
@@ -178,8 +182,9 @@ LaunchedEffect(state.pendingNavigation) {
 
 Rules:
 - ViewModel never references `Dispatchers.IO` directly — use `dispatchers.io` from `DispatcherProvider` (injected into use cases, not ViewModels directly).
-- Use case returns `Result<T, DomainError>`. ViewModel uses `onOk` / `onErr` and updates state; the Composable maps `state.error` to a string resource.
-- **No `postSideEffect`**. The Orbit host's side-effect type is `Nothing` (`OrbitContainerHost<State, State, Nothing>`). One-shot events (navigation, toasts, snackbars) live as **consumable state slots** (`pendingNavigation: Route?`, `pendingMessage: String?`). UI observes them with `LaunchedEffect(...)`, consumes, then calls a paired `onXxxConsumed()` intent to clear them. Reason: everything is state — easier to test, easier to inspect, easier to reason about restoration across config changes / process death.
+- Use case returns `Result<T, DomainError>`. ViewModel uses `onOk` / `onErr` and updates state; the Composable renders `state.error` with `:ui`'s `toMessage()`.
+- Loading and long-lived observation start in the container's on-create block — `orbitContainer(FooState.Initial) { load() }` — which runs once per ViewModel (once per back-stack entry), not in a `LaunchedEffect(Unit)` that re-runs whenever the screen comes back. Tests run it with `runOnCreate()`.
+- **No `postSideEffect`**. The Orbit host's side-effect type is `Nothing` (`OrbitContainerHost<State, State, Nothing>`). One-shot events (navigation, toasts, snackbars) live as **consumable state slots** (`pendingNavigation: Route?`, `pendingMessage: StringResource?` — which message, never resolved text; the screen resolves it with `getString(...)`). UI observes them with `LaunchedEffect(...)`, consumes, then calls a paired `onXxxConsumed()` intent to clear them. Reason: everything is state — easier to test, easier to inspect, easier to reason about restoration across config changes / process death.
 
 ### Sub-states via sealed interface
 

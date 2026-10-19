@@ -6,7 +6,7 @@ import ${BASE_PACKAGE}.ui.uiModule
 import org.koin.core.module.Module
 
 /**
- * Every Koin module the app starts with ([App] passes this list to `KoinApplication`).
+ * Every Koin module the app starts with ([startAppKoin] starts Koin with this list at launch).
  * /kmp-forge-add-feature appends each feature's module above the marker line — keep it.
  */
 internal val appModules: List<Module> = listOf(

@@ -86,9 +86,11 @@ cat <path>
 - 🔴 `try/catch` inside `intent { ... }` block. Let the use case return `Result`; use `onOk` / `onErr`.
 - 🔴 `kotlin.Result` (stdlib) or the **stdlib** `runCatching` used where a domain `Result<T, DomainError>` is expected. Stdlib `Result` is single-param / `Throwable`-only — import `com.github.michaelbull.result.Result` (and `Ok`/`Err`/`onOk`/… explicitly) instead. (kotlin-result's own `com.github.michaelbull.result.runCatching` + `mapError` is the `:data` boundary — fine there.)
 - 🔴 A `runCatching { … }.mapError { … }` or `catch (e: Exception/Throwable)` in `:data` that doesn't rethrow `CancellationException` first. Cancellation must propagate — rethrow it before mapping.
-- 🔴 An exception escaping a repository into `:domain`/`:feature-*` (a repository method that can throw). Wrap the call in the area's boundary helper (`catchNetwork { … }`) and return a `DomainError`.
+- 🔴 An exception escaping a repository into `:domain`/`:feature-*` (a repository method that can throw). Wrap the call in `catchNetwork { … }` (or the area's storage helper) and return a `DomainError`.
 - 🟡 `DomainError` declared as a `Throwable`/`Exception` subtype. `DomainError` is a plain `sealed interface` — it's a value, not an exception.
-- 🟡 A per-area error hierarchy (`interface PhotoError`, `sealed interface XError` beside `DomainError`), or a feature mapping `DomainError` to text itself. Errors are one app-wide sealed `DomainError` (add a case there) and become text only through `:ui`'s `DomainError.toMessage()`.
+- 🟡 An error type that doesn't extend `DomainError` (an area's own errors are a `sealed interface XError : DomainError.Typed`), or a typed error that only renames a built-in case (`PhotoNetworkError` → use `DomainError.Network`).
+- 🟡 A feature re-wording the built-in `DomainError` cases instead of calling `:ui`'s `toMessage()` (wording its own `Typed` errors first, then falling back to `toMessage()`, is expected).
+- 🟡 `DomainError.Network.Http` built from a 404 that means "not there" — the data source should return `null` / the repository `DomainError.NotFound`.
 - 🟡 A `catch (e: Exception)` with `@Suppress("TooGenericExceptionCaught")` and no comment saying why a failure is a value there (a probe → `null`, a retry loop). Add the reason, or use the boundary helper.
 - 🟡 Careless `.get()!!` / `unwrap()` / `getOrThrow()` on a `Result`. Use `.fold` or `.onOk { ... }.onErr { ... }` / `getOrElse { ... }` for exhaustive handling. (`onSuccess`/`onFailure` are deprecated in kotlin-result 2.x — 🟢 nit to rename.)
 

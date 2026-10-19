@@ -49,7 +49,7 @@ Step-by-step recipes for writing each layer's code — with the test patterns th
 - Use cases as `class GetUserUseCase(private val repo: UserRepository, private val dispatchers: DispatcherProvider) { suspend operator fun invoke(id: UserId): Result<User, DomainError> }` — public class, public constructor (the type flows to `:feature-*`, and feature tests build it with a fake repo).
 - Domain entities (`User`, `Order`, value classes) — **no default values**. Construct explicitly: `data class User(val id: UserId, val name: String, val email: String?)`, not `... = null`. Defaults hide intent at call sites and silently absorb newly-added fields; explicit construction forces every site to be revisited.
 - Repository **interfaces** (`UserRepository`)
-- `DomainError` — **one app-wide `sealed interface`** (`NotFound`, `Network(cause)`, `Unknown(cause)`, plus a case whenever the user must be told something new); `:ui`'s exhaustive `DomainError.toMessage()` is the only place it becomes text
+- `DomainError` — a `sealed interface` with the built-in cases every app hits (`Network.Connectivity`, `Network.Http(status, code)`, `NotFound`, `Unknown(cause)`), worded once by `:ui`'s exhaustive `DomainError.toMessage()`, plus the extension point `DomainError.Typed`: a domain area declares its own errors (`sealed interface PhotoError : DomainError.Typed`) with the payload a screen needs to react
 - `DispatcherProvider` interface
 - Pure Kotlin only.
 
@@ -60,7 +60,7 @@ Step-by-step recipes for writing each layer's code — with the test patterns th
 - Data sources: `internal class UserRemoteDataSource` (Ktor), `internal class UserLocalDataSource` (DataStore/SQLDelight) — `internal`, same reasoning.
 - DTOs (`UserDto`) + mappers (`UserDto.toDomain()`) — `internal`. DTOs may keep default values where the wire format needs them (the no-default rule targets domain entities + State, not DTOs).
 - Koin module exposing implementations bound to `:domain` interfaces. The module is public; binding an `internal` impl works because the binding lives in the same module.
-- **The exception boundary.** Data sources may throw; repositories never do. A small boundary helper per data area (`catchNetwork { … }` — kotlin-result's `runCatching` + `mapError`, rethrowing `CancellationException`) turns every failure into a `DomainError`. See the `data-layer` skill.
+- **The exception boundary.** Data sources may throw; repositories never do. A boundary helper (`catchNetwork { … }`, shipped with the Ktor opt-in — kotlin-result's `runCatching` + `mapError`, rethrowing `CancellationException`) turns every failure into a `DomainError`: no connection → `Network.Connectivity`, an error status (`response.requireSuccess()`) → `Network.Http`, anything else → `Unknown`. See the `data-layer` skill.
 
 **Single-type rule** — one repository or data source per domain type. `UserRepository` handles only `User` operations. `OrderRepository` handles only `Order`. Never a single `AppRepository` aggregating multiple types — it inevitably grows into a god object. If two types are conceptually one (e.g. `User` and `UserProfile` are the same aggregate), model them as a single domain type, not split repos.
 
@@ -70,7 +70,7 @@ For offline-first multi-source data (remote + cache + db) consider Store ([stack
 - `AppTheme {}` wrapper around `MaterialTheme`
 - Design tokens: `AppColors`, `AppType`, `AppSpacing`, `AppDimens` as Kotlin objects
 - Reusable Composables (buttons, cards, dialogs) — strictly stateless, hoisted-state pattern
-- `DomainError.toMessage()` — the app's one error → text mapping (exhaustive over the sealed `DomainError`), with its strings in `:ui`'s own `values/strings.xml`
+- `DomainError.toMessage()` — the one wording of the built-in `DomainError` cases (exhaustive; a typed error a screen doesn't handle gets the generic message), with its strings in `:ui`'s own `values/strings.xml`
 - Compose Multiplatform Resources (`Res.string`, `Res.drawable`)
 
 ### `:feature-<name>`
@@ -92,7 +92,7 @@ The feature's **public surface is exactly three things**: its `Route`, its Koin 
 - The composition root in `:shared/commonMain` is rendered by `/kmp-forge-init` from `overlay/shared/`: `AppKoin.kt` starts Koin, `App.kt` wraps everything in `AppTheme {}`; `AppNavigation.kt` owns the back stack, registers every route for state saving, and builds the nav graph by calling each feature's `addFooEntries(...)` inside `NavDisplay(entryProvider = entryProvider { ... })`. The app supplies cross-feature navigation as callbacks (e.g. `onOpenPhoto = { backStack.add(PhotoDetailRoute(it)) }`) — this is the one place that knows about more than one feature's routes.
 - **Koin starts at app launch, not inside composition**: `AppKoin.kt`'s `startAppKoin()` calls `startKoin { modules(appModules) }` once per process (a second call is a no-op), where `AppModules.kt` lists `uiModule + domainModule + dataModule + every featureModule`. Every entry point calls it before any UI — Android's `MainApplication.onCreate` through `initKoin(context)` (adds `androidContext`), iOS's `MainViewController()`, desktop/web `main()` — so a foreground service, a worker or a receiver resolves from the same graph as the screens. There is no `KoinApplication` composable. `/kmp-forge-add-feature` appends at the `// kmp-forge:` markers in `AppModules.kt` / `AppNavigation.kt`.
 - `AppBuildConfig` (generated build config) + crash-reporter / Sentry init (when opted in, before `App()`) live in `:shared`.
-- The per-platform **entry points are thin and live in the app modules**: `MainApplication` + `MainActivity` in `:androidApp`, `main()` in `:desktopApp`, `MainViewController` + the Xcode project in `iosApp/` — each starts Koin (`startAppKoin()` / `initKoin(context)`) and renders `:shared`'s `App()`.
+- The per-platform **entry points are thin and live in the app modules**: `MainApplication` + `MainActivity` in `:androidApp`, `main()` in `:desktopApp`, the Xcode project in `iosApp/` around `:shared`'s `iosMain` `MainViewController()` — each starts Koin (`startAppKoin()` / `initKoin(context)`) and renders `:shared`'s `App()`.
 
 ## Visibility
 

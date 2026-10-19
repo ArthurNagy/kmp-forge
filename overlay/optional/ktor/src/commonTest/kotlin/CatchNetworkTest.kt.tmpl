@@ -1,0 +1,49 @@
+package ${BASE_PACKAGE}.data
+
+import ${BASE_PACKAGE}.domain.DomainError
+import com.github.michaelbull.result.Err
+import com.github.michaelbull.result.Ok
+import io.ktor.client.HttpClient
+import io.ktor.client.engine.mock.MockEngine
+import io.ktor.client.engine.mock.respond
+import io.ktor.client.request.get
+import io.ktor.http.HttpStatusCode
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.test.runTest
+import kotlinx.io.IOException
+import kotlin.test.Test
+import kotlin.test.assertEquals
+import kotlin.test.assertFailsWith
+
+class CatchNetworkTest {
+    @Test
+    fun aSuccessfulCallPassesItsValueThrough() = runTest {
+        assertEquals(Ok(42), catchNetwork { 42 })
+    }
+
+    @Test
+    fun anErrorStatusBecomesHttp() = runTest {
+        val client = HttpClient(MockEngine { respond(content = "", status = HttpStatusCode.ServiceUnavailable) }) {
+            configureDefaults()
+        }
+
+        val result = catchNetwork { client.get("https://api.example.test/photos").requireSuccess() }
+
+        assertEquals(Err(DomainError.Network.Http(status = 503, code = null)), result)
+    }
+
+    @Test
+    fun aDroppedConnectionBecomesConnectivity() = runTest {
+        assertEquals(Err(DomainError.Network.Connectivity), catchNetwork { throw IOException("connection reset") })
+    }
+
+    @Test
+    fun anythingElseBecomesUnknown() = runTest {
+        assertEquals(Err(DomainError.Unknown("unexpected body")), catchNetwork { throw IllegalArgumentException("unexpected body") })
+    }
+
+    @Test
+    fun cancellationPropagates() = runTest {
+        assertFailsWith<CancellationException> { catchNetwork { throw CancellationException("cancelled") } }
+    }
+}

@@ -43,7 +43,7 @@ Loaded automatically in a kmp-forge project when the work matches:
 |---|---|
 | MVI | Orbit MVI |
 | DI | Koin, started once at app launch (`startAppKoin()`) so services share the screens' graph |
-| Errors | kotlin-result `Result<T, DomainError>` — one app-wide sealed `DomainError`, rendered by `:ui`'s `toMessage()` |
+| Errors | kotlin-result `Result<T, DomainError>` — a sealed `DomainError` (built-in network / not-found / unknown cases worded by `:ui`'s `toMessage()`, plus each area's `DomainError.Typed` errors) |
 | Navigation | Navigation 3 — the JetBrains Compose Multiplatform port only |
 | Image loading | Coil 3 |
 | HTTP (opt-in) | Ktor Client |

@@ -1,11 +1,14 @@
 package ${BASE_PACKAGE}.testing
 
+import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.withContext
 import kotlin.test.Test
 import kotlin.test.assertEquals
 
+// testScheduler.currentTime is experimental coroutines-test API.
+@OptIn(ExperimentalCoroutinesApi::class)
 class TestDispatcherProviderTest {
     @Test
     fun dispatchersShareTheRunTestVirtualClock() = runTest {

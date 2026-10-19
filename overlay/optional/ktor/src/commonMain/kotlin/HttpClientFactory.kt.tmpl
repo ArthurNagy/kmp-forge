@@ -21,7 +21,8 @@ internal fun createHttpClient(): HttpClient = HttpClient { configureDefaults() }
  *
  * A non-2xx response does not throw by itself: a data source checks `response.status`, turning the
  * statuses that mean something (404 → "not there") into values and failing on the rest with
- * `check(response.status.isSuccess())`; the repository's boundary maps that to a `DomainError`.
+ * `response.requireSuccess()`; the repository's `catchNetwork { }` maps that to a `DomainError`
+ * (CatchNetwork.kt).
  */
 internal fun HttpClientConfig<*>.configureDefaults() {
     install(ContentNegotiation) {

@@ -43,7 +43,7 @@ class FakeUserRepository : UserRepository {
 }
 ```
 
-`Result`/`Ok`/`Err` are [kotlin-result](https://github.com/michaelbull/kotlin-result) (package `com.github.michaelbull.result`), not `kotlin.Result`. `DomainError` is the app-wide sealed interface (`NotFound`, `Network(cause)`, `Unknown(cause)`, …).
+`Result`/`Ok`/`Err` are [kotlin-result](https://github.com/michaelbull/kotlin-result) (package `com.github.michaelbull.result`), not `kotlin.Result`. `DomainError` is the sealed error type (`Network.Connectivity`, `Network.Http`, `NotFound`, `Unknown`, plus each area's `DomainError.Typed` errors).
 
 ## When MockK is allowed
 
@@ -76,13 +76,13 @@ class GalleryViewModelTest {
 
     @Test
     fun loadSurfacesErrorOnFailure() = runTest {
-        val repo = FakeUserRepository().apply { nextError = DomainError.Network("offline") }
+        val repo = FakeUserRepository().apply { nextError = DomainError.Network.Connectivity }
         val vm = GalleryViewModel(GetPhotosUseCase(repo, TestDispatcherProvider(testScheduler)))
 
         vm.testWithInternalState(this, GalleryState.Initial) {
             containerHost.load()
             expectInternalState { copy(loading = true) }
-            expectInternalState { copy(loading = false, error = DomainError.Network("offline")) }
+            expectInternalState { copy(loading = false, error = DomainError.Network.Connectivity) }
         }
     }
 }

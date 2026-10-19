@@ -41,14 +41,22 @@ kover {
                     "*\$\$serializer",
                     // wiring: Koin module declarations (fooModule.kt → FooModuleKt, and per-platform
                     // actuals: PlatformDataModule.android.kt → PlatformDataModule_androidKt), Nav 3 entry
-                    // contributions (FooNavEntry.kt → FooNavEntryKt) and feature routes (NavKeys)
+                    // contributions (FooNavEntry.kt → FooNavEntryKt) and feature routes (NavKeys, plus a
+                    // data-class route's generated Companion)
                     "*ModuleKt",
                     "*Module_*Kt",
                     "*NavEntryKt",
                     "*.feature.*Route",
+                    "*.feature.*Route\$Companion",
+                    // the DomainError value types (cases carry no logic; they are exercised wherever
+                    // the code that returns them is tested)
+                    "*.domain.DomainError*",
                     // platform wiring (per-target dispatcher one-liners, the opt-in Ktor client
-                    // factory — data sources are tested against Ktor's MockEngine) and :ui tokens
+                    // factory — data sources are tested against Ktor's MockEngine, platform `actual`
+                    // adapters kept in `<base>.data.platform` — SharedPreferences / NSUserDefaults
+                    // stores, DataStore and SQLDelight driver factories) and :ui tokens
                     "*.RealDispatcherProvider*",
+                    "*.data.platform.*",
                     "*.data.HttpClientFactoryKt",
                     "*.ui.AppColorsKt",
                     "*.ui.AppDimens",

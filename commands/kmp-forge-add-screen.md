@@ -42,7 +42,7 @@ Ask via `AskUserQuestion` if missing.
 
 7. **Generate matching test**: `<Pascal>ViewModelTest.kt` under `feature-<feature-name>/src/commonTest/kotlin/.../feature/<feature_pkg>/`, seeded with `<Pascal>State.Initial`.
 
-8. **Build to verify**: `./gradlew :feature-<feature-name>:build`.
+8. **Build to verify**: `./gradlew :feature-<feature-name>:spotlessApply :feature-<feature-name>:build` (`spotlessApply` first: the rendered templates' import order depends on the base package).
 
 9. **Report** files created + Edits applied + build result.
 

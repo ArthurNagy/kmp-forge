@@ -1,6 +1,6 @@
 ---
 name: data-layer
-description: Write or change code in a kmp-forge project's :data module — internal repository implementations bound to :domain interfaces, data sources (Ktor HTTP, small preferences via a KeyValueStore or DataStore, SQLDelight, Store), DTOs and mappers, the exception boundary where every failure becomes a DomainError (catchNetwork-style helpers that rethrow cancellation), per-platform expect/actual pieces and their Koin module, dataModule bindings, and repository tests with fakes and MockEngine. Use when implementing a repository, adding an API call, a stored preference, a table or a cache, wiring a platform-specific dependency, or when an OpenSpec task touches :data.
+description: Write or change code in a kmp-forge project's :data module — internal repository implementations bound to :domain interfaces, data sources (Ktor HTTP, small preferences via a KeyValueStore or DataStore, SQLDelight, Store), DTOs and mappers, the exception boundary where every failure becomes a DomainError (catchNetwork classifies connectivity / HTTP status / unknown and rethrows cancellation), per-platform expect/actual pieces and their Koin module, dataModule bindings, and repository tests with fakes and MockEngine. Use when implementing a repository, adding an API call, a stored preference, a table or a cache, wiring a platform-specific dependency, or when an OpenSpec task touches :data.
 ---
 
 # :data — kmp-forge style
@@ -13,7 +13,9 @@ description: Write or change code in a kmp-forge project's :data module — inte
 data/src/commonMain/kotlin/<base>/data/
   dataModule.kt                 the one public declaration in :data
   PlatformDataModule.kt         internal expect val platformDataModule (when a platform piece exists)
-  CatchNetwork.kt               the boundary helper(s) — exceptions → DomainError
+  CatchNetwork.kt               the network boundary — exceptions → DomainError (Ktor opt-in, with tests)
+  HttpStatusException.kt        HttpResponse.requireSuccess() and the exception it throws (Ktor opt-in)
+  platform/                     platform `actual` adapters (KeyValueStore, DataStore / driver factories) — Kover-excluded glue
   RealDispatcherProvider.kt     (+ RealDispatcherProvider.<platform>.kt actuals)
   photo/
     PhotoDto.kt                 internal @Serializable wire shape + toDomain()
@@ -57,20 +59,25 @@ Put each data source behind an `internal interface` so the repository can be tes
 internal interface PhotoRemoteDataSource {
     suspend fun photos(): List<PhotoDto>
     suspend fun photo(id: String): PhotoDto?          // null: the server says it doesn't exist
+    suspend fun setFavorite(id: String, favorite: Boolean)
 }
 
 internal class KtorPhotoRemoteDataSource(private val client: HttpClient) : PhotoRemoteDataSource {
     override suspend fun photos(): List<PhotoDto> {
         val response = client.get("photos")
-        check(response.status.isSuccess()) { "HTTP ${response.status.value} for photos" }
+        response.requireSuccess()                                         // non-2xx → HttpStatusException
         return response.body()
     }
 
     override suspend fun photo(id: String): PhotoDto? {
         val response = client.get("photos/$id")
         if (response.status == HttpStatusCode.NotFound) return null      // an answer, not a failure
-        check(response.status.isSuccess()) { "HTTP ${response.status.value} for photos/$id" }
+        response.requireSuccess()
         return response.body()
+    }
+
+    override suspend fun setFavorite(id: String, favorite: Boolean) {
+        client.put("photos/$id") { parameter("favorite", favorite) }.requireSuccess()
     }
 }
 ```
@@ -84,9 +91,17 @@ internal class KtorPhotoRemoteDataSource(private val client: HttpClient) : Photo
       fun get(key: String): String?
       fun put(key: String, value: String)
   }
-  // androidMain: SharedPreferences (context.getSharedPreferences(…, Context.MODE_PRIVATE)); iosMain: NSUserDefaults;
-  // jvmMain: java.util.prefs.Preferences; webMain: localStorage. Bound in platformDataModule.
+
+  // androidMain, package <base>.data.platform — thin adapters there are platform glue, excluded from Kover
+  internal class SharedPreferencesKeyValueStore(context: Context) : KeyValueStore {
+      private val prefs = context.getSharedPreferences("app", Context.MODE_PRIVATE)
+      override fun get(key: String): String? = prefs.getString(key, null)
+      override fun put(key: String, value: String) = prefs.edit().putString(key, value).apply()
+  }
+  // iosMain: NSUserDefaults.standardUserDefaults (stringForKey / setObject); jvmMain: java.util.prefs.Preferences;
+  // webMain: localStorage. Bound in platformDataModule.
   ```
+  Keep the adapters this thin. The logic on top of a `KeyValueStore` stays in common code, tested with an in-memory fake.
 - **Values the UI observes, or structured state** (a theme the app re-renders on, settings screens): DataStore, as one Koin `single` **per file**. A second instance on the same file throws on first use. Read it with a flow that can't throw:
   ```kotlin
   override val themeMode: Flow<String?> = store.data
@@ -101,20 +116,18 @@ internal class KtorPhotoRemoteDataSource(private val client: HttpClient) : Photo
 
 ### 3. The repository: where exceptions become `DomainError`
 
-One small boundary helper per kind of source, shared by the area's repositories:
+The Ktor opt-in ships the network boundary, `CatchNetwork.kt`, with its tests:
 
 ```kotlin
-// CatchNetwork.kt
-/**
- * Runs [block], turning any failure into [DomainError.Network]. Rethrows [CancellationException] so coroutine
- * cancellation propagates (kotlin-result's runCatching would otherwise swallow it).
- */
-internal inline fun <T> catchNetwork(block: () -> T): Result<T, DomainError> =
-    runCatching(block).mapError { e ->
-        if (e is CancellationException) throw e
-        Logger.w(e) { "network call failed" }
-        DomainError.Network(e.message)
+internal suspend fun <T> catchNetwork(block: suspend () -> T): Result<T, DomainError> = runCatching { block() }.mapError { e ->
+    if (e is CancellationException) throw e                   // cancellation must propagate, always first
+    Logger.w(e) { "network call failed" }
+    when (e) {
+        is HttpStatusException -> DomainError.Network.Http(e.status, e.code)   // from response.requireSuccess()
+        is IOException -> DomainError.Network.Connectivity                    // kotlinx.io: offline, DNS, timeouts
+        else -> DomainError.Unknown(e.message)                                // e.g. a body that doesn't parse
     }
+}
 ```
 
 ```kotlin
@@ -135,11 +148,17 @@ internal class PhotoRepositoryImpl(
                 .map { it.toDomain() }
         }
 
-    // setFavorite(…) and favorites() follow the same pattern.
+    override suspend fun setFavorite(id: PhotoId, favorite: Boolean): Result<Unit, DomainError> =
+        withContext(dispatchers.io) {
+            catchNetwork { remote.setFavorite(id.value, favorite) }
+        }
+
+    // favorites(): a stream the UI observes — back it with a MutableStateFlow the repository updates
+    // after each successful photos() / setFavorite(), so it never throws.
 }
 ```
 
-- **Every call to a data source goes through a helper.** Nothing a library throws reaches `:domain`. One helper per kind of failure: `catchNetwork` maps to `Network(cause)`. A parser or storage helper (`runCatching { parser.parse(bytes) }.mapError { … DomainError.Unknown(it.message) }`) maps to `Unknown(cause)`, or to a case the app added. Statuses and answers that mean something were already decided in the data source (404 → `null` → `NotFound`).
+- **Every call to a data source goes through a helper.** Nothing a library throws reaches `:domain`. `catchNetwork` classifies network failures into the built-in cases. Other sources get a helper of the same shape: a parser or storage helper (`runCatching { parser.parse(bytes) }.mapError { … DomainError.Unknown(it.message) }`) maps to `Unknown(cause)`, or to the area's typed error when a screen must react (`PhotoError.AlbumFull(limit)`). Statuses and answers that mean something are decided before the boundary: in the data source (404 → `null`), then in the repository (`null` → `NotFound`, an API error code → a typed error).
 - It is **kotlin-result's** `runCatching` (`import com.github.michaelbull.result.runCatching`, returns `Result<V, Throwable>`), never the stdlib's. Its `mapError` **rethrows `CancellationException` first, always**: otherwise a cancelled screen's call comes back as an error instead of stopping. Because there is no `catch` clause, detekt's `TooGenericExceptionCaught` doesn't apply. Don't hand-roll `catch (e: Exception)` to do the same job.
 - When a failure is a *value* rather than an error (a probe that answers `null`, a retry loop that keeps the last failure), write a `try`/`catch` that rethrows `CancellationException` first, with `@Suppress("TooGenericExceptionCaught")` and a comment saying why every failure means the same thing there:
   ```kotlin
@@ -156,6 +175,7 @@ internal class PhotoRepositoryImpl(
 - I/O runs on `dispatchers.io` from the injected `DispatcherProvider`, CPU-heavy parsing on `dispatchers.default`. Never `Dispatchers.*`: only `RealDispatcherProvider` and its actuals name dispatchers.
 - Streams (`Flow` / `StateFlow`) never throw: `.catch { }` inside the flow, or publish the failure in the emitted state (`error: DomainError?`).
 - A `cause` is the exception message, kept for logs. The UI never shows it.
+- When the API sends a machine-readable error code in its error body, the data source reads it and throws `HttpStatusException(status, code)` itself. The repository can then turn a known code into the area's typed error (`code == "album_full"` → `PhotoError.AlbumFull(limit)`).
 
 ### 4. Wire it
 
@@ -203,21 +223,25 @@ internal class FakePhotoRemoteDataSource : PhotoRemoteDataSource {
     var failWith: Throwable? = null
     override suspend fun photos(): List<PhotoDto> = failWith?.let { throw it } ?: photos
     override suspend fun photo(id: String): PhotoDto? = failWith?.let { throw it } ?: photos.firstOrNull { it.id == id }
+    override suspend fun setFavorite(id: String, favorite: Boolean) {
+        failWith?.let { throw it }
+        photos = photos.map { if (it.id == id) it.copy(favorite = favorite) else it }
+    }
 }
 
 class PhotoRepositoryImplTest {
     @Test
-    fun mapsATransportFailureToNetwork() = runTest {
-        val remote = FakePhotoRemoteDataSource().apply { failWith = IllegalStateException("HTTP 500 for photos") }
+    fun aDroppedConnectionBecomesConnectivity() = runTest {
+        val remote = FakePhotoRemoteDataSource().apply { failWith = IOException("no route to host") }   // kotlinx.io
         val repo = PhotoRepositoryImpl(remote, TestDispatcherProvider(testScheduler))
 
-        assertEquals(Err(DomainError.Network("HTTP 500 for photos")), repo.photos())
+        assertEquals(Err(DomainError.Network.Connectivity), repo.photos())
     }
 }
 ```
 
 - **Cancellation, once per helper:** a data source that throws `CancellationException` must make the repository call throw it too (`assertFailsWith<CancellationException>`), not return an `Err`.
-- **The Ktor data source and the status handling:** build the production setup over Ktor's multiplatform fake engine, `HttpClient(MockEngine { respond(content = "…", status = HttpStatusCode.NotFound, headers = headersOf(HttpHeaders.ContentType, "application/json")) }) { configureDefaults() }`. Then check 404 → `NotFound`, 5xx → `Network`, a malformed or non-JSON body → `Network`. Init adds `libs.ktor.client.mock` to `:data`'s `commonTest` when Ktor is selected; older projects add it from the catalog. MockK stays out of `commonTest`.
+- **The Ktor data source and the status handling:** build the production setup over Ktor's multiplatform fake engine, `HttpClient(MockEngine { respond(content = "…", status = HttpStatusCode.NotFound, headers = headersOf(HttpHeaders.ContentType, "application/json")) }) { configureDefaults() }`. Then check 404 → `NotFound`, 5xx → `Network.Http(status, …)`, a malformed or non-JSON body → `Unknown`. `CatchNetworkTest` (shipped with the Ktor opt-in) already covers the helper's own mapping. Init adds `libs.ktor.client.mock` to `:data`'s `commonTest` when Ktor is selected; older projects add it from the catalog. MockK stays out of `commonTest`.
 - **Preferences:** an in-memory `KeyValueStore` (a `mutableMapOf` behind the interface), or for DataStore an in-memory store:
   ```kotlin
   private class FakePreferencesDataStore : DataStore<Preferences> {
@@ -240,6 +264,6 @@ class PhotoRepositoryImplTest {
 
 - Nothing in `:data` is public except `dataModule`. No DTO, `HttpResponse` or `Preferences` appears in a `:domain` signature.
 - No exception escapes a repository: every data-source call goes through a boundary helper that rethrows `CancellationException` first, each broad `try/catch` carries its reason, and flows `.catch`.
-- No `Dispatchers.*` outside `RealDispatcherProvider`. Every `expect` has an actual on every target.
+- No `Dispatchers.*` outside `RealDispatcherProvider`. Every `expect` has an actual on every target, and platform adapters live in `<base>.data.platform`.
 - Each new repository or data source is bound in `dataModule`, and its tests cover every error it can return plus cancellation.
 - `./gradlew :data:jvmTest` while iterating. Before pushing, run `./gradlew spotlessApply` (the samples here are compact, and ktlint_official reflows signatures and comments), then the CI gate: `./gradlew spotlessCheck detekt build koverVerify`.

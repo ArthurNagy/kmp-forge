@@ -1,6 +1,6 @@
 ---
 name: presentation-layer
-description: Write or change UI code in a kmp-forge project — :feature-* screens, Orbit ViewModels with state-only events (consumable state slots, never postSideEffect) that start their work in the container's on-create block, State without defaults plus Initial, the entry/Screen/Content split, route arguments passed to the ViewModel through Koin parameters, Nav 3 entry contributions with outgoing navigation as callbacks, errors rendered through :ui's DomainError.toMessage(), feature string resources, accessibility and RTL, :ui tokens and shared composables, and ViewModel tests with Orbit's harness. Use when building or changing a screen, ViewModel or UI state, navigation between screens or features, a shared composable or design token, or when an OpenSpec task touches :feature-* or :ui.
+description: Write or change UI code in a kmp-forge project — :feature-* screens, Orbit ViewModels with state-only events (consumable state slots, never postSideEffect) that start their work in the container's on-create block, State without defaults plus Initial, the entry/Screen/Content split, route arguments passed to the ViewModel through Koin parameters, Nav 3 entry contributions with outgoing navigation as callbacks, errors rendered through :ui's DomainError.toMessage() with the screen wording its area's typed errors, feature string resources, accessibility and RTL, :ui tokens and shared composables, and ViewModel tests with Orbit's harness. Use when building or changing a screen, ViewModel or UI state, navigation between screens or features, a shared composable or design token, or when an OpenSpec task touches :feature-* or :ui.
 ---
 
 # Presentation (`:feature-*` and `:ui`) — kmp-forge style
@@ -42,7 +42,7 @@ internal data class PhotosState(
 ```
 
 - **No constructor defaults.** `Initial` is the single starting value, used by `orbitContainer(...)` and every test.
-- `error: DomainError?` carries the error as-is; the screen renders it with `:ui`'s `toMessage()`.
+- `error: DomainError?` carries the error as-is: a built-in case, or the area's typed error (`PhotoError.AlbumFull(limit)`). The screen turns it into words (see *Strings and errors*).
 - **A slot holds what happened, never resolved text:** a flag, a domain value (`downloadResult: TransferResult?`) or a `StringResource`. The screen turns it into words (`getString(…)` inside its `LaunchedEffect`), so no literal text sits in a ViewModel. The template's `pendingMessage: String?` is a placeholder; give it one of those types when the screen first uses it.
 - Mutually exclusive page states (`Loading | Loaded | Error`) that turn into boolean tangles: use a `sealed interface XState` whose starting state is an explicit object. Default to the flat data class.
 - Everything that must survive rotation or process death, or that an intent needs, goes in `State`. Only UI-local details (scroll position, an open dropdown) may live in `remember`. Derived facts can be getters on the state (`val isSelectionMode get() = selectedIds.isNotEmpty()`).
@@ -122,7 +122,7 @@ internal fun PhotosScreen(
 ```
 
 - `XScreen` (internal) resolves the ViewModel with `koinViewModel<XViewModel>()` **in its body**. A `viewModel = …` default parameter would leak the internal type. The screen collects state, runs one `LaunchedEffect` per consumable slot (act, then call `onXConsumed()`), and passes lambdas down. With many callbacks, group them in a remembered holder: `val actions = remember(viewModel) { PhotosActions(onFavoriteClick = viewModel::onFavoriteClicked, …) }`.
-- `XContent` (private) is stateless: state plus lambdas, no ViewModel, no Koin. Host the `SnackbarHost` in its `Scaffold`, or `showSnackbar` never returns. Errors: `state.error?.let { Text(it.toMessage()) }`.
+- `XContent` (private) is stateless: state plus lambdas, no ViewModel, no Koin. Host the `SnackbarHost` in its `Scaffold`, or `showSnackbar` never returns. Errors: `state.error?.let { Text(it.message()) }`, using the screen's own mapping (see *Strings and errors*).
 - **Navigation.** A tap that only navigates calls the callback directly (`onPhotoClick = onOpenPhoto`). Navigation that depends on an outcome ("the session ended", "the save succeeded") goes through a slot that the screen's `LaunchedEffect` turns into the callback. A slot holds the navigation argument (or this feature's own route), never another feature's route.
 
 ## Navigation 3
@@ -135,11 +135,11 @@ internal fun PhotosScreen(
       viewModel { (id: String) -> PhotoDetailViewModel(id, get()) }   // org.koin.core.module.dsl.viewModel
   }
   // XNavEntry.kt
-  entry<PhotoDetailRoute> { route -> PhotoDetailScreen(id = route.id, onNavigateBack = onNavigateBack) }
+  entry<PhotoDetailRoute> { route -> PhotoDetailScreen(id = route.id, onNavigateBack = onPhotoDetailBack) }
   // PhotoDetailScreen.kt
   val viewModel = koinViewModel<PhotoDetailViewModel>(key = id, parameters = { parametersOf(id) })
   ```
-  The on-create block then loads by `id`. A ViewModel without arguments stays `viewModelOf(::XViewModel)`.
+  The on-create block then loads by `id`. A ViewModel without arguments stays `viewModelOf(::XViewModel)`. A pushed screen always gets a working Back: give it its own non-null callback (`onPhotoDetailBack: () -> Unit` on `addPhotosEntries`), because the feature's `onNavigateBack` is `null` when the feature's first screen is the start destination.
 - **Outgoing navigation is a callback parameter** on `addXEntries(...)`. The app supplies it in `AppNavigation.kt` (`onOpenPhoto = { backStack.add(PhotoDetailRoute(it.value)) }`). A feature never imports another feature's route.
 - A new route must be registered in `AppNavigation.kt`'s `SerializersModule` (the `// kmp-forge:nav-routes` marker). Otherwise saving the back stack throws on iOS, desktop and web. `/kmp-forge-add-screen` does it.
 - The start destination is wired with `onNavigateBack = null`, and its screen shows no Back control.
@@ -151,7 +151,17 @@ One module per feature, listed in `:shared`'s `AppModules.kt` (`/kmp-forge-add-f
 ## Strings and errors
 
 - Every user-facing string, `contentDescription` included, comes from the feature's own `src/commonMain/composeResources/values/strings.xml`. The **unqualified `values/` table must define every key**: Compose falls back only to it, and a key that exists only in `values-en/` crashes every other locale. Translations (`values-fr/`) may omit keys. `Res` is generated `internal` into `<base>.feature.<pkg>.resources`.
-- **Errors become text only through `:ui`'s `DomainError.toMessage()`**, the app's one exhaustive mapping. Never map a `DomainError` again in a feature, and never show its `cause`. A new `DomainError` case gets its message there, with its string in `:ui`'s table.
+- **Errors.** `:ui`'s `DomainError.toMessage()` words the built-in cases (`Network.Connectivity`, `Network.Http`, `NotFound`, `Unknown`) once for the whole app; never re-word them in a feature. The screen words the area's **typed** errors it can react to, from its own string table, and falls back to `toMessage()` for everything else:
+
+  ```kotlin
+  @Composable
+  private fun DomainError.message(): String = when (this) {
+      PhotoError.TitleBlank -> stringResource(Res.string.photo_title_blank)
+      is PhotoError.AlbumFull -> stringResource(Res.string.photo_album_full, limit)
+      else -> toMessage()            // built-in cases, and typed errors this screen doesn't handle
+  }
+  ```
+  A typed error can also drive more than text, such as a dialog or a different action (`if (state.error is PhotoError.AlbumFull) …`). Never show a `cause`.
 - Counts use `pluralStringResource(Res.plurals.photo_count, count, count)`. Inside a `LaunchedEffect`, resolve with the suspending `getString(…)`.
 - Remove the template's `placeholder_content` string and its `// TODO(kmp-forge):` line once the real content exists (`kmp-reviewer` flags a feature that still renders it).
 
@@ -204,6 +214,6 @@ class PhotosViewModelTest {
 - The feature's public surface is exactly its route, module and `addXEntries`. No `:data` import, no other feature's route.
 - No `postSideEffect`, no Effect type, no `try/catch` in an intent, no `Dispatchers.*`, no repository in a ViewModel. Work starts in the on-create block, not in a `LaunchedEffect(Unit)`.
 - `State` has no defaults, `Initial` sets every field, and every `pendingX` slot has its `LaunchedEffect` and `onXConsumed()`.
-- Errors are rendered with `toMessage()`. Every new route is registered in `AppNavigation.kt`. The start destination has `onNavigateBack = null`.
+- Errors are worded by the screen's typed-error mapping, falling back to `toMessage()`. Every new route is registered in `AppNavigation.kt`. The start destination has `onNavigateBack = null`.
 - Every string is in `values/strings.xml`, the template placeholder is gone, and the accessibility checklist above holds.
 - `./gradlew :feature-<name>:jvmTest` while iterating. Before pushing, run `./gradlew spotlessApply` (the samples here are compact, and ktlint_official reflows signatures and comments), then the CI gate: `./gradlew spotlessCheck detekt build koverVerify`. When the change is user-visible, ask for the `kmp-qa` agent to run its scenarios on a device.

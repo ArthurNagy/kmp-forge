@@ -29,7 +29,7 @@ FEATURE_NAME_CAMEL="$(echo "$FEATURE_NAME_PASCAL" | awk '{print tolower(substr($
 
 ### 2. Determine base package
 
-Read from CLAUDE.md → `Base package:` line, or from `androidApp/build.gradle.kts` android config (the thin Android application module, where `applicationId`/`namespace` live). Fallback: ask user.
+Read from CLAUDE.md → the `**Base package:**` line under Product (scaffolds before 0.6 have none), or from `androidApp/build.gradle.kts` android config (the thin Android application module, where `applicationId`/`namespace` live). Fallback: ask user.
 
 ```bash
 BASE_PACKAGE="com.example.myapp"                    # parsed
@@ -92,7 +92,7 @@ bash "${CLAUDE_PLUGIN_ROOT}/scripts/apply-overlay.sh" patch-settings \
 
 ### 5. Wire the feature into `:shared`
 
-`:shared` is the composition root: `App.kt` starts Koin with the list in `AppModules.kt`, and `AppNavigation.kt` owns the Nav 3 back stack. Both files carry `// kmp-forge:` marker comments (rendered by `/kmp-forge-init` from `overlay/shared/`); insert new lines **directly above** each marker and keep the marker. All paths below are under `shared/src/commonMain/kotlin/<base-pkg-path>/`.
+`:shared` is the composition root: `AppKoin.kt`'s `startAppKoin()` starts Koin at app launch with the list in `AppModules.kt`, and `AppNavigation.kt` owns the Nav 3 back stack. Both files carry `// kmp-forge:` marker comments (rendered by `/kmp-forge-init` from `overlay/shared/`); insert new lines **directly above** each marker and keep the marker. All paths below are under `shared/src/commonMain/kotlin/<base-pkg-path>/`.
 
 1. `shared/build.gradle.kts` → `commonMain.dependencies { … }`: add `implementation(project(":feature-${FEATURE_NAME}"))`.
 2. `AppModules.kt`: add `import ${BASE_PACKAGE}.feature.${FEATURE_NAME_PKG}.${FEATURE_NAME_CAMEL}Module` and, above `// kmp-forge:feature-modules`, the line `    ${FEATURE_NAME_CAMEL}Module,`.

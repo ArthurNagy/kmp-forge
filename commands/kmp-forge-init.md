@@ -380,6 +380,10 @@ targets the project has (`jvmMain` always; `iosMain` with iOS; `webMain` with we
   commonTest.dependencies { implementation(libs.ktor.client.mock) }  // MockEngine for data source tests
   ```
   and in `dataModule.kt`, bind the client inside `module { … }`: `single { createHttpClient() }`.
+  The overlay also renders `CatchNetwork.kt` (the `:data` network boundary: `catchNetwork { }`,
+  `HttpResponse.requireSuccess()`) with its tests. In `androidApp/src/main/AndroidManifest.xml`, add
+  `<uses-permission android:name="android.permission.INTERNET" />` above `<application …>` — without
+  it every HTTP call on Android fails at runtime.
 - **SQLDelight** (relational DB):
   ```kotlin
   // data/build.gradle.kts
@@ -412,6 +416,17 @@ targets the project has (`jvmMain` always; `iosMain` with iOS; `webMain` with we
 ### 7. License
 
 If user picked Apache-2.0, replace the `LICENSE` text (currently MIT from kmp.new's default if any) accordingly. If Proprietary, write a short proprietary notice.
+
+### 7b. Format once
+
+The overlay's imports are ordered for a `com.*` base package; ktlint orders imports
+lexicographically, so with any other base the first CI run would fail `spotlessCheck`. Normalize
+once (this also proves the Gradle configuration loads — the first run downloads dependencies):
+
+```bash
+source "${TMPDIR:-/tmp}/kmp-forge-init.env"
+cd "${TARGET:?}" && ./gradlew spotlessApply -q 2>&1 | tail -20
+```
 
 ### 8. Git init + first commit + optional GitHub repo
 

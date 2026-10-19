@@ -1,6 +1,6 @@
 ---
 name: git-cliff-changelog
-description: Configure and run git-cliff to generate CHANGELOG.md and GitHub Release bodies from Conventional Commits in kmp-forge-scaffolded projects. Use when setting up changelog automation, releasing a new version, or troubleshooting changelog output.
+description: Configure and run git-cliff to generate CHANGELOG.md and GitHub Release bodies from Conventional Commits. Use in a kmp-forge project (its CLAUDE.md links kmp-forge's docs as its rules) when setting up changelog automation, releasing a new version, or troubleshooting changelog output.
 ---
 
 # git-cliff — kmp-forge changelog

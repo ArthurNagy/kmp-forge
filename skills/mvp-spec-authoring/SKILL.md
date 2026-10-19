@@ -1,6 +1,6 @@
 ---
 name: mvp-spec-authoring
-description: Author docs/MVP_SPEC.md for a kmp-forge project — interactive interview structure, section templates, and what makes a spec good vs vague. Used by the /kmp-forge-spec command.
+description: Author docs/MVP_SPEC.md for a kmp-forge project — interactive interview structure, section templates, and what makes a spec good vs vague. Use in a kmp-forge project (its CLAUDE.md links kmp-forge's docs as its rules) when writing or revising the MVP spec, turning a product idea or brain dump into one, or when /kmp-forge-spec runs.
 ---
 
 # MVP Spec authoring
@@ -126,7 +126,7 @@ The `/kmp-forge-spec` command supports:
 - **Default (interview)**: walk section-by-section, asking each via `AskUserQuestion`. Push back briefly on vague answers.
 - **`--from-dump`**: user pastes a free-form product idea; the command extracts what maps to spec sections and asks follow-ups only on gaps.
 
-Both modes write to `docs/MVP_SPEC.md` using the template at `overlay/product/MVP_SPEC.md.tmpl`.
+Both modes write to `docs/MVP_SPEC.md` using the template at `${CLAUDE_PLUGIN_ROOT}/overlay/product/MVP_SPEC.md.tmpl`.
 
 ## Maintaining the spec
 

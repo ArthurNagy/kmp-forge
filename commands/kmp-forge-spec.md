@@ -1,11 +1,13 @@
 ---
 description: Author docs/MVP_SPEC.md interactively or by structuring a free-form dump.
-argument-hint: [--from-dump]
+argument-hint: "[--from-dump]"
 ---
 
 # /kmp-forge-spec
 
 Generates or revises `docs/MVP_SPEC.md` for a kmp-forge project.
+
+First load the `kmp-forge:mvp-spec-authoring` skill (Skill tool; where it isn't available, read `${CLAUDE_PLUGIN_ROOT}/skills/mvp-spec-authoring/SKILL.md`) — it holds the section templates and the good-vs-vague checklist this command applies.
 
 ## Modes
 
@@ -37,7 +39,7 @@ Read the dump, extract sections that map to MVP_SPEC structure, write them in, t
 
 ## Output
 
-Overwrite or update `docs/MVP_SPEC.md` based on the template in `overlay/product/MVP_SPEC.md.tmpl`.
+Overwrite or update `docs/MVP_SPEC.md` based on the template in `${CLAUDE_PLUGIN_ROOT}/overlay/product/MVP_SPEC.md.tmpl`.
 
 Substitute:
 - `${APP_NAME}` — already in CLAUDE.md

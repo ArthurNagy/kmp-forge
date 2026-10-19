@@ -1,6 +1,6 @@
 ---
 name: data-layer
-description: Write or change code in a kmp-forge project's :data module — internal repository implementations bound to :domain interfaces, data sources (Ktor HTTP, small preferences via a KeyValueStore or DataStore, SQLDelight, Store), DTOs and mappers, the exception boundary where every failure becomes a DomainError (catchNetwork classifies connectivity / HTTP status / unknown and rethrows cancellation), per-platform expect/actual pieces and their Koin module, dataModule bindings, and repository tests with fakes and MockEngine. Use when implementing a repository, adding an API call, a stored preference, a table or a cache, wiring a platform-specific dependency, or when an OpenSpec task touches :data.
+description: Write or change code in a kmp-forge project's :data module — internal repository implementations bound to :domain interfaces, data sources (Ktor HTTP, small preferences via a KeyValueStore or DataStore, SQLDelight, Store), DTOs and mappers, the exception boundary where every failure becomes a DomainError (catchNetwork classifies connectivity / HTTP status / unknown and rethrows cancellation), per-platform expect/actual pieces and their Koin module, dataModule bindings, and repository tests with fakes and MockEngine. Use in a kmp-forge project (its CLAUDE.md links kmp-forge's docs as its rules) when implementing a repository, adding an API call, a stored preference, a table or a cache, wiring a platform-specific dependency, or when an OpenSpec task touches :data.
 ---
 
 # :data — kmp-forge style

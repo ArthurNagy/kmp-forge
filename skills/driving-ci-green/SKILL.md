@@ -1,6 +1,6 @@
 ---
 name: driving-ci-green
-description: Watch a PR's GitHub Actions checks and drive them to green from the CLI in a kmp-forge-scaffolded project, without flooding the context window with CI logs. Use when watching PR checks after a push, diagnosing a red check, mirroring the CI gate locally before pushing, or when an agent needs the canonical gh commands for CI status and failure logs.
+description: Watch a PR's GitHub Actions checks and drive them to green from the CLI without flooding the context window with CI logs. Use in a kmp-forge project (its CLAUDE.md links kmp-forge's docs as its rules) when watching PR checks after a push, diagnosing a red check, mirroring the CI gate locally before pushing, or when an agent needs the canonical gh commands for CI status and failure logs.
 ---
 
 # Driving CI green — kmp-forge style

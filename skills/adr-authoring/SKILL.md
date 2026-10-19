@@ -18,6 +18,10 @@ Status: Accepted | Superseded by [NNNN](NNNN-...)
 ## Context
 <what's driving this decision? what's the problem or the constraint?>
 
+Alternatives considered:
+- **<option>** — <why it loses here>
+- **<option>** — <why it loses here>
+
 ## Decision
 <what we will do — concrete, action-oriented>
 

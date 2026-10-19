@@ -21,6 +21,7 @@ import ${BASE_PACKAGE}.feature.${FEATURE_NAME_PKG}.resources.navigate_back
 import ${BASE_PACKAGE}.feature.${FEATURE_NAME_PKG}.resources.placeholder_content
 import ${BASE_PACKAGE}.ui.AppSpacing
 import ${BASE_PACKAGE}.ui.toMessage
+import org.jetbrains.compose.resources.getString
 import org.jetbrains.compose.resources.stringResource
 import org.koin.compose.viewmodel.koinViewModel
 import org.orbitmvi.orbit.compose.collectAsState
@@ -45,8 +46,8 @@ internal fun ${FEATURE_NAME_PASCAL}Screen(onNavigateBack: (() -> Unit)?) {
     val snackbarHostState = remember { SnackbarHostState() }
 
     LaunchedEffect(state.pendingMessage) {
-        val msg = state.pendingMessage ?: return@LaunchedEffect
-        snackbarHostState.showSnackbar(msg)
+        val message = state.pendingMessage ?: return@LaunchedEffect
+        snackbarHostState.showSnackbar(getString(message))
         viewModel.onPendingMessageConsumed()
     }
 

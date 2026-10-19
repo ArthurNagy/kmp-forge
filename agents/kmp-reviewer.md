@@ -134,6 +134,7 @@ Note: use-case **constructors stay public** — feature tests build them with fa
 - 🟡 Clickable Composable smaller than `AppDimens.touchTargetMin`. Apply `.minimumInteractiveComponentSize()` or sized constraint.
 - 🟡 `Modifier.padding(left = ..., right = ...)`. Use `start = ..., end = ...`.
 - 🟡 `Alignment.Left` / `Alignment.Right`. Use `Alignment.Start` / `Alignment.End`.
+- 🟡 A consumable message slot typed `String?`, or set from literal text in a ViewModel. Hold a `StringResource` (or a domain value) and resolve it in the screen — `getString(...)` inside the `LaunchedEffect`.
 - 🟡 Hardcoded user-facing string in `Text(...)`, or a `DomainError` rendered directly (`toString()`, its `cause`). Move to `Res.string`; render errors with `:ui`'s `state.error?.toMessage()`.
 - 🔴 A string resource that exists only in a qualified table (`values-en/`, `values-xx/`) and not in the unqualified `composeResources/values/strings.xml`. Compose MP falls back only to `values/` — the app crashes ("Resource with ID='string:x' not found") on any device whose language has no table.
 

@@ -43,7 +43,7 @@ internal data class PhotosState(
 
 - **No constructor defaults.** `Initial` is the single starting value, used by `orbitContainer(...)` and every test.
 - `error: DomainError?` carries the error as-is: a built-in case, or the area's typed error (`PhotoError.AlbumFull(limit)`). The screen turns it into words (see *Strings and errors*).
-- **A slot holds what happened, never resolved text:** a flag, a domain value (`downloadResult: TransferResult?`) or a `StringResource`. The screen turns it into words (`getString(…)` inside its `LaunchedEffect`), so no literal text sits in a ViewModel. The template's `pendingMessage: String?` is a placeholder; give it one of those types when the screen first uses it.
+- **A slot holds what happened, never resolved text:** a flag, a domain value (`downloadResult: TransferResult?`) or a `StringResource`. The screen turns it into words (`getString(…)` inside its `LaunchedEffect`), so no literal text sits in a ViewModel. The template's `pendingMessage: StringResource?` is the message slot; the screen resolves it with `getString(…)`.
 - Mutually exclusive page states (`Loading | Loaded | Error`) that turn into boolean tangles: use a `sealed interface XState` whose starting state is an explicit object. Default to the flat data class.
 - Everything that must survive rotation or process death, or that an intent needs, goes in `State`. Only UI-local details (scroll position, an open dropdown) may live in `remember`. Derived facts can be getters on the state (`val isSelectionMode get() = selectedIds.isNotEmpty()`).
 
@@ -207,7 +207,7 @@ class PhotosViewModelTest {
 - Tag tests that cover an OpenSpec scenario with `// Scenario: <exact name>`. The `kmp-qa` agent traces coverage through the tag, then runs the user-visible scenarios on a device.
 - Compose UI behavior (`runComposeUiTest`) drives the stateless Content through its `testTag`s. When a test needs `XContent`, widen it from `private` to `internal`, which is the visibility rule's own reason to widen.
 - MockK never appears in `commonTest`. Turbine on `container.stateFlow` is for timing-sensitive cases (debounce).
-- The generated `XViewModelTest` targets the template: a ViewModel with no constructor arguments and `pendingMessage = "Hi"`. Rewrite it as soon as the ViewModel takes use cases or a slot changes type. It stops compiling, which is the cue.
+- The generated `XViewModelTest` targets the template's ViewModel, which has no constructor arguments. Rewrite it as soon as the ViewModel takes use cases. It stops compiling, which is the cue.
 
 ## Before you hand it on
 

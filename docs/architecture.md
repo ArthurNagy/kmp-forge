@@ -132,7 +132,7 @@ internal data class GalleryState(
 
     // Consumable event slots — set inside intent {}, cleared by paired onXxxConsumed().
     val pendingNavigation: PhotoDetailRoute?,
-    val pendingMessage: String?,
+    val pendingMessage: StringResource?,   // which message; the screen resolves the text
 ) {
     companion object {
         // Single starting-state source — used by orbitContainer(...) and by tests.
@@ -184,7 +184,7 @@ Rules:
 - ViewModel never references `Dispatchers.IO` directly — use `dispatchers.io` from `DispatcherProvider` (injected into use cases, not ViewModels directly).
 - Use case returns `Result<T, DomainError>`. ViewModel uses `onOk` / `onErr` and updates state; the Composable renders `state.error` with `:ui`'s `toMessage()`.
 - Loading and long-lived observation start in the container's on-create block — `orbitContainer(FooState.Initial) { load() }` — which runs once per ViewModel (once per back-stack entry), not in a `LaunchedEffect(Unit)` that re-runs whenever the screen comes back. Tests run it with `runOnCreate()`.
-- **No `postSideEffect`**. The Orbit host's side-effect type is `Nothing` (`OrbitContainerHost<State, State, Nothing>`). One-shot events (navigation, toasts, snackbars) live as **consumable state slots** (`pendingNavigation: Route?`, `pendingMessage: String?`). UI observes them with `LaunchedEffect(...)`, consumes, then calls a paired `onXxxConsumed()` intent to clear them. Reason: everything is state — easier to test, easier to inspect, easier to reason about restoration across config changes / process death.
+- **No `postSideEffect`**. The Orbit host's side-effect type is `Nothing` (`OrbitContainerHost<State, State, Nothing>`). One-shot events (navigation, toasts, snackbars) live as **consumable state slots** (`pendingNavigation: Route?`, `pendingMessage: StringResource?` — which message, never resolved text; the screen resolves it with `getString(...)`). UI observes them with `LaunchedEffect(...)`, consumes, then calls a paired `onXxxConsumed()` intent to clear them. Reason: everything is state — easier to test, easier to inspect, easier to reason about restoration across config changes / process death.
 
 ### Sub-states via sealed interface
 

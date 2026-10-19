@@ -19,7 +19,7 @@ Alternatives considered:
 
 Use [Orbit MVI](https://orbit-mvi.org/) on every ViewModel. ViewModels extend `androidx.lifecycle.ViewModel` and implement `OrbitContainerHost<State, State, Nothing>` (container via `orbitContainer(State.Initial)`). State mutations go through `intent { reduce { ... } }`.
 
-**State-only events** — we do NOT use `postSideEffect`. Effect type is always `Nothing`. One-shot events (navigation, toasts, snackbars) are modeled as consumable state slots (`pendingNavigation: Route?`, `pendingMessage: String?`) set inside `intent {}` and cleared by paired `onXxxConsumed()` intents the UI calls after rendering.
+**State-only events** — we do NOT use `postSideEffect`. Effect type is always `Nothing`. One-shot events (navigation, toasts, snackbars) are modeled as consumable state slots (`pendingNavigation: Route?`, `pendingMessage: StringResource?` — the screen resolves the text) set inside `intent {}` and cleared by paired `onXxxConsumed()` intents the UI calls after rendering.
 
 **Sub-states via sealed interface** when a flat data class would force boolean spaghetti at the page level (mutually-exclusive `Loading | Loaded | Error`). Default is flat data class; promote only when warranted.
 

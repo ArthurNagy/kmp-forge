@@ -5,7 +5,7 @@ All notable changes to `kmp-forge` will be documented in this file.
 Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [0.6.1] - 2026-10-20
 
 ### Fixed
 - **kmp-forge's skills stay out of other projects.** Every skill's description now says to use it in a kmp-forge project (its `CLAUDE.md` links kmp-forge's docs as its rules — scaffolded and adopted projects do), so with android-forge also installed — it ships skills with the same names — `domain-layer`, `github-release-artifacts`, `adr-authoring` and the rest no longer compete in an android-forge project. `mvp-spec-authoring` gains a real "use when" clause.

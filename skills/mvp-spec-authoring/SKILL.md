@@ -1,11 +1,13 @@
 ---
 name: mvp-spec-authoring
-description: Author docs/MVP_SPEC.md for a kmp-forge project — interactive interview structure, section templates, and what makes a spec good vs vague. Use in a kmp-forge project (its CLAUDE.md links kmp-forge's docs as its rules) when writing or revising the MVP spec, turning a product idea or brain dump into one, or when /kmp-forge-spec runs.
+description: This skill should be used in a kmp-forge project (its CLAUDE.md links kmp-forge's docs as its rules) when writing or revising docs/MVP_SPEC.md — defining v1 scope, must-haves, out-of-scope items, key user flows and success metrics, turning a product idea or brain dump into a spec, or when /kmp-forge-spec runs. Not for backlog issues (backlog-issue-authoring) or architecture decisions (adr-authoring).
 ---
 
 # MVP Spec authoring
 
-`docs/MVP_SPEC.md` is the single source of truth for product scope in a kmp-forge project. Claude reads it on every session for context. It should be short enough to scan in 60 seconds, specific enough that someone could ship v1 from it alone.
+`docs/MVP_SPEC.md` is the single source of truth for product scope in a kmp-forge project. The project's CLAUDE.md links it, and `/kmp-forge-refine --gaps` drafts backlog issues from its Must-haves and flows (the architect reads § Critical technical considerations) — so write each Must-have so it can become one or more issues. It should be short enough to scan in 60 seconds, specific enough that someone could ship v1 from it alone. State the platforms explicitly (e.g. "Android and iOS in v1; desktop and web → Out of scope").
+
+It is **not** an OpenSpec spec, and the two don't overlap: `openspec/specs/` records what the app does **today**, one capability at a time, and grows with each merged change; `docs/MVP_SPEC.md` records what v1 is **meant** to be and why. Keep behavior detail (scenarios, edge cases) out of it — that belongs in the OpenSpec change for the issue. Keep the template's opening comment, which says this to whoever opens the file.
 
 ## Structure (in this order)
 
@@ -41,7 +43,7 @@ One paragraph describing the *primary* persona. Add secondary personas only if t
 
 One line. Mention price points if known.
 
-✓ "Freemium with one-time premium unlock ($4.99–$9.99). Free tier: 4 images/batch + ads. Premium: unlimited + color palettes + gradients."
+✓ "Freemium with one-time premium unlock (USD 4.99–9.99). Free tier: 4 images/batch + ads. Premium: unlimited + color palettes + gradients."
 
 ✗ "Maybe subscription, maybe one-time, TBD."
 
@@ -123,10 +125,10 @@ How will you know v1 succeeded? Pick 2–4 specific metrics.
 
 The `/kmp-forge-spec` command supports:
 
-- **Default (interview)**: walk section-by-section, asking each via `AskUserQuestion`. Push back briefly on vague answers.
+- **Default (interview)**: walk section-by-section, asking each as a plain message (`AskUserQuestion` only for fixed choices, such as the business model). Push back briefly on vague answers.
 - **`--from-dump`**: user pastes a free-form product idea; the command extracts what maps to spec sections and asks follow-ups only on gaps.
 
-Both modes write to `docs/MVP_SPEC.md` using the template at `${CLAUDE_PLUGIN_ROOT}/overlay/product/MVP_SPEC.md.tmpl`.
+Both modes write to `docs/MVP_SPEC.md` using the template at [`overlay/product/MVP_SPEC.md.tmpl`](../../overlay/product/MVP_SPEC.md.tmpl).
 
 ## Maintaining the spec
 

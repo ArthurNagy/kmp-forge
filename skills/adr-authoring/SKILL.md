@@ -1,11 +1,11 @@
 ---
 name: adr-authoring
-description: Author Architecture Decision Records (ADRs) in docs/DECISIONS/ following the Michael Nygard format. Use in a kmp-forge project (its CLAUDE.md links kmp-forge's docs as its rules) when documenting a stack or architecture decision, adopting an opt-in library, superseding a prior decision, or when /kmp-forge-add-library, /kmp-forge-refine or the kmp-architect agent calls for an ADR.
+description: Author or supersede an Architecture Decision Record in a kmp-forge project (its CLAUDE.md links kmp-forge's docs as its rules) — Nygard format in docs/DECISIONS/NNNN-kebab-title.md, next free number, Context with alternatives considered, Decision, Consequences. Use when recording why a stack, module or architecture choice was made, adopting an opt-in library (Ktor, SQLDelight, Sentry, gradle-play-publisher), changing distribution or observability tier, superseding an earlier ADR, or when /kmp-forge-add-library, /kmp-forge-refine or the kmp-architect agent calls for an ADR.
 ---
 
 # ADR authoring — kmp-forge style
 
-ADRs live in `docs/DECISIONS/NNNN-kebab-case-title.md`. They capture *why* a non-obvious decision was made — the kind of thing you'd otherwise re-debate every six months.
+ADRs live in `docs/DECISIONS/NNNN-kebab-case-title.md`. They capture *why* a non-obvious decision was made — the kind of thing a team otherwise re-debates every six months.
 
 ## Format (Michael Nygard)
 
@@ -13,7 +13,7 @@ ADRs live in `docs/DECISIONS/NNNN-kebab-case-title.md`. They capture *why* a non
 # NNNN. <title>
 
 Date: YYYY-MM-DD
-Status: Accepted | Superseded by [NNNN](NNNN-...)
+Status: Accepted | Accepted (supersedes [NNNN](NNNN-...)) | Superseded by [NNNN](NNNN-...) | Deprecated
 
 ## Context
 <what's driving this decision? what's the problem or the constraint?>
@@ -23,7 +23,7 @@ Alternatives considered:
 - **<option>** — <why it loses here>
 
 ## Decision
-<what we will do — concrete, action-oriented>
+<imperative, starting with the verb: "Use …", "Adopt …" — concrete, action-oriented>
 
 ## Consequences
 <what becomes easier, what becomes harder, what reviewer must enforce going forward>
@@ -33,7 +33,7 @@ Alternatives considered:
 
 `NNNN-kebab-case-title.md` where:
 
-- `NNNN` is sequential (0001, 0002, ...), never reused, never reordered
+- `NNNN` is the highest number in `docs/DECISIONS/` plus one, four digits — never reused, never reordered
 - title is kebab-case, brief (3–6 words)
 
 Examples:
@@ -44,8 +44,9 @@ Examples:
 ## Status
 
 - **Accepted** — current decision
-- **Superseded by [NNNN](NNNN-...)** — replaced by a later ADR; this ADR is read-only history
-- **Deprecated** — no longer relevant; left for context
+- **Accepted (supersedes …)** — `Status: Accepted (supersedes [NNNN](NNNN-...))`: current decision that replaces an earlier ADR (§ Updating decisions)
+- **Superseded by …** — `Status: Superseded by [NNNN](NNNN-...)`: replaced by a later ADR; this ADR is read-only history
+- **Deprecated** — no longer relevant (the thing it governed is gone); left for context
 
 Never edit an Accepted ADR's substance. Write a new ADR that supersedes it.
 
@@ -57,11 +58,30 @@ Never edit an Accepted ADR's substance. Write a new ADR that supersedes it.
 ✓ Distribution tier change (graduating from GitHub Releases to Play Store)
 ✓ Observability tier change (opting into Sentry)
 ✓ Per-project decisions that diverge from kmp-forge defaults
+✓ A leaked secret — `NNNN-secret-rotation.md`: date, secret type, scope, remediation ([secrets.md](../../docs/secrets.md))
 
 ✗ Library version bumps (no ADR; just commit)
 ✗ Internal refactors with no architectural impact
 ✗ Bug fixes
 ✗ UI / design changes (those live in Figma + design tokens)
+
+## From an `adr_proposal.yml` issue
+
+The issue form (`adr` label) collects **Proposed title**, **Context**, **Decision** and **Consequences**; the issue
+is where the decision is discussed, the ADR file is the record. Once the proposal is agreed:
+
+1. Number it — the highest number in `docs/DECISIONS/` plus one — and name the file after the proposed title in
+   kebab-case (`NNNN-kebab-case-title.md`).
+2. Carry the form's sections into the format above: **Context** gains the forcing function and an
+   **Alternatives considered** list (the options the issue thread weighed — ask for them when the issue names none);
+   **Decision** is rewritten imperatively with the concrete shape; **Consequences** gets its Easier / Harder /
+   Enforced lines.
+3. `Date:` is the day it is written, `Status: Accepted` (or `Accepted (supersedes [NNNN](…))`, plus the superseded
+   ADR's status line — § Updating decisions).
+4. Copy each enforceable rule to CLAUDE.md § Project-specific overrides, commit both as `docs(adr): <title>`, and
+   open the PR with `Closes #<issue>` in its body so merging records the decision and closes the proposal.
+
+A proposal that is turned down gets no ADR file: whoever turned it down closes the issue with a comment saying why.
 
 ## Pre-seeded ADRs (from kmp-forge overlay)
 
@@ -74,7 +94,9 @@ Every scaffolded project ships with these 6, documenting the locked-stack ration
 - `0005-result-domain-error.md` — why kotlin-result (Result<V, E>) + sealed DomainError over Arrow / exceptions
 - `0006-dispatcher-provider.md` — why inject DispatcherProvider
 
-The project's first author-written ADR starts at `0007`.
+A new ADR takes the highest number in `docs/DECISIONS/` plus one — `0007` in a fresh scaffold, later in an adopted
+project that already had ADRs. Commit ADRs on their own as `docs(adr): <title>` (what `/kmp-forge-refine`
+tells the user to do).
 
 ## Writing tips
 
@@ -88,7 +110,7 @@ State the *forcing function* — what made this decision necessary? Not "we shou
 
 ### Decision section
 
-Imperative: "We will adopt X."
+Imperative, starting with the verb — "Use X", "Adopt X" — like the seeded ADRs.
 
 Include the specific shape of the adoption — version, library, idiomatic snippet. Reviewer should be able to enforce it.
 
@@ -101,16 +123,18 @@ Include the specific shape of the adoption — version, library, idiomatic snipp
 Three pillars:
 - **Easier** — what does this unlock or simplify?
 - **Harder** — what new ongoing cost does it create?
-- **Enforced** — what does kmp-reviewer (or you) now enforce on every PR?
+- **Enforced** — what must every PR now respect? `kmp-reviewer` enforces the rules in the project's CLAUDE.md
+  § Project-specific overrides, not the ADRs themselves — so copy each enforceable rule there as one line
+  (`- <rule> (ADR NNNN)`), in the same commit as the ADR.
 
 ✓
 > - Easier: cross-platform crashes in one dashboard; breadcrumbs from Kermit attached.
 > - Harder: SENTRY_DSN secret to manage; another SDK to bump on `/kmp-forge-bump-stack`.
-> - Reviewer enforces: don't log raw user input (PII); add Kermit log calls at ERROR/WARN at semantic boundaries.
+> - Enforced (copied to CLAUDE.md § Project-specific overrides): don't log raw user input (PII); add Kermit log calls at ERROR/WARN at semantic boundaries.
 
 ### Length
 
-100–250 lines max. ADRs are not specs; they're decision logs. If you find yourself writing implementation detail, link to code or a doc instead.
+Usually under ~60 lines — the seeded ADRs are 25–50. ADRs are not specs; they're decision logs. Implementation detail belongs in code or a doc the ADR links to.
 
 ## Updating decisions
 

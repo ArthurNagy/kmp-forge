@@ -7,13 +7,22 @@ argument-hint: "[--from-dump]"
 
 Generates or revises `docs/MVP_SPEC.md` for a kmp-forge project.
 
-First load the `kmp-forge:mvp-spec-authoring` skill (Skill tool; where it isn't available, read `${CLAUDE_PLUGIN_ROOT}/skills/mvp-spec-authoring/SKILL.md`) — it holds the section templates and the good-vs-vague checklist this command applies.
+First load the `kmp-forge:mvp-spec-authoring` skill (Skill tool; where it isn't available, read
+`${CLAUDE_PLUGIN_ROOT}/skills/mvp-spec-authoring/SKILL.md`) — it holds the section templates and the good-vs-vague
+checklist this command applies.
+
+If `docs/MVP_SPEC.md` already has content, ask via `AskUserQuestion` first: **Revise sections (Recommended)** ·
+**Start over** — never overwrite it without that answer.
 
 ## Modes
 
+Arguments: `$ARGUMENTS` (`--from-dump` selects the second mode).
+
 ### Default — interactive interview
 
-Ask each section's question via `AskUserQuestion`. Cover the full MVP_SPEC template structure:
+Ask each section's question as a plain message and wait for the answer (the answers are free text). Use
+`AskUserQuestion` only where the choices are fixed — **Business model**: Freemium · One-time · Subscription · Free
+with ads. Cover the full MVP_SPEC template structure:
 
 1. **Overview** — one paragraph: what the app does, the problem it solves
 2. **Target users** — primary persona; one paragraph
@@ -31,7 +40,8 @@ For each section, after the user answers:
 
 ### --from-dump — structure a free-form paste
 
-If invoked with `--from-dump`, prompt the user with `AskUserQuestion`:
+If invoked with `--from-dump`: any text after the flag is the dump. Otherwise ask for it in a plain message and end
+your turn:
 
 > Paste your product idea, vision, or any context you have. I'll structure it into the MVP_SPEC template and ask follow-up questions on gaps.
 
@@ -59,4 +69,3 @@ Substitute:
 
 - Don't write a ROADMAP.md by default — user opts in if/when they want one.
 - This command is most useful at project start. Rerunning later updates the spec; treat updates as substantive (commit as `docs: refine MVP spec`).
-- If the user already has a spec in `docs/MVP_SPEC.md`, ask before overwriting. Default behavior: append revisions, don't blow away.

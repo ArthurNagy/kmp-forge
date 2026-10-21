@@ -52,6 +52,10 @@ git diff --unified=0 origin/main...HEAD
 cat <path>
 ```
 
+Read the project's `CLAUDE.md` § Project-specific overrides first: each line there (usually citing an ADR) is a
+rule you enforce like the ones below — 🔴 when it says so, else 🟡 — and an override that relaxes a rule below wins
+over it.
+
 ## What you enforce
 
 ### Architecture (blocking)

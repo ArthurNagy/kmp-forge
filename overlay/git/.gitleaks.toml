@@ -4,16 +4,31 @@ title = "kmp-forge default gitleaks config"
 [extend]
 useDefault = true
 
+# Only binary files and build output are skipped. Text resources stay scanned — a key pasted into
+# composeResources/values/strings.xml, a JSON under composeResources/files/ or an Android res/ XML
+# ships in every app build. Paths match repo-relative: the hook's `protect --staged` reports them that
+# way; for a full-tree scan run `gitleaks dir . --config .gitleaks.toml` from the repo root.
 [allowlist]
-description = "Common false-positive locations for KMP+Compose projects"
+description = "Binary resources and build outputs"
 paths = [
-    '''[^/]+/src/[^/]+/composeResources/.*''',     # Compose MP Resources (icons, strings) — :shared, :feature-*, …
-    '''.*build/.*''',                              # Build outputs
-    '''gradle/wrapper/.*''',                       # Gradle wrapper
-    '''.*\.lock''',                                # Lock files
+    '''(^|/)src/[^/]+/composeResources/drawable[^/]*/[^/]+\.(png|webp|jpe?g|gif|bmp)$''',  # Compose resource images
+    '''(^|/)src/[^/]+/composeResources/font[^/]*/[^/]+\.(ttf|otf)$''',                     # Compose resource fonts
+    '''(^|/)src/[^/]+/res/(drawable|mipmap)[^/]*/[^/]+\.(png|webp|jpe?g|gif)$''',          # Android launcher icons, images
+    '''(^|/)iosApp/(.+/)?[^/]+\.xcassets/.+\.(png|jpe?g|pdf)$''',                          # iOS asset catalogs (app icon, images)
+    '''^([^/]+/){0,3}build/''',                                                             # build outputs (a module's build/)
+    '''(^|/)gradle/wrapper/gradle-wrapper\.(jar|properties)$''',                            # Gradle wrapper
+    '''\.lock$''',                                                                          # lock files
 ]
 regexes = [
-    '''ANDROID_KEYSTORE_PASSWORD''',               # variable names in workflows/build files
-    '''SENTRY_DSN''',                              # variable names
+    # Secret *names* in workflows, docs and build files (never their values)
+    '''ANDROID_KEYSTORE_BASE64''',
+    '''ANDROID_KEYSTORE_PASSWORD''',
+    '''ANDROID_KEY_ALIAS''',
+    '''ANDROID_KEY_PASSWORD''',
     '''APP_STORE_CONNECT_API_KEY_ID''',
+    '''APP_STORE_CONNECT_API_KEY_ISSUER_ID''',
+    '''APP_STORE_CONNECT_API_KEY_CONTENT''',
+    '''FIREBASE_SERVICE_ACCOUNT_JSON''',
+    '''GOOGLE_PLAY_SERVICE_ACCOUNT_JSON''',
+    '''SENTRY_DSN''',
 ]

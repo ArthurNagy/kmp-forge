@@ -86,7 +86,7 @@ Skip this section in `tests-only` mode, or when no scenario is user-visible (say
    4. boot an AVD: `android emulator list`, then `android emulator start <first AVD>` (returns when booted).
 
    Nothing usable → `VERDICT: ERROR` ("no Android device available"). Note the choice for the `DEVICE` line: the serial, plus the AVD name when you know it (you booted it, or `android emulator list` shows only one), otherwise the `model:` from `adb devices -l`.
-2. **Build + identify.** `./gradlew :androidApp:assembleDebug 2>&1 | tail -20`; APK = `androidApp/build/outputs/apk/debug/*.apk`. Read `applicationId` from `androidApp/build.gradle.kts`. A build failure here → `VERDICT: ERROR` with the failing line (CI is green, so it is environmental).
+2. **Build + identify.** `LOG="${TMPDIR:-/tmp}/kmp-qa-assemble.log"; ./gradlew :androidApp:assembleDebug --console=plain > "${LOG}" 2>&1; rc=$?; tail -20 "${LOG}"; echo "exit=${rc}"` (Gradle's exit code, not `tail`'s); APK = `androidApp/build/outputs/apk/debug/*.apk`. Read `applicationId` from `androidApp/build.gradle.kts`. A build failure here → `VERDICT: ERROR` with the failing line (CI is green, so it is environmental).
 3. **Install** — `android install --apks <apk> --device <serial>`. On a physical device, an install failure from a differently-signed build means this device is out (see the rules) — go back to step 1's next option.
 4. **One journey per user-visible scenario**, written to `build/qa/<slug>/journeys/<k>-<scenario-kebab>.xml` in the Android CLI journey format:
    ```xml

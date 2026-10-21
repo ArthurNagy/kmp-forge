@@ -425,8 +425,12 @@ once (this also proves the Gradle configuration loads — the first run download
 
 ```bash
 source "${TMPDIR:-/tmp}/kmp-forge-init.env"
-cd "${TARGET:?}" && ./gradlew spotlessApply -q 2>&1 | tail -20
+cd "${TARGET:?}" || exit 1; LOG="${TMPDIR:-/tmp}/kmp-forge-init-gradle.log"
+./gradlew spotlessApply -q --console=plain > "${LOG}" 2>&1; rc=$?; tail -20 "${LOG}"; echo "exit=${rc}"
 ```
+
+A non-zero `exit=` (Gradle's own, not `tail`'s) is a scaffold bug: show the tail and
+`grep -n "What went wrong" -A15 "${LOG}"` verbatim and stop. Don't paper over it.
 
 ### 8. Git init + first commit + optional GitHub repo
 
@@ -449,7 +453,7 @@ Then ask via `AskUserQuestion` whether to **create the GitHub repo and push now*
 ```bash
 gh repo create "<APP_NAME>" --private --source=. --remote=origin
 git push -u origin main
-# Workflow labels the backlog relies on (ready, in-progress, epic, priority:high|low, no-spec, chore, adr)
+# Workflow labels the backlog relies on (ready, in-progress, priority:high|low, no-spec, chore, adr)
 bash "${CLAUDE_PLUGIN_ROOT}/scripts/issues.sh" labels
 ```
 

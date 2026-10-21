@@ -73,12 +73,18 @@ Read `gradle/libs.versions.toml` → `[versions] kotlin` (the key kmp.new's cata
 ```bash
 [[ -d openspec ]] && openspec --version && node --version
 grep -q "kmp-forge project rules" openspec/config.yaml 2>/dev/null && echo "kmp-forge rules present"
-gh label list --limit 200 --json name --jq '[.[].name] | map(select(. == "ready" or . == "in-progress" or . == "epic" or . == "no-spec"))'
+gh --version | head -1
+if [[ "$(git remote get-url origin 2>/dev/null)" == *github* ]]; then
+    gh label list --limit 200 --json name --jq '[.[].name] | map(select(. == "ready" or . == "in-progress" or . == "no-spec"))'
+else
+    echo "no GitHub origin — labels check skipped"
+fi
 ```
 
+- `gh` < 2.94 → ✗: the work queue reads GitHub sub-issues (`--parent`, `subIssuesSummary`). Remediation: `brew upgrade gh`.
 - `openspec/` present → `openspec` **≥ 1.14** (kmp-forge's `openspec/config.yaml` rules need it; older CLIs ignore them). Remediation: `brew upgrade openspec` or `npm install -g @fission-ai/openspec@latest` (Node ≥ 20.19). Absent → report "plain docs" (✓, not drift).
 - `openspec/config.yaml` without kmp-forge's rules → ⚠, remediation: merge in the plugin's `overlay/openspec/config.yaml.tmpl`.
-- The workflow labels (`ready`, `in-progress`, `epic`, `no-spec`, …) missing on the GitHub repo → ⚠, remediation: `bash "${CLAUDE_PLUGIN_ROOT}/scripts/issues.sh" labels` (writes labels to GitHub — say so). Skip when `gh` is unauthenticated or there is no GitHub `origin`.
+- The workflow labels (`ready`, `in-progress`, `no-spec`, …) missing on the GitHub repo → ⚠, remediation: `bash "${CLAUDE_PLUGIN_ROOT}/scripts/issues.sh" labels` (writes labels to GitHub — say so). Skip when `gh` is unauthenticated. No GitHub `origin` → report `no GitHub origin — skipped`, with no fix to offer (`issues.sh labels` writes to the origin repo).
 
 ### 8. Check Compose MP version
 
@@ -88,7 +94,8 @@ Read `gradle/libs.versions.toml` → `[versions] composeMultiplatform` (and `mat
 
 Run quickly to verify Gradle can resolve plugins + dependencies:
 ```bash
-./gradlew tasks --offline 2>&1 | tail -20
+LOG="${TMPDIR:-/tmp}/kmp-forge-doctor-gradle.log"
+./gradlew tasks --offline --console=plain > "${LOG}" 2>&1; rc=$?; tail -20 "${LOG}"; echo "exit=${rc}"
 ```
 
 If `--offline` fails (cache empty), try without it.
@@ -108,7 +115,7 @@ Example:
 ✗ signing.properties: not present. Required for release builds — see docs/secrets.md
 ✓ git hooks: pre-commit installed, gitleaks on PATH
 ⚠ OpenSpec: 1.3.1 found, ≥ 1.14 needed for openspec/config.yaml rules. Upgrade: brew upgrade openspec
-✓ Issue labels: ready, in-progress, epic, no-spec present
+✓ Issue labels: ready, in-progress, no-spec present
 ✓ Compose MP: 1.12.1 (compatible with Kotlin 2.4.20)
 ```
 

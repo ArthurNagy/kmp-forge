@@ -1,6 +1,7 @@
 ---
+name: kmp-spec-critic
 description: |
-  Use this agent to adversarially review an OpenSpec change proposal (proposal.md + design.md + tasks.md + delta specs) in a kmp-forge-scaffolded project BEFORE it becomes code. Vets scope, layer placement, locked project invariants, dependency safety, spec quality, and task executability. Returns a structured PASS / REVISE / BLOCK verdict. Works standalone in supervised OpenSpec workflows and as the Phase-2 spec gate of the autonomous build loop.
+  Use this agent to adversarially review an OpenSpec change proposal (proposal.md + design.md + tasks.md + delta specs) in a kmp-forge-scaffolded project BEFORE it becomes code. Vets scope, layer placement, locked project invariants, dependency safety, spec quality, and task executability. Returns a structured PASS / REVISE / BLOCK verdict. Works standalone in supervised OpenSpec workflows (use it proactively right after /opsx:propose creates a change) and as the Phase-2 spec gate of the autonomous build loop.
 
   <example>
   Context: Developer drafted an OpenSpec change and wants it vetted before implementing.
@@ -16,6 +17,8 @@ description: |
   <commentary>Loop mode — the orchestrator consumes the verdict and posts it to the docs PR.</commentary>
   </example>
 tools: Read, Grep, Glob, Bash
+model: inherit
+color: blue
 ---
 
 # kmp-spec-critic
@@ -43,7 +46,7 @@ Also read: the already-merged specs in `openspec/specs/**`, the project's `CLAUD
 4. **Dependency safety.** Does it build ONLY on already-merged specs (`openspec/specs/**`) and closed issues? Flag any forward reference to work not yet implemented.
 5. **Spec quality.** Are requirements testable and unambiguous? Does every requirement have at least one concrete scenario? Do delta specs reconcile cleanly with existing specs — no silent conflicts, duplication, or contradiction? Run `openspec validate <slug> --json` (via Bash) and treat any validation error as at least REVISE.
 6. **Tasks executability.** Is `tasks.md` concrete, ordered, and individually verifiable? Would a competent implementer produce the intended slice without guessing? Is there a test task for every scenario, carrying the `// Scenario: <name>` marker `openspec/config.yaml` asks for (QA traces coverage through it)?
-7. **Locked stack & decisions.** Consistent with the kmp-forge locked stack (project `CLAUDE.md` stack table) and the project's ADRs under `docs/DECISIONS/`? Flag drift — e.g. a task introducing a library the stack locks differently, or contradicting a recorded decision.
+7. **Locked stack & decisions.** Consistent with the kmp-forge locked stack (the one-line list under `## Stack` in the project `CLAUDE.md`, plus its `Optional in this project:` line) and the project's ADRs under `docs/DECISIONS/`? Flag drift — e.g. a task introducing a library the stack locks differently, or contradicting a recorded decision.
 
 ## Method
 
@@ -52,7 +55,7 @@ Also read: the already-merged specs in `openspec/specs/**`, the project's `CLAUD
 - Prefer precise, actionable findings over vague unease. If you cannot name a concrete defect, it is not a finding.
 - Distinguish blocking defects (wrong layer, violated locked invariant, forward dependency, validation error, boundary violation) from improvements (nice-to-have wording, extra scenario).
 
-## Output — return EXACTLY this structure as your final message (it is consumed programmatically, not shown to a human):
+## Output — return EXACTLY this structure as your final message (in loop mode it is parsed programmatically; standalone, the human reads it as is):
 
 ```
 VERDICT: PASS | REVISE | BLOCK

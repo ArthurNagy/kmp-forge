@@ -14,7 +14,7 @@ One invocation = one full increment: take the next `ready` GitHub issue → docs
 
 ## Work queue: GitHub issues
 
-The queue is this repo's open issues labeled **`ready`** — nothing else. Ordered `priority:high` → unlabeled → `priority:low`, then oldest first; `epic` issues are skipped (split them into slice issues). An issue is worked only when its **author and whoever applied `ready`** are the loop's own GitHub account or listed in `ready-approvers` below, and nothing in its **Depends on** section (or GitHub's "blocked by") is still open. Selection is code — `scripts/issues.sh next` in the kmp-forge plugin — not model judgment.
+The queue is this repo's open issues labeled **`ready`** — nothing else. Ordered `priority:high` → unlabeled → `priority:low`, then oldest first; parent issues (any issue with sub-issues) are skipped — their sub-issues are the work. An issue is worked only when its **author and whoever applied `ready`** are the loop's own GitHub account or listed in `ready-approvers` below, and nothing in its **Depends on** section (or GitHub's "blocked by") is still open. Selection is code — `scripts/issues.sh next` in the kmp-forge plugin — not model judgment.
 
 **Only a human applies `ready`.** The loop files follow-up issues (and, with `queue-empty-refine: on`, up to 3 drafted next slices when the queue empties) and moves `in-progress`, but never approves work (the merge guard denies it in `enforce`). An issue filed by someone outside the approvers is raw intake: re-file it as your own (refined) issue to queue it.
 
@@ -43,16 +43,17 @@ ${AUTOLOOP_HANDOFF}
 
 ## Steering (no need to interrupt)
 
-- **Add work:** file an issue (the Feature / backlog item form) and label it `ready`. **Reorder:** `priority:high` / `priority:low`. **Pause one:** remove `ready`. On the `in-progress` issue that pauses the whole loop (`⏸ LOOP PAUSED` — it never starts another slice meanwhile); relabel it to resume, or remove `in-progress` to drop it. **Hold an epic:** `epic`. The loop re-reads the queue at every iteration.
-- **Edit this runbook or the guard mode** while the loop runs: it commits your uncommitted `openspec/AUTOLOOP.md` / guard-mode edits to `main` at its next Phase 0 — you don't need to commit them yourself.
+- **Add work:** file an issue (the Feature / backlog item form) and label it `ready`. **Reorder:** `priority:high` / `priority:low`. **Pause one:** remove `ready`. On the `in-progress` issue that pauses the whole loop (`⏸ LOOP PAUSED` — it never starts another slice meanwhile); relabel it to resume, or remove `in-progress` to drop it. **Hold a big one:** split it into sub-issues — the parent is never worked, its sub-issues are. The loop re-reads the queue at every iteration.
+- **Edit this runbook** while the loop runs — outside Claude (in the enforce modes the guard denies Claude writing it; its `ready-approvers` decide whose issues the loop trusts). With the guard enforcing, the loop commits your uncommitted `openspec/AUTOLOOP.md` edit to `main` at its next Phase 0. In `log` it can't tell your edit from a worker's, so it stops and asks you to commit it yourself.
+- **Change the guard mode** (`.claude/hooks/merge-guard.mode`) outside Claude — in a terminal, or with `!` in front of the command at the Claude Code prompt. It applies to the next tool call; commit it yourself (the loop never commits it and reminds you in its report).
 - **Emergency stop:** create the kill-switch file (`kill-switch:` above — by default `touch openspec/STOP`). The loop checks it before every phase and every merge, and halts leaving any open PRs as they are. Delete the file to resume.
 - **Hard stop now:** interrupt the running `/loop` (Esc), or tell it to stop.
 
 ## Merge guard
 
-`.claude/hooks/merge-guard.sh` runs as a `PreToolUse` hook on every Bash, Write/Edit and `mcp__*` call. It independently re-checks every merge (`gh pr merge` in any form, `gh api` merge endpoints, MCP merge tools): all checks on the head commit green, and the newest `### 🤖` gate review **posted by the loop's GitHub account** reads PASS **on the current head commit**. In `enforce` it also denies subagent merges and pushes to `main`, any push to `main` beyond loop bookkeeping (`openspec/**`, the mode file), force-pushes, applying the `ready` label (from anyone), and a subagent editing the guard itself — and it fails closed when it can't reach GitHub. Mode lives in `.claude/hooks/merge-guard.mode` (`off | log | enforce-ci | enforce`), re-read on every invocation — no restart needed. Every decision is logged to `.claude/hooks/merge-guard.log`.
+`.claude/hooks/merge-guard.sh` runs as a `PreToolUse` hook on every Bash, Write/Edit and `mcp__*` call (it needs `python3`). It independently re-checks every merge (`gh pr merge` in any form, `gh api` merge endpoints, MCP merge tools) on the PR and repository the command really targets: all checks on the head commit green, and the newest `### 🤖` gate review **posted by the loop's GitHub account** reads PASS **on the current head commit**. In `enforce` it also denies subagent merges and pushes to `main`, any push to `main` beyond `openspec/**`, force-pushes and deletes of `main` however spelled, applying the `ready` label (from anyone), a subagent posting a `### 🤖` verdict, Claude — main conversation included — writing the guard's script, mode file, `.claude/settings*.json` or this runbook (also by `git restore`/`checkout -- <path>`, a patch, or a `git stash`/`reset --hard` that would discard your uncommitted edit of one), and any command mentioning a merge, push, guard file or `ready` that it cannot parse (run gh/git directly, with literal arguments). It fails closed when it can't reach GitHub. Mode lives in `.claude/hooks/merge-guard.mode` (`off | log | enforce-ci | enforce`; missing or garbled = `enforce-ci`), re-read on every invocation — no restart needed. Every decision is logged to `.claude/hooks/merge-guard.log`.
 
-**Trust ramp.** It starts in `log` so it cannot block a real merge before you have seen it agree with the loop. After an increment or two:
+**Trust ramp.** It starts in `log` so it cannot block a real merge before you have seen it agree with the loop. After an increment or two, check the log, then switch the mode yourself — in a terminal, or with `!` in front of each command at the Claude Code prompt (once it enforces, Claude can't write the mode file):
 
 ```bash
 cut -f2,5,6 .claude/hooks/merge-guard.log   # every merge the loop performed should show ALLOW
@@ -60,7 +61,9 @@ echo enforce > .claude/hooks/merge-guard.mode
 git commit -m "chore(autoloop): enforce merge guard" -- .claude/hooks/merge-guard.mode && git push
 ```
 
-The mode file is tracked — it's project policy, so a fresh clone keeps it. (If you skip the commit, the loop commits it for you at its next Phase 0 as a steering edit.)
+The mode file is tracked — it's project policy, so a fresh clone keeps it. Only you commit it: the loop leaves an uncommitted mode change alone and reminds you in its report.
+
+**Branch protection.** If `main` requires pull requests, the account the loop runs as needs a bypass for its `openspec/**` bookkeeping pushes — see [Branch protection](https://github.com/arthurnagy/kmp-forge/blob/main/docs/autoloop.md#branch-protection).
 
 From then on "never force-merge" is enforced by the harness rather than trusted to the model.
 

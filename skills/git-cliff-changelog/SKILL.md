@@ -1,6 +1,6 @@
 ---
 name: git-cliff-changelog
-description: Configure and run git-cliff to generate CHANGELOG.md and GitHub Release bodies from Conventional Commits. Use in a kmp-forge project (its CLAUDE.md links kmp-forge's docs as its rules) when setting up changelog automation, releasing a new version, or troubleshooting changelog output.
+description: This skill should be used in a kmp-forge project (its CLAUDE.md links kmp-forge's docs as its rules) when previewing unreleased changes or the next version (git cliff --unreleased / --bumped-version), regenerating CHANGELOG.md, editing cliff.toml groups, or debugging empty, missing or mis-grouped release-note entries. For building, signing and tagging a release, use github-release-artifacts.
 ---
 
 # git-cliff — kmp-forge changelog
@@ -38,7 +38,7 @@ commit_parsers = [
 ]
 ```
 
-Full template: see `overlay/root/cliff.toml`.
+Full template: [`overlay/root/cliff.toml`](../../overlay/root/cliff.toml).
 
 ## Use cases
 
@@ -92,21 +92,23 @@ Nothing is dropped silently: a non-conventional subject still reaches the notes 
 
 Commits with `BREAKING CHANGE:` footer or `<type>!:` get a **BREAKING** suffix in the generated entry. The `cliff.toml` template shipped by kmp-forge handles this automatically.
 
-Example output:
+Example output — the template renders the commit's description only (type and scope dropped, first letter
+upper-cased):
 
 ```
 ### Features
-- feat(gallery): add multi-select (abc1234) **BREAKING**
-- feat(auth): support 2FA (def5678)
+- Add multi-select (abc1234) **BREAKING**
+- Support 2FA (def5678)
 ```
 
 ## Release flow
 
-1. `git cliff --unreleased` to preview
-2. Decide semver bump (major / minor / patch based on commits)
-3. `git tag -a v0.3.0 -m "Release v0.3.0"`
-4. `git push origin v0.3.0` → triggers `.github/workflows/release.yml`
-5. CI generates release body via `orhun/git-cliff-action@v4` + uploads artifacts
+`git cliff --unreleased` previews the notes; `git cliff --bumped-version` computes the next version from the commits.
+The tag and its push follow [release.md § Tagging](../../docs/release.md#tagging): tag the commit on `main` with the
+gate green (`git tag -a v<x.y.z> -m "Release v<x.y.z>"`); pushing the tag publishes the release, so that push is
+the user's (an agent's only after the user's explicit yes in that session). The push triggers
+`.github/workflows/release.yml` (the `github-release-artifacts` skill covers it), which builds the artifacts,
+generates the release body with `orhun/git-cliff-action@v4` and uploads both.
 
 ## Troubleshooting
 

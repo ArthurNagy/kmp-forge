@@ -9,8 +9,8 @@ context: |
   (Orbit MVI, Koin, Navigation 3, kotlin-result). The project CLAUDE.md and the kmp-forge docs it
   links are the source of truth for module layering, the stack and testing: a change follows them
   and never re-decides them (changing them is an ADR in docs/DECISIONS/ first).
-  Work arrives as GitHub issues. A change implements exactly one issue; an issue labeled `epic` is
-  split into one issue per slice before anything is proposed. docs/MVP_SPEC.md is product scope:
+  Work arrives as GitHub issues. A change implements exactly one issue; a parent issue (one with
+  GitHub sub-issues) is never proposed itself — each of its sub-issues is. docs/MVP_SPEC.md is product scope:
   a change outside it needs the scope decision recorded there first.
 
 rules:

@@ -23,7 +23,7 @@ A Claude Code plugin that scaffolds and guides Kotlin Multiplatform + Compose Mu
 - `/kmp-forge-add-library <query>` — find a KMP library via klibs.io and add it to the version catalog
 - `/kmp-forge-bump-stack` — refresh `libs.versions.toml` against the latest stable versions
 - `/kmp-forge-spec` — author `MVP_SPEC.md` interactively or from a free-form dump
-- `/kmp-forge-refine <idea | #issues | --gaps>` — product-owner pass: draft workable backlog issues (acceptance criteria, one-PR slices, epics split; an epic also gets an architect pass — technical order, per-slice notes, ADR drafts), file the ones you pick; you approve them with `ready`
+- `/kmp-forge-refine <idea | #issues | --gaps>` — product-owner pass: draft workable backlog issues (acceptance criteria, one-PR slices; work too big for one PR becomes a parent issue with GitHub sub-issues, and parent issues and issues that need design get an architect pass — technical order, per-issue notes, ADR drafts), file the ones you pick; you approve them with `ready`
 - `/kmp-forge-doctor` — check JDK, Xcode, Android SDK, Android CLI, Gradle wrapper + AGP floor
 - `/kmp-forge-add-autoloop` — install the autonomous build loop (OpenSpec workflow, GitHub-issue queue, merge-guard hook) into a project
 - `/kmp-forge-next-increment` — run ONE autonomous increment on the next `ready` issue (propose → gate → implement → gate → merge); wrap with `/loop` to work the queue down

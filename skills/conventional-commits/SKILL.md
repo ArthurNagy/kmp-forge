@@ -1,6 +1,6 @@
 ---
 name: conventional-commits
-description: Author Conventional Commits in a kmp-forge project, where git-cliff generates the changelog and GitHub Release notes from commit prefixes. Use in a kmp-forge project (its CLAUDE.md links kmp-forge's docs as its rules) when committing changes and deciding the correct type/scope and semver impact so the release notes categorize correctly, or when reviewing commit-message style against the project's git-cliff config.
+description: This skill should be used in a kmp-forge project (its CLAUDE.md links kmp-forge's docs as its rules) when writing a commit message or PR title — choosing the Conventional Commit type (feat vs fix vs refactor/chore), scope and breaking-change marker, which drive git-cliff release notes, the semver bump and CI's spec-link check on feat PRs — or when reviewing commit-message style against the project's git-cliff config.
 ---
 
 # Conventional Commits — kmp-forge style
@@ -19,7 +19,7 @@ description: Author Conventional Commits in a kmp-forge project, where git-cliff
 
 - `feat` — new feature, user-visible
 - `fix` — bug fix
-- `chore` — housekeeping (deps, CI, build, config)
+- `chore` — housekeeping that isn't build or CI (dependency bumps, config, the release version bump)
 - `docs` — docs only
 - `refactor` — code change with no behavior change
 - `test` — test only
@@ -27,10 +27,22 @@ description: Author Conventional Commits in a kmp-forge project, where git-cliff
 - `ci` — CI workflow changes
 - `perf` — performance change
 - `style` — formatting only (rare)
+- `revert` — reverts an earlier commit (git's `Revert "…"` subject is fine; git-cliff groups both)
 
 ## Scope (optional)
 
-Use module name (`gallery`, `auth`, `ui`) or area (`ci`, `release`, `deps`). Single token. Skip if it doesn't add clarity.
+A single token: the feature (`gallery`, `photo-detail`), a shared module (`shared`, `ui`, `domain`, `data`,
+`testing`), a platform (`android`, `ios`, `desktop`, `web`) or an area (`ci`, `release`, `deps`, `adr`,
+`changelog`). Skip it if it doesn't add clarity.
+
+## PR titles and CI
+
+- PR titles follow the same format: squash is the default merge, so the PR title becomes the commit — and the
+  changelog entry.
+- A `feat:` PR that changes production code (`src/*Main/` in `:shared`, `:ui`, `:domain`, `:data` or a
+  `:feature-*`) must carry its OpenSpec change under `openspec/changes/` or `openspec/specs/`, or the `no-spec`
+  label — CI's `spec-link` check fails it otherwise. Pick `feat` for user-visible behavior, not to dodge or trigger
+  that check.
 
 ## Subject
 
@@ -65,7 +77,7 @@ BREAKING CHANGE: v1 routes now return 410. Migrate to v2.
 
 ✓ `feat(gallery): add multi-select bulk action`
 ✓ `fix(auth): reset token expiry on refresh`
-✓ `chore(deps): bump kotlin to 2.2.20`
+✓ `chore(deps): bump kotlin to 2.4.21`
 ✓ `ci: enable macOS leg for iOS builds`
 ✓ `refactor(domain): extract OrderSorter from CheckoutUseCase`
 ✓ `docs(release): document gradle-play-publisher graduation path`

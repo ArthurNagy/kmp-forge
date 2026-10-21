@@ -154,12 +154,14 @@ For each: read the doc, run **detect**, apply **transform**, run **verify** (res
 ## Build / verify protocol
 
 ```bash
-cd "$project_root"
-./gradlew <affected modules>:build 2>&1 | tail -30
+cd "${project_root}" || exit 1; LOG="${TMPDIR:-/tmp}/kmp-forge-migrate-gradle.log"
+./gradlew <affected modules>:build --console=plain > "${LOG}" 2>&1; rc=$?; tail -30 "${LOG}"; echo "exit=${rc}"
 # `build` already runs every target's tests (common tests run inside each target's test task —
 # there is no `commonTest` task); for a fast host-only loop on result/orbit/tests layers:
-./gradlew <module>:jvmTest 2>&1 | tail -30
+./gradlew <module>:jvmTest --console=plain > "${LOG}" 2>&1; rc=$?; tail -30 "${LOG}"; echo "exit=${rc}"
 ```
+
+`exit=` is Gradle's exit code (a pipe into `tail` would report `tail`'s); the log keeps the full output.
 
 If red: stop, return the failing tail verbatim, mark the layer **incomplete**. Do not proceed.
 

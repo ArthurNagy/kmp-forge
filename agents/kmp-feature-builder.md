@@ -135,10 +135,13 @@ These are non-negotiable. Surface a clear error and stop if any conflict with th
 
 9. **Build to verify**:
    ```bash
-   cd "${project_root}"
-   ./gradlew :feature-${feature_name}:spotlessApply 2>&1 | tail -5   # import order depends on the base package
-   ./gradlew :feature-${feature_name}:build :shared:build 2>&1 | tail -30
+   cd "${project_root}" || exit 1; LOG="${TMPDIR:-/tmp}/kmp-forge-feature-gradle.log"
+   ./gradlew ":feature-${feature_name}:spotlessApply" --console=plain > "${LOG}" 2>&1; rc=$?   # import order depends on the base package
+   tail -5 "${LOG}"; echo "spotlessApply exit=${rc}"; [[ ${rc} -eq 0 ]] || exit "${rc}"
+   ./gradlew ":feature-${feature_name}:build" :shared:build --console=plain > "${LOG}" 2>&1; rc=$?
+   tail -30 "${LOG}"; echo "build exit=${rc}"; exit "${rc}"
    ```
+   The log keeps the full output; each `exit=` is Gradle's own exit code, not `tail`'s.
 
 10. **Report** — return a structured summary (terse, caveman-OK since this is internal output):
     - Files created (paths)

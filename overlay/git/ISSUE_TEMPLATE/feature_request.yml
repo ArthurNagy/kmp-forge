@@ -5,8 +5,8 @@ body:
   - type: markdown
     attributes:
       value: |
-        One issue = one change that fits one pull request. Bigger than that? File it as an epic
-        (add the `epic` label) and split it into one issue per slice.
+        One issue = one change that fits one pull request. Bigger than that? Keep this issue as the
+        parent and split the work into GitHub sub-issues, one per pull request.
   - type: textarea
     id: problem
     attributes:
@@ -49,4 +49,4 @@ body:
     id: notes
     attributes:
       label: Notes
-      description: Design links (Figma), hints, prior art, technical notes (an epic's slices get the architect's from /kmp-forge-refine). Guidance for the design, not scope.
+      description: Design links (Figma), hints, prior art, technical notes (/kmp-forge-refine adds the architect's when it designs an issue). Guidance for the design, not scope.

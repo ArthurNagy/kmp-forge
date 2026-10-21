@@ -5,6 +5,113 @@ All notable changes to `kmp-forge` will be documented in this file.
 Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+The factory fixes from android-forge's independent review (android-forge PR #1), ported to the shared-lineage files.
+They cover the merge guard, the issue queue, the loop's posted text, the backlog model, gitleaks and the git/release
+skills.
+
+**Upgrading a project** — re-run `/kmp-forge-add-autoloop` to install merge guard v5. The guard now needs `python3`
+≥ 3.8, and the issue queue needs `gh` ≥ 2.94. Before the next loop run, turn each open `epic` issue into a parent
+issue by linking its slices to it (`gh issue edit <slice> --parent <epic>`). Then delete the label
+(`gh label delete epic`). The queue no longer skips by label, so an `epic` that is `ready` but has no sub-issues would
+be picked up as work. Copy `overlay/git/.gitleaks.toml` over the project's own copy.
+
+### Changed
+- **Parent issues instead of epics.**
+  - **Model:** work too big for one PR stays a parent issue, split into GitHub sub-issues
+    (`gh issue create --parent`, gh ≥ 2.94). `scripts/issues.sh next` skips any issue with sub-issues. There is no
+    `epic` label (`labels` no longer creates it).
+  - **Agents:** the product owner drafts `parent:` and `design:` lines. `kmp-architect` designs parent issues and
+    single issues marked `design: needed` (a new module, data source or library, a platform, or a cross-cutting
+    concern).
+  - **Refine:** `/kmp-forge-refine #<n>` reads sub-issues natively instead of `Part of #<epic>` Notes lines. It files
+    parents before their sub-issues, resolving `draft:<j>` / `new:<s>` references to numbers.
+  - **Elsewhere:** the issue form, `docs/product-workflow.md`, `docs/autoloop.md`, the AUTOLOOP runbook,
+    `openspec/config.yaml`'s context, doctor and init follow.
+- **The loop posts every text through a file.** Gate reviews, comments, issue drafts and follow-ups are written by a
+  quoted heredoc (`<<'GATE_EOF'`) and posted with `--body-file`. Commits use `git commit -F` on a quoted-heredoc file,
+  and titles the loop did not write are single-quoted. A double-quoted `--body` executed backticks and `$` in the text.
+- **Steering files stay the human's.**
+  - **Runbook:** Phase 0 checks the kill switch first, then the working tree. An uncommitted
+    `openspec/AUTOLOOP.md` edit is committed to `main` only while the guard enforces; in `log`/`off` the loop
+    escalates, since a worker could have written it.
+  - **Mode file:** the loop never commits `.claude/hooks/merge-guard.mode`. It names an uncommitted mode change in its
+    report.
+  - **Branch protection:** a steering push rejected by "Require a pull request" points at the new
+    [docs/autoloop.md § Branch protection](docs/autoloop.md#branch-protection).
+- `/kmp-forge-spec` asks **Revise sections** or **Start over** before it touches an existing spec, interviews in plain
+  messages (`AskUserQuestion` only for the business model) and reads `$ARGUMENTS`. `overlay/product/MVP_SPEC.md.tmpl`
+  opens with a comment that says what the file is, and what it is not: an OpenSpec spec.
+- **Agent frontmatter:** every factory agent gets `name` / `model: inherit` / `color`. The code reviewer never posts
+  the verdict, and the spec critic reads the scaffolded CLAUDE.md's `## Stack` + `Optional in this project:` lines.
+  `kmp-reviewer` enforces the project's CLAUDE.md § Project-specific overrides.
+- **Skills:**
+  - **Descriptions:** sharper triggers, still scoped to kmp-forge projects.
+  - **adr-authoring:** next-free numbering, the full status vocabulary, an imperative Decision, and an
+    `adr_proposal.yml` → ADR recipe.
+  - **backlog-issue-authoring:** the bug form's headings verbatim, and chores on the backlog form.
+  - **conventional-commits:** gains `revert`, PR titles and the `spec-link` rule.
+  - **git-cliff-changelog:** its example output is what `cliff.toml` renders.
+  - **driving-ci-green:** maps each red step of the gate (including `build-ios` and `spec-link`) to its fix.
+- **docs/git-conventions.md:** `feat/` and `spec/` branch names, one name per issue
+  (`spec/<issue>-<kebab>` → `feat/<issue>-<kebab>`), and the PR template and pre-commit hook as shipped.
+
+### Fixed
+- **Merge guard v5** (`overlay/autoloop/merge-guard.sh`, `# version: 5`): a bash launcher plus an embedded python3
+  shell lexer (stdlib, ≥ 3.8). It no longer needs `jq`.
+  - **Targets:** it checks the PR and repository a merge really targets: `$(…)`, variables, xargs/find input,
+    `GH_REPO`, `--repo` and `cd` are all resolved. When it can't pin a target down, it fails closed.
+  - **Wrappers:** it unwraps `timeout`/`env`/`sudo`/`xargs`/`find -exec`/`eval`/`sh -c` and gh and git aliases. An
+    unknown wrapper around gh or git, such as `xcrun git push …`, is denied.
+  - **Pushes and tokens:** it denies force pushes in every spelling, `gh auth token`, `gh alias set`, and curl/wget
+    writes to the API.
+  - **Protected files:** it protects its own files and `openspec/AUTOLOOP.md` from every Claude caller in the enforce
+    modes. That covers Write/Edit with normalised paths, Bash writers, git pathspecs (resolved in git's `-C`
+    directory), patches, and wholesale reverts over the human's uncommitted edit.
+  - **Verdicts:** it denies subagent-posted `### 🤖` gate verdicts.
+  - **Deny by default:** in the enforce modes it denies any command it can't parse that mentions a merge, push, ref,
+    token, guard file or `ready`.
+  - **Mode file:** a missing or garbled one now means `enforce-ci`, not `log`.
+  - **Bookkeeping:** only `openspec/**` counts as bookkeeping on a push to `main`.
+  - **Limitations:** what it can't see is listed in docs/autoloop.md § Limitations.
+  - **`/kmp-forge-add-autoloop`:** checks python3 ≥ 3.8 and openspec ≥ 1.14, asks before creating labels,
+    smoke-tests the wired hook, and reports the installed vs the shipped `# version:` on a re-run.
+- **`issues.sh` dependencies:**
+  - **References:** "Depends on" accepts `#12`, `owner/repo#12` and issue/PR URLs. A reference into another
+    repository blocks unless gh can read it there and it is closed.
+  - **Listing:** the queue listing's `--limit` is 5000. A limit of 200 silently dropped the oldest issues.
+  - **PR history:** the history behind change-name reuse is fully paginated.
+- **Security: `.gitleaks.toml` no longer allowlists all of `composeResources/`** or every path containing `build/`.
+  - **Scanned:** string tables, `composeResources/files/*.json`, Android `res/` XML and every other text file.
+  - **Skipped:** only Compose resource images and fonts, Android `res/` drawable/mipmap images, iOS asset-catalog
+    images, a module's `build/`, the Gradle wrapper and `*.lock`.
+  - **Secret names:** names from `release.yml` and the docs are allowlisted, never their values.
+  - **Docs:** `docs/secrets.md` shows the shipped config and hook verbatim.
+- **Gradle's exit code is read, not `tail`'s.**
+  - **Where:** init's format step, the feature builder, the migrator, kmp-qa, bump-stack, doctor, the loop's local
+    gate and driving-ci-green.
+  - **Before:** they piped `./gradlew … | tail`, which reports `tail`'s status, so a red build looked green.
+  - **Now:** each runs Gradle into a log, prints its tail and the exit code.
+- `/kmp-forge-doctor` checks `gh` ≥ 2.94 and skips the labels check without a GitHub `origin`.
+
+### Validated
+- **Merge guard:** android-forge's hook-JSON harness, adapted to kmp-forge, passes all 1133 checks on `/bin/bash` 3.2 +
+  python 3.9, on bash 5.3 + python 3.15, and with GNU coreutils first.
+  - Every listed bypass is DENY in the enforce modes, the loop's own commands ALLOW, and `log` never denies. The 0.6.1
+    guard (v3) fails 345 of these checks.
+  - 32 checks with no python3, or a crashing one, fail closed.
+  - A further 165 checks run the commands from the orchestrator and the loop agents, as written, through the guard.
+  - `/kmp-forge-add-autoloop`'s blocks run end to end in a path with a space. The smoke check goes through the wired
+    `settings.json` command.
+- **`issues.sh`:** 14 stub-`gh` scenarios pass under bash 3.2 and 5.3: resume, conflict, a parent skipped,
+  priorities, trust, same-repo and cross-repo dependencies, gh < 2.94 and `labels`. The previous `issues.sh` fails 12
+  of them.
+- **gitleaks:** the shipped pre-commit hook catches keys in string tables, `composeResources/files/` JSON, Kotlin
+  sources, Android `res/` XML and Gradle files. It skips images, fonts, build output, the wrapper and lock files, and
+  passes the whole overlay.
+- **Shell blocks:** every changed one passes `bash -n` and `zsh -n`.
+
 ## [0.6.1] - 2026-10-20
 
 ### Fixed

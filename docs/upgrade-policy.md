@@ -24,7 +24,7 @@ It does **not** retroactively migrate existing scaffolded projects to match a ne
 
 - **Major**: breaking template or structural change (e.g. dropping a locked-stack lib, renaming overlay modules, changing CLAUDE.md template shape in a non-additive way)
 - **Minor**: new commands, new skills, new templates, additive doc changes
-- **Patch**: doc fixes, intra-version library bumps in `libs.versions.toml.tmpl`, bug fixes in scripts
+- **Patch**: doc fixes, intra-version library bumps in `overlay/gradle/libs.versions.toml.additions.tmpl`, bug fixes in scripts
 
 Plugin's `CHANGELOG.md` notes which template changes affect existing projects.
 
@@ -55,4 +55,4 @@ If migration demand grows post-v1 (multiple personal projects, real friction), v
 - Bump major version in `.claude-plugin/plugin.json`
 - Add `## [v2.0.0] — YYYY-MM-DD` section to `CHANGELOG.md` listing every breaking template change with manual-migration steps
 - Update `.claude-plugin/marketplace.json` in this repo to bump the plugin `version` to the new tag
-- Open a tracking issue in the plugin repo for the migration; link from the README's "Currently supported" badge
+- Open a tracking issue in the plugin repo for the migration and link it from that `CHANGELOG.md` section

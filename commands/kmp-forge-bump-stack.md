@@ -62,9 +62,11 @@ Never go below kmp-forge's floor (Gradle 9.8.1 / AGP 9.4.1 — `pin-toolchain` i
 ### 6. Build to verify
 
 ```bash
-cd <projectRoot>
-./gradlew build 2>&1 | tail -50
+cd "<projectRoot>" || exit 1; LOG="${TMPDIR:-/tmp}/kmp-forge-bump-stack-gradle.log"
+./gradlew build --console=plain > "${LOG}" 2>&1; rc=$?; tail -50 "${LOG}"; echo "exit=${rc}"
 ```
+
+The log keeps the full output; `exit=` is Gradle's exit code (`exit=0` is green).
 
 If green, proceed to step 7. If red, surface the failure verbatim — user decides whether to revert or fix forward. **Do not** auto-revert.
 

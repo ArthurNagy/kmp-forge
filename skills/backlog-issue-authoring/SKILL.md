@@ -1,15 +1,15 @@
 ---
 name: backlog-issue-authoring
-description: Write or refine a GitHub issue for a kmp-forge project so it can enter the backlog — Problem, WHEN/THEN acceptance criteria, Out of scope, Depends on, Needs a human first, Change name; slicing epics into one-PR issues; priority labels. Use in a kmp-forge project (its CLAUDE.md links kmp-forge's docs as its rules) when filing a feature, bug or chore issue, turning an idea or a vague issue into a workable one, splitting an epic, or when /kmp-forge-refine or the kmp-product-owner agent drafts issues. Never applies the `ready` label.
+description: Write or refine a GitHub issue for a kmp-forge project so it can enter the backlog — Problem, WHEN/THEN acceptance criteria, Out of scope, Depends on, Needs a human first, Change name; splitting bigger work into a parent issue with one-PR sub-issues; priority labels. Use in a kmp-forge project (its CLAUDE.md links kmp-forge's docs as its rules) when filing a feature, bug or chore issue, turning an idea or a vague issue into a workable one, splitting work too big for one PR, or when /kmp-forge-refine or the kmp-product-owner agent drafts issues. Never applies the `ready` label.
 ---
 
 # Backlog issue authoring — kmp-forge style
 
-In a kmp-forge project, GitHub issues are the single source of work: open issues labeled `ready` are the backlog that people and the autonomous build loop work from. An issue is **workable** when someone who has never seen the conversation could propose its OpenSpec change without asking a question. Canonical rules: the plugin's `docs/product-workflow.md`.
+In a kmp-forge project, GitHub issues are the single source of work: open issues labeled `ready` are the backlog that people and the autonomous build loop work from. An issue is **workable** when someone who has never seen the conversation could propose its OpenSpec change without asking a question. Its readers: the human who approves it, the `kmp-architect` agent (in `/kmp-forge-refine`, for a parent issue or one that needs design — it adds technical **Notes** and **Out of scope** lines), the proposer that turns it into an OpenSpec change (`/opsx:propose`, by hand or in the autonomous loop), and `kmp-qa`, which checks its acceptance criteria. Canonical rules: the plugin's `docs/product-workflow.md`.
 
 ## The one rule about `ready`
 
-**Never apply `ready`.** It is how a human approves work. File and refine issues freely, add `priority:*` / `epic` / type labels when asked, but finish by telling the human which issues to promote — and give them the command to run themselves:
+**Never apply `ready`.** It is how a human approves work. File and refine issues freely, add `priority:*` / type labels when asked, but finish by telling the human which issues to promote — and give them the command to run themselves:
 
 ```
 gh issue edit 41 42 43 --add-label ready
@@ -65,7 +65,7 @@ Empty optional sections render as `_No response_`; omit them or leave that marke
 ✓ `WHEN the app restarts THEN the last picked theme is applied before the first frame`
 ✗ `Theme works correctly` (not checkable) · ✗ `Store the theme in DataStore` (implementation)
 
-**Size: one change, one PR.** Roughly ≤ 5 acceptance criteria and one feature module (plus the `:domain` / `:data` it needs). Bigger → it is an **epic**: label it `epic`, keep its Problem, and list its slices as separate issues, each independently shippable and ordered so each **Depends on** only the ones before it. Slice by user-visible outcome (vertical: domain → data → UI for one behavior), never by layer ("all the domain models" is not a slice). Link each slice to its epic with a first **Notes** line `Part of #<epic>` — never with **Depends on**: an epic stays open, and the queue skips an issue while anything it depends on is open. In `/kmp-forge-refine` the `kmp-architect` agent then fits an epic into the codebase: it fixes the technical order, may add one enabling `chore` slice for infrastructure (applying SQLDelight, extracting a module), appends technical **Notes** and **Out of scope** lines to each slice, and drafts the ADRs the epic needs.
+**Size: one change, one PR.** Roughly ≤ 5 acceptance criteria and one feature module (plus the `:domain` / `:data` it needs). Bigger → it is a **parent issue**: keep its Problem as the whole outcome and split the work into GitHub **sub-issues** (`gh issue create --parent <n>`, or `gh issue edit <sub> --parent <n>` for an existing one), each independently shippable and ordered so each **Depends on** only the ones before it. Slice by user-visible outcome (vertical: domain → data → UI for one behavior), never by layer ("all the domain models" is not a sub-issue). Never put the parent in a sub-issue's **Depends on**: a parent stays open, and the queue skips an issue while anything it depends on is open — it skips the parent itself too, since its sub-issues are the work. In `/kmp-forge-refine` the `kmp-architect` agent then fits the work into the codebase — for a parent, and for a single issue that adds a module, a data source or library, a platform or a cross-cutting concern: it fixes the technical order, may add one enabling `chore` issue for infrastructure (applying SQLDelight, adding a platform, extracting a module), appends technical **Notes** and **Out of scope** lines to each issue, and drafts the ADRs the work needs.
 
 **Out of scope** is binding for whoever implements it — use it to stop scope creep you can foresee ("no sync across devices", "no new feature module", ":domain stays untouched").
 
@@ -77,8 +77,47 @@ Empty optional sections render as `_No response_`; omit them or leave that marke
 
 ## Bugs and chores
 
-- **Bug** (`bug` label, Bug report form): steps, expected vs actual, platform + version. Add an acceptance criterion for the fix when "expected" is ambiguous.
-- **Chore** (`chore` label): build, tooling or maintenance with no user-visible behavior — Problem + a done-condition is enough; its PR will not be a `feat:` (so CI's spec-link check does not apply).
+- **Bug** (`bug` label, Bug report form) — its headings, verbatim (`scripts/issues.sh` and the loop read
+  **Acceptance criteria**, **Depends on** and **Change name** from a bug the same way):
+
+  ```markdown
+  ### What happened?
+
+  <steps to reproduce; expected vs actual>
+
+  ### Acceptance criteria
+
+  - WHEN the device is offline THEN the gallery shows the cached photos instead of an error
+
+  ### Depends on
+
+  #12
+
+  ### Change name
+
+  fix-offline-gallery
+
+  ### Platform
+
+  iPhone 15 · iOS 17
+
+  ### App version
+
+  v0.3.2
+
+  ### Logs / screenshots
+
+  <log excerpt>
+  ```
+
+  **What happened?** is required; add an acceptance criterion for the fix whenever "expected" is ambiguous — each
+  becomes a regression test. Its PR is a `fix(…)`.
+- **Chore** (`chore` label): build, tooling or maintenance with no user-visible behavior — including the enabling
+  issue the `kmp-architect` adds before infrastructure-dependent work (applying SQLDelight, adding a
+  platform). It uses the **backlog form's shape** above, labeled `chore` instead of `enhancement`: **Problem** says why
+  the work is needed now, **Acceptance criteria** are done-conditions a reviewer can check (`WHEN the project builds THEN
+  :data generates AppDatabase with the photos table and its query tests pass`), plus **Out of scope** / **Depends on** /
+  **Change name** as usual. Its PR is not a `feat:` (so CI's spec-link check does not apply).
 
 ## Priority
 

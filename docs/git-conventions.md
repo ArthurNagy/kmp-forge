@@ -11,10 +11,15 @@
 **Trunk-based.** `main` is always shippable. No long-lived `develop` or `release/*` branches.
 
 Branch names:
-- `feature/<short-name>` — new functionality
+- `feat/<short-name>` — new functionality
 - `fix/<short-name>` — bug fix
 - `chore/<short-name>` — non-code housekeeping (deps, CI, docs)
 - `refactor/<short-name>` — code structure change with no behavior change
+- `spec/<short-name>` — an OpenSpec docs PR (a proposal under `openspec/changes/`, an archive) — no production code
+
+Issue-driven work uses one name for everything: the OpenSpec change `<issue>-<kebab>` is proposed on
+`spec/<issue>-<kebab>` and built on `feat/<issue>-<kebab>` (`fix/…` for a bug) — see
+[product-workflow.md](product-workflow.md); the autonomous loop relies on it.
 
 Releases come from tags on `main`, not from branches.
 
@@ -29,7 +34,7 @@ Scope is optional but encouraged. Use module name (`gallery`, `auth`) or area (`
 Examples:
 - `feat(gallery): add multi-select bulk action`
 - `fix(auth): reset token expiry on refresh`
-- `chore: bump kotlin to 2.2.20`
+- `chore: bump kotlin to 2.4.21`
 - `ci: enable macOS leg for iOS builds`
 
 Breaking changes get a `!` after the type and a `BREAKING CHANGE:` footer:
@@ -48,10 +53,15 @@ PR template at `.github/pull_request_template.md`:
 
 ```markdown
 ## Summary
-- <one to three bullets answering WHY, not what>
+- <!-- 1–3 bullets answering WHY, not what -->
+
+Fixes #<!-- issue number: merging closes it -->
+
+<!-- OpenSpec: a feat: PR that changes production code carries its change under
+     openspec/changes/<name>/ (or its ticked tasks.md), or the `no-spec` label. -->
 
 ## Screenshots / GIFs
-<required for UI changes; before/after>
+<!-- required for UI changes; before/after -->
 ```
 
 PR titles follow Conventional Commits (the squash-merge commit message inherits from the PR title).
@@ -72,7 +82,9 @@ Configure on `main`:
 - (Solo project): no review requirement; CI is the gate
 - (Multi-contributor): require 1 approving review
 
-See [ci.md § Branch protection setup](ci.md#branch-protection-setup).
+With the autonomous loop, the account `gh` is authenticated as needs a bypass for its bookkeeping pushes to `main`
+(steering files, archives) — see [autoloop.md § Branch protection](autoloop.md#branch-protection). See
+[ci.md § Branch protection setup](ci.md#branch-protection-setup).
 
 ## .gitignore
 
@@ -123,23 +135,15 @@ Both client-side and server-side. Belt + suspenders.
 
 ### Pre-commit (gitleaks)
 
-`.gitleaks.toml` at repo root with default rules.
+`.gitleaks.toml` at the repo root extends gitleaks' default rules; its allowlist skips only binary resources (images
+and fonts under `composeResources/`, Android `res/` images, iOS asset-catalog images), build output, the Gradle
+wrapper and lock files — `composeResources/values/strings.xml`, `composeResources/files/` and every other text file
+are scanned. The hook, `.kmp-forge-pre-commit.sh`, runs
+`gitleaks protect --staged --config .gitleaks.toml --no-banner --redact` (`SKIP_GITLEAKS=1` bypasses it for an
+emergency commit). `/kmp-forge-init` copies it to `.git/hooks/pre-commit` when git init is opted in; after a fresh
+clone: `cp .kmp-forge-pre-commit.sh .git/hooks/pre-commit && chmod +x .git/hooks/pre-commit`.
 
-Hook at `.git/hooks/pre-commit`:
-
-```bash
-#!/usr/bin/env bash
-set -euo pipefail
-if ! command -v gitleaks >/dev/null; then
-    echo "gitleaks not installed; install via brew install gitleaks"
-    exit 0
-fi
-gitleaks protect --staged --config .gitleaks.toml
-```
-
-Mark executable: `chmod +x .git/hooks/pre-commit`.
-
-`/kmp-forge-init` installs the hook automatically when git init is opted in.
+Both files, verbatim: [secrets.md § gitleaks](secrets.md#gitleaks-pre-commit).
 
 ### Server-side (GitHub)
 

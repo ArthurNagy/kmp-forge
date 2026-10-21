@@ -118,31 +118,65 @@ Gradle reads `KEYSTORE_PATH=$RUNNER_TEMP/release.keystore` and signs the AAB/APK
 
 ## gitleaks (pre-commit)
 
-`.gitleaks.toml` at repo root — uses default rule set with project-specific allowlist additions if needed.
+`.gitleaks.toml` at the repo root extends gitleaks' default rules. Its allowlist skips only binary files and build
+output — text resources stay scanned: a key pasted into `composeResources/values/strings.xml` or a JSON under
+`composeResources/files/` ships in every app build, so it's reported like any other file. As shipped:
 
 ```toml
 [allowlist]
-description = "Common false-positive locations"
+description = "Binary resources and build outputs"
 paths = [
-    '''[^/]+/src/[^/]+/composeResources/.*''',  # Compose resources (:shared, :feature-*, …)
-    '''.*\.gradle\.kts''',                     # Gradle files (passwords come from props)
+    '''(^|/)src/[^/]+/composeResources/drawable[^/]*/[^/]+\.(png|webp|jpe?g|gif|bmp)$''',  # Compose resource images
+    '''(^|/)src/[^/]+/composeResources/font[^/]*/[^/]+\.(ttf|otf)$''',                     # Compose resource fonts
+    '''(^|/)src/[^/]+/res/(drawable|mipmap)[^/]*/[^/]+\.(png|webp|jpe?g|gif)$''',          # Android launcher icons, images
+    '''(^|/)iosApp/(.+/)?[^/]+\.xcassets/.+\.(png|jpe?g|pdf)$''',                          # iOS asset catalogs (app icon, images)
+    '''^([^/]+/){0,3}build/''',                                                             # build outputs (a module's build/)
+    '''(^|/)gradle/wrapper/gradle-wrapper\.(jar|properties)$''',                            # Gradle wrapper
+    '''\.lock$''',                                                                          # lock files
+]
+regexes = [
+    # Secret *names* in workflows, docs and build files (never their values)
+    '''ANDROID_KEYSTORE_BASE64''',
+    '''ANDROID_KEYSTORE_PASSWORD''',
+    '''ANDROID_KEY_ALIAS''',
+    '''ANDROID_KEY_PASSWORD''',
+    '''APP_STORE_CONNECT_API_KEY_ID''',
+    '''APP_STORE_CONNECT_API_KEY_ISSUER_ID''',
+    '''APP_STORE_CONNECT_API_KEY_CONTENT''',
+    '''FIREBASE_SERVICE_ACCOUNT_JSON''',
+    '''GOOGLE_PLAY_SERVICE_ACCOUNT_JSON''',
+    '''SENTRY_DSN''',
 ]
 ```
 
-Pre-commit hook at `.git/hooks/pre-commit`:
+A false positive in a text file is silenced on its line with a `gitleaks:allow` comment (`// gitleaks:allow`,
+`<!-- gitleaks:allow -->`) or with a narrow path entry — never by allowlisting a whole directory such as
+`composeResources/`. The paths match repo-relative, so scan a full tree with `gitleaks dir . --config .gitleaks.toml`
+from the repo root.
+
+The hook ships as `.kmp-forge-pre-commit.sh` (committed, so a fresh clone can reinstall it) and `/kmp-forge-init`
+copies it to `.git/hooks/pre-commit` (executable):
 
 ```bash
 #!/usr/bin/env bash
+# Installed at .git/hooks/pre-commit by /kmp-forge-init.
+# Set SKIP_GITLEAKS=1 to bypass for an emergency commit (rotate any leaked secret afterward).
 set -euo pipefail
-if ! command -v gitleaks >/dev/null; then
-    echo "gitleaks not installed: brew install gitleaks (or skip via SKIP_GITLEAKS=1)"
+
+if [[ "${SKIP_GITLEAKS:-}" == "1" ]]; then
     exit 0
 fi
-[[ "${SKIP_GITLEAKS:-}" == "1" ]] && exit 0
-gitleaks protect --staged --config .gitleaks.toml
+
+if ! command -v gitleaks >/dev/null; then
+    echo "warning: gitleaks not installed; install with: brew install gitleaks"
+    echo "         skipping secret scan for this commit."
+    exit 0
+fi
+
+gitleaks protect --staged --config .gitleaks.toml --no-banner --redact
 ```
 
-`/kmp-forge-init` installs both `.gitleaks.toml` and the hook (making it executable).
+Reinstall after a clone: `cp .kmp-forge-pre-commit.sh .git/hooks/pre-commit && chmod +x .git/hooks/pre-commit`.
 
 ## GitHub server-side scanning
 

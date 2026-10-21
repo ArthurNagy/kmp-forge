@@ -65,7 +65,8 @@ Marketplace install: `/plugin marketplace add arthurnagy/kmp-forge` then `/plugi
 commands/                    Slash commands (kmp-forge-*.md) — entry points for users
 agents/                      Subagents invoked by commands (kmp-feature-builder, kmp-reviewer,
                               kmp-migrator, kmp-spec-critic, kmp-product-owner (backlog drafts),
-                              kmp-architect (epics only: technical design, slice order, ADR drafts),
+                              kmp-architect (parent issues + issues marked `design: needed`: technical
+                              design, sub-issue order, ADR drafts),
                               kmp-qa (acceptance scenarios: tagged tests + device journeys),
                               kmp-loop-{proposer,implementer,code-reviewer,fixer} — the loop workers)
 skills/                      Workflow skills auto-triggered in scaffolded projects
@@ -95,8 +96,9 @@ overlay/                     Templated files copied into scaffolded projects
                                + `kmp-forge.root` (root project: Kover aggregation + 75% gate)
   gradle/libs.versions.toml.additions.tmpl   Section-aware additions merged into existing catalog
   autoloop/                    Autonomous-loop overlay installed by /kmp-forge-add-autoloop
-                               (merge-guard.sh 4-mode PreToolUse hook + settings.json wiring,
-                                AUTOLOOP.md.tmpl runbook; the work queue is GitHub issues labeled `ready`)
+                               (merge-guard.sh 4-mode PreToolUse hook — a bash launcher + an embedded python3
+                                shell lexer — + settings.json wiring, AUTOLOOP.md.tmpl runbook; the work queue is
+                                GitHub issues labeled `ready`, parent issues split into sub-issues)
 docs/                        Source-of-truth conventions linked from every scaffolded CLAUDE.md
                              (architecture, stack, testing, ci, git-conventions, release,
                               observability, product-workflow, autoloop, secrets, i18n-a11y,
@@ -158,8 +160,9 @@ There is no build system here. Work is:
 ### Required external tools at runtime
 
 - `envsubst` (GNU gettext) — `brew install gettext && brew link --force gettext`.
-- `python3` — for `apply-overlay.sh patch-libs`.
-- `gh` — optional, for `/kmp-forge-init`'s GitHub repo creation step.
+- `python3` ≥ 3.8 — for `apply-overlay.sh patch-libs`, `scripts/issues.sh` and the autoloop's merge guard.
+- `gh` ≥ 2.94 — optional for `/kmp-forge-init`'s GitHub repo creation step; required by the issue queue (it reads
+  GitHub sub-issues).
 - The user's machine needs JDK, Android SDK, Xcode (mac+iOS), Gradle wrapper — `/kmp-forge-doctor` checks them.
 
 ## Conventions for editing this repo
@@ -167,8 +170,21 @@ There is no build system here. Work is:
 - Conventional Commits (see `docs/git-conventions.md`). Releases tagged from `main`, changelog rendered by git-cliff (see `cliff.toml` analogue if added).
 - When adding a new overlay variable, update all three: (a) the `.tmpl` that uses it, (b) `OVERLAY_VARS` in `scripts/apply-overlay.sh` (anything not listed there is left verbatim), and (c) the `commands/kmp-forge-init.md` step 4 `export` block (or the add-feature/add-autoloop export for those templates). Unset envsubst vars silently become empty strings — easy footgun.
 - When changing a locked-stack rule, update **all four** in lockstep: `docs/<area>.md` (canonical), `agents/kmp-reviewer.md` (enforcement), `agents/kmp-feature-builder.md` (generation), `agents/kmp-migrator.md` (refactor recipe — detect/transform/verify for that rule), plus the layer skill that teaches it (`skills/{domain,data,presentation}-layer/SKILL.md` — its examples must keep compiling against the rule) and the relevant template under `overlay/modules/feature/` if shape changes. The v0.2 release in `CHANGELOG.md` is the example: state-only events touched 6 surfaces.
-- When changing autonomous-loop material, update in lockstep: `commands/kmp-forge-next-increment.md` (orchestrator), the worker agents (`agents/kmp-loop-*.md`, `agents/kmp-spec-critic.md`), `overlay/autoloop/` (merge-guard.sh + templates), `scripts/issues.sh` (queue selection), and `docs/autoloop.md` (canonical).
+- When changing autonomous-loop material, update in lockstep: `commands/kmp-forge-next-increment.md` (orchestrator), the worker agents (`agents/kmp-loop-*.md`, `agents/kmp-spec-critic.md`), `overlay/autoloop/` (merge-guard.sh + templates), `scripts/issues.sh` (queue selection), and `docs/autoloop.md` (canonical). `merge-guard.sh` is a bash launcher + an embedded python3 program (stdlib, ≥ 3.8) that lexes shell commands; validate every change with a hook-JSON harness under `/bin/bash` 3.2 and bash 5 (bypasses must DENY in the enforce modes, the loop's own commands ALLOW, `log` never denies). Keep every text the loop posts or commits in quoted-heredoc files (`--body-file`, `git commit -F`). In the enforce modes the guard denies every Claude write to its files and to `openspec/AUTOLOOP.md`, and only a human commits `.claude/hooks/merge-guard.mode`. Work too big for one PR is a parent issue with GitHub sub-issues (`gh issue create --parent`); the queue skips any issue that has sub-issues, with no label involved.
 - The issue form's field labels are a contract: `overlay/git/ISSUE_TEMPLATE/feature_request.yml` renders `### <label>` sections that `scripts/issues.sh` (`Depends on`, `Needs a human first`, `Change name`) and the loop workers (`Problem`, `Acceptance criteria`, `Out of scope`, `Notes`) parse — and `/kmp-forge-refine` edits (it appends the architect's technical notes to `Notes`, `Out of scope`, `Needs a human first`, and rewrites `Depends on`). Rename one → change all three, plus `docs/product-workflow.md`. Likewise the `ready` label name is shared by `issues.sh`, `merge-guard.sh` (denies applying it) and the docs. **Only a human applies `ready`** — no command or agent may add it. The `### 🤖 <gate> — round r/3 — <VERDICT>` review header is a contract between the orchestrator (posts it), its Phase-0 resume jq (parses it), and `merge-guard.sh` (checks the last ` — ` field is `PASS`, the author is the loop account, and the review's commit is the PR head) — change all three together or the guard denies every merge. The hook command in `overlay/autoloop/settings.json` must stay quoted (`bash "${CLAUDE_PROJECT_DIR}/…"`) — unquoted, it splits on paths with spaces and the guard silently never runs. Bump the `# version:` line in `merge-guard.sh` whenever the script changes so `/kmp-forge-add-autoloop` re-runs can detect stale project copies.
 - Plugin docs (`docs/*.md`) are the source of truth — scaffolded `CLAUDE.md.tmpl` links to them on GitHub `main`, so docs ship with the plugin via the repo, not via copy.
 - Paths in user-facing instructions must quote (`"$TARGET"`) — the user's Personal projects directory contains a space.
 - Never push to GitHub or create a remote from a command without the user's explicit yes in that session (`/kmp-forge-init` asks before creating and pushing the repo; the autonomous loop pushes because the user installed and launched it). Never enable branch protection from a command — the user sets it up.
+- Validating a command's shell blocks: stub `gh` by absolute path or assert `command -v gh` hits the stub. Under `zsh -f`, macOS `/etc/zshenv`'s path_helper puts `/opt/homebrew/bin` back in front, and init's last block creates and pushes a real repo.
+
+## Shared lineage with android-forge
+
+android-forge (`../android-forge`, the pure-Android sibling) was bootstrapped from kmp-forge v0.6.0 (`4362f52`). These files are near-identical in both plugins (renamed `kmp-` → `android-`), so a fix in one usually applies to the other. Port it by hand and note it in both changelogs:
+
+- `scripts/issues.sh`, `overlay/autoloop/{merge-guard.sh,settings.json,AUTOLOOP.md.tmpl}`, `overlay/git/**`
+- `commands/{…-spec,…-refine,…-next-increment,…-add-autoloop}.md`
+- `agents/{…-product-owner,…-architect,…-spec-critic,…-loop-proposer,…-loop-implementer,…-loop-code-reviewer,…-loop-fixer}.md`
+- `skills/{backlog-issue-authoring,mvp-spec-authoring,adr-authoring,conventional-commits,git-cliff-changelog,driving-ci-green}`
+- `docs/{product-workflow,autoloop,git-conventions,upgrade-policy}.md`
+
+Everything else (stack, modules, templates, build logic, QA, reviewer, migrator, layer skills) diverges by design.

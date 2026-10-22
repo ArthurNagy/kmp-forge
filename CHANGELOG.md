@@ -5,7 +5,7 @@ All notable changes to `kmp-forge` will be documented in this file.
 Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [0.7.0] - 2026-10-22
 
 The factory fixes from android-forge's independent review (android-forge PR #1), ported to the shared-lineage files.
 They cover the merge guard, the issue queue, the loop's posted text, the backlog model, gitleaks and the git/release
